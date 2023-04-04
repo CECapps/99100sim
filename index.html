@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>LOL Editor</title>
+        <link rel="icon" href="favicon.png" sizes="100x100" type="image/png">
+        <script type="module" src="./ops.js"></script>
+        <script>
+            /** @type {Simulation} sim */
+            window.sim = '';
+        </script>
+        <script type="module">
+// @ts-check
+import { Simulation } from "./classes/Simulation.js";
+import { Op, Ops } from "./ops.js";
+import { ExecutionProcess } from "./classes/ExecutionProcess.js";
+import { ExecutionUnit } from "./classes/ExecutionUnit.js";
+import { Instruction } from "./classes/Instruction.js";
+
+/** @type {Simulation} sim */
+window.sim = new Simulation();
+
+/*
+const starting_point = 0;
+for (let x = 0; x < 256; x++) {
+    // We're packing together two bytes in memory to make a color.
+    // We're about to write 256 consecutive *bytes*, or 128 words.
+    // On the current 128-word wide color graph, this means we're going to write
+    // exactly one row.
+
+    // The base address to which we write is based on how far into x we are.
+    const x_factor = 256 * x;
+
+    for (let y = 0; y < 128; y++) {
+        // lol math
+        window.sim.state.memory.setByte(0xF000, x); // starting_point + x_factor + (y * 2), x);
+        window.sim.state.memory.setByte(0xF000, y); // starting_point + x_factor + (y * 2) + 1, y);
+    }
+}
+*/
+for (let i = 0; i < 32768; i++) {
+    window.sim.state.memory.setWord(i, 0x1000);
+}
+window.sim.resetIVs();
+
+function GR() { const ta = new Uint16Array(1); window.crypto.getRandomValues(ta); return ta[0]; }
+
+let counter = 100;
+while(false) {
+    const rn = GR();
+    //console.debug('opcode=' + rn.toString(16).toUpperCase().padStart('0',4));
+
+    const op_name = Op.getOpForOpcode(rn);
+    if (op_name === undefined) {
+        console.error('Whoa, a real live MID!  Moving on...');
+        continue;
+    }
+    const op = Op.getOpForString(op_name);
+    const inst = new Instruction(op);
+    inst.setParamsFromOpcode(rn);
+    const pl = inst.getParamList();
+    //console.debug(`int=${inst.op.op} base_opcode=${inst.op.opcode.toString(16).toUpperCase().padStart('0',4)} actual_opcode=${inst.getEffectiveOpcode().toString(16).toUpperCase().padStart('0',4)} args=${pl.join(',')}`);
+    for (let param_name of pl) {
+        //console.debug(`param '${param_name}' = ` + inst.getParam(param_name));
+    }
+    if (--counter < 1) {
+        break;
+    }
+}
+
+
+
+
+// And away we go!
+console.info('Outside: calling run(50)')
+console.info('Outside: run(50) result state: "%s"', window.sim.run(50));
+// Nothing should go below here.
+// Nothing should go below here.
+// Nothing should go below here.
+        </script>
+
+        <!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
+
+        <script>
+
+"use strict";
+
+const sim = window.sim;
+function update_viz(vizel) {
+/*
+    const word_count = 32768;
+    const start_word_count_inclusive = 0;
+    const end_word_count_inclusive = 0x7FFF;
+    const words_per_row = 64;
+    const total_rows = 512;
+    const pixel_size = 6;
+*/
+
+    const word_count = 0x2000; // That means it'll STOP here.
+    const start_word_count_inclusive = 0;
+    const end_word_count_inclusive = word_count - 1;
+    const words_per_row = 64;
+    const total_rows = Math.ceil((word_count - start_word_count_inclusive) / words_per_row);
+    const pixel_size = 8;
+
+
+    vizel.innerHTML = '';
+    vizel.appendChild(
+        createMemoryVisualizer(
+            window.sim.state.memory.getDV(),
+            word_count, start_word_count_inclusive, end_word_count_inclusive,
+            words_per_row, total_rows, pixel_size
+        )
+    );
+}
+
+var viz_needs_redraw = false;
+function redraw () {
+    if (viz_needs_redraw) {
+        update_viz(document.getElementById('viz'));
+    }
+    viz_needs_redraw = false;
+    requestAnimationFrame(redraw);
+}
+requestAnimationFrame(redraw);
+
+window.addEventListener('memory_updated', function (event) {
+    // update_viz(document.getElementById('viz'));
+    viz_needs_redraw = true;
+});
+
+
+
+const Tab_Width = 4;
+
+addEventListener('DOMContentLoaded', function() {
+    const codebox = document.getElementById('codebox');
+    // Turn tabs into 4-char indents.
+    codebox.addEventListener('keydown',
+        /** @param {KeyboardEvent} event */
+        function (event) {
+            if (event.key != "Tab") {
+                return true;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+
+            const el = event.target;
+            if ( !(el instanceof HTMLTextAreaElement) ) {
+                // lol yeah this to shut the typechecker up about how EventTarget
+                // doesn't have the selection or value stuff from forms.  I mean
+                // it's right, but it's also wrong.  I couldn't cast it because
+                // then it'd complain that the thing coming in from event.target
+                // couldn't be cast into a textarea and it redlined it ARGH
+                // anyway this works
+                return;
+            }
+            const start_point = el.selectionStart;
+            const end_point = el.selectionEnd;
+            const previous_newline = el.value.lastIndexOf("\x0a", start_point);
+
+            const chars_in = start_point - previous_newline - 1;
+            let insert_count = 0;
+            if (chars_in > 0) {
+                const tabstops = Math.floor(chars_in / Tab_Width);
+                const remainder = chars_in - (tabstops * Tab_Width);
+                insert_count = Tab_Width - remainder;
+            }
+            if (insert_count == 0) {
+                insert_count = Tab_Width;
+            }
+            const left = el.value.substring(0, start_point);
+            const right = el.value.substring(start_point);
+            el.value = left + ' '.repeat(insert_count) + right;
+            el.setSelectionRange(start_point + insert_count, end_point + insert_count);
+        }
+    );
+});
+
+/**
+ * @param {DataView} memory
+ * @param {number} word_count
+ * @param {number} start_word_count_inclusive
+ * @param {number} end_word_count_inclusive
+ * @param {number} words_per_row
+ * @param {number} total_rows
+ * @param {number} pixel_size
+ **/
+function createMemoryVisualizer(memory, word_count, start_word_count_inclusive, end_word_count_inclusive, words_per_row, total_rows, pixel_size) {
+    const WORDS_IN_DATAVIEW = word_count;
+    const WORDS_PER_VISUAL_ROW = words_per_row;
+    const TOTAL_VISUAL_ROWS = total_rows;
+    const BLOCK_SIZE = pixel_size;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = WORDS_PER_VISUAL_ROW * BLOCK_SIZE;;
+    canvas.height = TOTAL_VISUAL_ROWS * BLOCK_SIZE;
+
+    const ctx = canvas.getContext('2d');
+    const imageData = ctx.createImageData(canvas.width, canvas.height);
+
+    for (let i = start_word_count_inclusive; i < end_word_count_inclusive; i++) {
+        const word = memory.getUint16(i * 2);
+        const red = (word >> 11) << 3;
+        const green = ((word >> 5) & 0x3f) << 2;
+        const blue = (word & 0x1f) << 3;
+
+        const row = Math.floor(i / WORDS_PER_VISUAL_ROW);
+        const col = i % WORDS_PER_VISUAL_ROW;
+        //console.log("Word %s at %d x %d", (i * 2).toString(16).toUpperCase().padStart(4,"0"), row, col);
+        const blockX = col * BLOCK_SIZE;
+        const blockY = row * BLOCK_SIZE;
+
+        for (let j = 0; j < BLOCK_SIZE; j++) {
+            for (let k = 0; k < BLOCK_SIZE; k++) {
+                const pixelX = blockX + k;
+                const pixelY = blockY + j;
+                const pixelOffset = (pixelY * canvas.width + pixelX) * 4;
+                imageData.data[pixelOffset] = red;
+                imageData.data[pixelOffset + 1] = green;
+                imageData.data[pixelOffset + 2] = blue;
+                imageData.data[pixelOffset + 3] = 255;
+            }
+        }
+    }
+
+    ctx.putImageData(imageData, 0, 0);
+    /*
+    canvas.addEventListener('click', function (event) {
+        const rect = canvas.getBoundingClientRect()
+        const x = event.clientX - rect.left
+        const y = event.clientY - rect.top
+        console.log("x: " + x + " y: " + y)
+    });
+    */
+    return canvas;
+}
+        </script>
+
+        <!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
+
+        <style>
+            /* https://paletton.com/#uid=53u0I0kgX6j8zeBb67ClS4Srx3b */
+            html {
+                color: #f0f0f0;
+                background-color: #101a20;
+                /* font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif; */
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: 100;
+                font-size: 0.2in;
+            }
+            input, textarea {
+                color: #f0f0f0;
+                background-color: #101a20;
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: normal;
+                font-size: 1rem;
+            }
+
+            #flexcontainer {
+                display: flex;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="flexcontainer">
+            <div style="flex: auto;">
+                <textarea id="codebox" rows="10" cols="40" spellcheck="false" ></textarea>
+            </div>
+            <div id="viz" style="flex: auto;"></div>
+        </div>
+    </body>
+</html>

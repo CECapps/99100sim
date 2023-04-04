@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Opcode Map</title>
+        <script src="ops.js"></script>
+        <script>
+const mids = {
+    'MID A'	    : [parseInt('0000',16),	parseInt('007F',16)],
+    'MID B'	    : [parseInt('00A0',16),	parseInt('017F',16)],
+    'MID C 1A'	: [parseInt('0210',16),	parseInt('021F',16)],
+    'MID C 1B'	: [parseInt('0230',16),	parseInt('023F',16)],
+    'MID C 1C'	: [parseInt('0250',16),	parseInt('025F',16)],
+    'MID C 1D'	: [parseInt('0270',16),	parseInt('027F',16)],
+    'MID C 1E'	: [parseInt('0290',16),	parseInt('029F',16)],
+    'MID C 1F'	: [parseInt('02B0',16),	parseInt('02BF',16)],
+    'MID C 1G'	: [parseInt('02D0',16),	parseInt('02DF',16)],
+    'MID C 2A'	: [parseInt('02E1',16),	parseInt('02FF',16)],
+    'MID C 2B'	: [parseInt('0301',16),	parseInt('033F',16)],
+    'MID C 3A'	: [parseInt('0341',16),	parseInt('035F',16)],
+    'MID C 3B'	: [parseInt('0361',16),	parseInt('037F',16)],
+    'MID C 3C'	: [parseInt('0381',16),	parseInt('039F',16)],
+    'MID C 3D'	: [parseInt('03A1',16),	parseInt('03BF',16)],
+    'MID C 3E'	: [parseInt('03C1',16),	parseInt('03DF',16)],
+    'MID C 4A'	: [parseInt('03E1',16),	parseInt('03FF',16)],
+    'MID D'	    : [parseInt('0780',16),	parseInt('07FF',16)],
+    'MID E'	    : [parseInt('0C00',16),	parseInt('0FFF',16)],
+};
+
+addEventListener('DOMContentLoaded', function() {
+    const table = document.querySelector('#opcode_map tbody');
+    for (let i = 0; i < 2 ** 16; i += 16) {
+        const row = document.createElement('tr');
+        const base = document.createElement('td');
+        base.innerText = i.toString(16).padStart(4, '0').toUpperCase(); // hex!
+        row.appendChild(base);
+        for (let j = 0; j < 16; j++) {
+            const cell = document.createElement('td');
+            cell.id = 'opcode_' + (i + j).toString(16).padStart(4, '0').toUpperCase();
+            let txt = Op.getOpForOpcode(i + j);
+            if (txt === undefined) {
+                txt = '';
+                cell.classList.add('empty');
+            }
+            if (txt) {
+                const op = Ops[txt];
+                cell.classList.add(`format_${op.format}`);
+                cell.classList.add(`format_${op.format}_var_${op.format_var}`);
+                const opcode_string = `${op.opcode.toString(16).padStart(4, '0').toUpperCase()} - ${op.opcode_legal_max.toString(16).padStart(4, '0').toUpperCase()}`;
+                const formatvar_string = `Format ${op.format}, Variation ${op.format_var}`;
+                cell.title = `${op.shortdesc}\x0a${opcode_string}; ${formatvar_string}`;
+            }
+            cell.innerText = txt;
+            row.appendChild(cell);
+        }
+        table.appendChild(row);
+    }
+
+    for (const mid_id in mids) {
+        const mid_string = mid_id.toLowerCase().replace(/\s/g, '_');
+        for (let i = mids[mid_id][0]; i <= mids[mid_id][1]; i++) {
+            const opcode_cell = document.getElementById('opcode_' + i.toString(16).padStart(4, '0').toUpperCase());
+            opcode_cell.classList.add('mid');
+            opcode_cell.classList.add(mid_string.split('_', 2).join('_')); // mid_x_y -> mid_x
+            opcode_cell.classList.add(mid_string);
+            if (opcode_cell.classList.contains('empty')) {
+                opcode_cell.innerText = mid_id;
+            } else {
+                opcode_cell.title = opcode_cell.title + `\x0a${mid_id}`;
+            }
+        }
+    }
+
+    const d = document.createElement('div');
+    d.textContent = 'Done';
+    const i = document.createElement('i');
+    i.textContent = '!';
+    d.appendChild(i);
+    document.body.insertBefore(d, document.getElementById('opcode_map'));
+});
+
+        </script>
+        <style>
+            :root {
+                --format-slices: calc(360 / 21);
+                --optab-border: groove;
+            }
+            html {
+                color: #f0f0f0;
+                background-color: #101a20;
+                /* font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif; */
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: 100;
+                font-size: 0.2in;
+            }
+            #opcode_map td, #opcode_map th {
+                margin: 2px;
+                padding: 2px;
+                white-space: nowrap;
+            }
+            #opcode_map tbody td:first-child, #opcode_map thead th {
+                border: 1px solid #1A2227;
+            }
+            #opcode_map tbody td:first-child {
+                text-align: right;
+            }
+            #opcode_map thead th {
+                text-align: left;
+            }
+
+            .mid {
+                font-weight: bold;
+                font-style: italic;
+            }
+            .mid.empty {
+                border: 2px solid #37434A;
+                color: #37434A;
+                font-weight: 100;
+                font-style: normal;
+            }
+
+            .mid_a { outline: 3px dotted #800; }
+            .mid_b { outline: 3px dotted #080; }
+            .mid_c { outline: 3px dotted #008; }
+            .mid_d { outline: 3px dotted #808; }
+            .mid_e { outline: 3px dotted #880; }
+
+/* #region Formats & Vars */
+            .format_1  { background-color: hsl( calc(var(--format-slices) * 1),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 1), 100%, 33%); }
+            .format_2  { background-color: hsl( calc(var(--format-slices) * 2),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 2), 100%, 33%); }
+            .format_3  { background-color: hsl( calc(var(--format-slices) * 3),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 3), 100%, 33%); }
+            .format_4  { background-color: hsl( calc(var(--format-slices) * 4),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 4), 100%, 33%); }
+            .format_5  { background-color: hsl( calc(var(--format-slices) * 5),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 5), 100%, 33%); }
+
+            .format_6  { background-color: hsl( calc(var(--format-slices) * 6),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 6), 100%, 33%); }
+            .format_6_var_1  { background-color: hsl( calc(var(--format-slices) * 6),  70%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 6), 100%, 33%); }
+            .format_6_var_2  { background-color: hsl( calc(var(--format-slices) * 6),  60%, 30% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 6), 100%, 33%); }
+            .format_6_var_3  { background-color: hsl( calc(var(--format-slices) * 6),  50%, 35% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 6), 100%, 33%); }
+            .format_6_var_4  { background-color: hsl( calc(var(--format-slices) * 6),  40%, 40% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 6), 100%, 33%); }
+
+            .format_7  { background-color: hsl( calc(var(--format-slices) * 7),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 7), 100%, 33%); }
+            .format_7_var_1  { background-color: hsl( calc(var(--format-slices) * 7),  70%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 7), 100%, 33%); }
+            .format_7_var_2  { background-color: hsl( calc(var(--format-slices) * 7),  60%, 30% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 7), 100%, 33%); }
+            .format_7_var_3  { background-color: hsl( calc(var(--format-slices) * 7),  50%, 35% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 7), 100%, 33%); }
+            .format_7_var_4  { background-color: hsl( calc(var(--format-slices) * 7),  40%, 40% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 7), 100%, 33%); }
+
+            .format_8  { background-color: hsl( calc(var(--format-slices) * 8),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 8), 100%, 33%); }
+            .format_8_var_1  { background-color: hsl( calc(var(--format-slices) * 8),  70%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 8), 100%, 33%); }
+            .format_8_var_2  { background-color: hsl( calc(var(--format-slices) * 8),  60%, 30% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 8), 100%, 33%); }
+            .format_8_var_3  { background-color: hsl( calc(var(--format-slices) * 8),  50%, 35% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 8), 100%, 33%); }
+
+            .format_9  { background-color: hsl( calc(var(--format-slices) * 9),  50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 9), 100%, 33%); }
+            .format_9_var_1  { background-color: hsl( calc(var(--format-slices) * 9),  70%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 9), 100%, 33%); }
+            .format_9_var_2  { background-color: hsl( calc(var(--format-slices) * 9),  60%, 30% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 9), 100%, 33%); }
+
+            .format_10 { background-color: hsl( calc(var(--format-slices) * 10), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 10), 100%, 33%); }
+
+            .format_11 { background-color: hsl( calc(var(--format-slices) * 11), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 11), 100%, 33%); }
+            .format_11_var_1 { background-color: hsl( calc(var(--format-slices) * 11), 70%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 11), 100%, 33%); }
+            .format_11_var_2 { background-color: hsl( calc(var(--format-slices) * 11), 50%, 30% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 11), 100%, 33%); }
+            .format_11_var_3 { background-color: hsl( calc(var(--format-slices) * 11), 50%, 35% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 11), 100%, 33%); }
+
+            .format_12 { background-color: hsl( calc(var(--format-slices) * 12), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 12), 100%, 33%); }
+            .format_12_var_1 { background-color: hsl( calc(var(--format-slices) * 12), 70%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 12), 100%, 33%); }
+            .format_12_var_2 { background-color: hsl( calc(var(--format-slices) * 12), 60%, 30% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 12), 100%, 33%); }
+            .format_12_var_3 { background-color: hsl( calc(var(--format-slices) * 12), 50%, 35% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 12), 100%, 33%); }
+
+            .format_13 { background-color: hsl( calc(var(--format-slices) * 13), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 13), 100%, 33%); }
+            .format_14 { background-color: hsl( calc(var(--format-slices) * 14), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 14), 100%, 33%); }
+            .format_15 { background-color: hsl( calc(var(--format-slices) * 15), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 15), 100%, 33%); }
+            .format_16 { background-color: hsl( calc(var(--format-slices) * 16), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 16), 100%, 33%); }
+            .format_17 { background-color: hsl( calc(var(--format-slices) * 17), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 17), 100%, 33%); }
+
+            .format_18 { background-color: hsl( calc(var(--format-slices) * 18), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 18), 100%, 33%); }
+            .format_18_var_1 { background-color: hsl( calc(var(--format-slices) * 18), 70%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 18), 100%, 33%); }
+            .format_18_var_2 { background-color: hsl( calc(var(--format-slices) * 18), 60%, 30% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 18), 100%, 33%); }
+            .format_18_var_3 { background-color: hsl( calc(var(--format-slices) * 18), 50%, 35% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 18), 100%, 33%); }
+
+            .format_19 { background-color: hsl( calc(var(--format-slices) * 19), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 19), 100%, 33%); }
+            .format_19_var_1 { background-color: hsl( calc(var(--format-slices) * 19), 70%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 19), 100%, 33%); }
+            .format_19_var_2 { background-color: hsl( calc(var(--format-slices) * 19), 60%, 30% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 19), 100%, 33%); }
+
+            .format_20 { background-color: hsl( calc(var(--format-slices) * 20), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 20), 100%, 33%); }
+            .format_21 { background-color: hsl( calc(var(--format-slices) * 21), 50%, 25% ); border: 2px var(--optab-border) hsl(calc(var(--format-slices) * 21), 100%, 33%); }
+/* #endregion */
+/* nice. */
+        </style>
+    </head>
+    <body>
+        <table id="opcode_map">
+            <thead>
+                <tr>
+                    <th>&nbsp;</th>
+                    <th>0</th>
+                    <th>1</th>
+                    <th>2</th>
+                    <th>3</th>
+                    <th>4</th>
+                    <th>5</th>
+                    <th>6</th>
+                    <th>7</th>
+                    <th>8</th>
+                    <th>9</th>
+                    <th>A</th>
+                    <th>B</th>
+                    <th>C</th>
+                    <th>D</th>
+                    <th>E</th>
+                    <th>F</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </body>
+</html>
