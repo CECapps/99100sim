@@ -1,15 +1,22 @@
 <!DOCTYPE html>
 <html>
     <head>
-        <title>LOL Editor</title>
+        <title>99100 Sim</title>
         <link rel="icon" href="favicon.png" sizes="100x100" type="image/png">
-        <script type="module" src="./ops.js"></script>
+        <script src="./viz.js"></script>
+        <script src="./txt2asm.js"></script>
         <script>
             /** @type {Simulation} sim */
             window.sim = '';
         </script>
 <script type="module">
 // @ts-check
+/**
+ * For Very Important Reasons, you can only import modules if you yourself are
+ * a module.  But if you're a module, you can't actually do certain things.
+ * So, let's stash what we need in the global window object and switch back.
+ * @TODO I'm sure there's a better way to deal with this problem.
+ **/
 import { Simulation } from "./classes/Simulation.js";
 
 /** @type {Simulation} sim */
@@ -27,147 +34,17 @@ console.info('Outside: run(50) result state: "%s"', window.sim.run(50));
 
 <script>
 "use strict";
-const sim = window.sim;
 
-function update_viz(vizel) {
+window.addEventListener('DOMContentLoaded', tab_fixer_onload);
+window.addEventListener('DOMContentLoaded', viz_redraw_init);
+window.addEventListener('memory_updated', viz_request_redraw);
+
 /*
-    const word_count = 32768;
-    const start_word_count_inclusive = 0;
-    const end_word_count_inclusive = 0x7FFF;
-    const words_per_row = 64;
-    const total_rows = 512;
-    const pixel_size = 6;
+window.addEventListener('memory_updated', function (event) {
+        viz_needs_redraw = true;
+    });
 */
 
-    const word_count = 0x2000; // That means it'll STOP here.
-    const words_per_row = 64;
-    const pixel_size = 8;
-    const start_word_count_inclusive = 0;
-    // Calculated, leave alone.
-    const end_word_count_inclusive = word_count - 1;
-    const total_rows = Math.ceil((word_count - start_word_count_inclusive) / words_per_row);
-
-    vizel.innerHTML = '';
-    vizel.appendChild(
-        create_memory_visualizer(
-            window.sim.state.getMemoryDataView(),
-            start_word_count_inclusive, end_word_count_inclusive,
-            words_per_row, total_rows, pixel_size
-        )
-    );
-}
-
-var viz_needs_redraw = false;
-function redraw () {
-    if (viz_needs_redraw) {
-        update_viz(document.getElementById('viz'));
-    }
-    viz_needs_redraw = false;
-    requestAnimationFrame(redraw);
-}
-requestAnimationFrame(redraw);
-
-window.addEventListener('memory_updated', function (event) {
-    // update_viz(document.getElementById('viz'));
-    viz_needs_redraw = true;
-});
-
-
-
-const Tab_Width = 4;
-addEventListener('DOMContentLoaded', function() {
-    const codebox = document.getElementById('codebox');
-    // Turn tabs into 4-char indents.
-    codebox.addEventListener('keydown',
-        /** @param {KeyboardEvent} event */
-        function (event) {
-            if (event.key != "Tab") {
-                return true;
-            }
-            event.preventDefault();
-            event.stopPropagation();
-
-            const el = event.target;
-            if ( !(el instanceof HTMLTextAreaElement) ) {
-                // lol yeah this to shut the typechecker up about how EventTarget
-                // doesn't have the selection or value stuff from forms.  I mean
-                // it's right, but it's also wrong.  I couldn't cast it because
-                // then it'd complain that the thing coming in from event.target
-                // couldn't be cast into a textarea and it redlined it ARGH
-                // anyway this works
-                return;
-            }
-            const start_point = el.selectionStart;
-            const end_point = el.selectionEnd;
-            const previous_newline = el.value.lastIndexOf("\x0a", start_point);
-
-            const chars_in = start_point - previous_newline - 1;
-            let insert_count = 0;
-            if (chars_in > 0) {
-                const tabstops = Math.floor(chars_in / Tab_Width);
-                const remainder = chars_in - (tabstops * Tab_Width);
-                insert_count = Tab_Width - remainder;
-            }
-            if (insert_count == 0) {
-                insert_count = Tab_Width;
-            }
-            const left = el.value.substring(0, start_point);
-            const right = el.value.substring(start_point);
-            el.value = left + ' '.repeat(insert_count) + right;
-            el.setSelectionRange(start_point + insert_count, end_point + insert_count);
-        }
-    );
-});
-
-/**
- * @param {DataView} memory
- * @param {number} word_count
- * @param {number} start_word_count_inclusive
- * @param {number} end_word_count_inclusive
- * @param {number} words_per_row
- * @param {number} total_rows
- * @param {number} pixel_size
- **/
-function create_memory_visualizer(memory, start_word_count_inclusive, end_word_count_inclusive, words_per_row, total_rows, pixel_size) {
-    const WORDS_PER_VISUAL_ROW = words_per_row;
-    const TOTAL_VISUAL_ROWS = total_rows;
-    const BLOCK_SIZE = pixel_size;
-
-    const canvas = document.createElement('canvas');
-    canvas.width = WORDS_PER_VISUAL_ROW * BLOCK_SIZE;;
-    canvas.height = TOTAL_VISUAL_ROWS * BLOCK_SIZE;
-
-    const ctx = canvas.getContext('2d');
-    const image_data = ctx.createImageData(canvas.width, canvas.height);
-
-    for (let i = start_word_count_inclusive; i < end_word_count_inclusive; i++) {
-        const word = memory.getUint16(i * 2);
-        const red = (word >> 11) << 3;
-        const green = ((word >> 5) & 0x3f) << 2;
-        const blue = (word & 0x1f) << 3;
-
-        const row = Math.floor(i / WORDS_PER_VISUAL_ROW);
-        const col = i % WORDS_PER_VISUAL_ROW;
-        //console.log("Word %s at %d x %d", (i * 2).toString(16).toUpperCase().padStart(4,"0"), row, col);
-        const blockX = col * BLOCK_SIZE;
-        const blockY = row * BLOCK_SIZE;
-
-        for (let j = 0; j < BLOCK_SIZE; j++) {
-            for (let k = 0; k < BLOCK_SIZE; k++) {
-                const pixelX = blockX + k;
-                const pixelY = blockY + j;
-                const pixel_offset = (pixelY * canvas.width + pixelX) * 4;
-                image_data.data[pixel_offset] = red;
-                image_data.data[pixel_offset + 1] = green;
-                image_data.data[pixel_offset + 2] = blue;
-                image_data.data[pixel_offset + 3] = 255;
-            }
-        }
-    }
-
-    ctx.putImageData(image_data, 0, 0);
-    return canvas;
-}
 </script>
 
 <!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
