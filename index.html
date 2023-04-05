@@ -8,83 +8,27 @@
             /** @type {Simulation} sim */
             window.sim = '';
         </script>
-        <script type="module">
+<script type="module">
 // @ts-check
 import { Simulation } from "./classes/Simulation.js";
-import { Op, Ops } from "./ops.js";
-import { ExecutionProcess } from "./classes/ExecutionProcess.js";
-import { ExecutionUnit } from "./classes/ExecutionUnit.js";
-import { Instruction } from "./classes/Instruction.js";
 
 /** @type {Simulation} sim */
 window.sim = new Simulation();
-
-/*
-const starting_point = 0;
-for (let x = 0; x < 256; x++) {
-    // We're packing together two bytes in memory to make a color.
-    // We're about to write 256 consecutive *bytes*, or 128 words.
-    // On the current 128-word wide color graph, this means we're going to write
-    // exactly one row.
-
-    // The base address to which we write is based on how far into x we are.
-    const x_factor = 256 * x;
-
-    for (let y = 0; y < 128; y++) {
-        // lol math
-        window.sim.state.setByte(0xF000, x); // starting_point + x_factor + (y * 2), x);
-        window.sim.state.setByte(0xF000, y); // starting_point + x_factor + (y * 2) + 1, y);
-    }
-}
-*/
 for (let i = 0; i < 32768; i++) {
     window.sim.state.setWord(i, 0x1000);
 }
 window.sim.resetIVs();
-
-function GR() { const ta = new Uint16Array(1); window.crypto.getRandomValues(ta); return ta[0]; }
-
-let counter = 100;
-while(false) {
-    const rn = GR();
-    //console.debug('opcode=' + rn.toString(16).toUpperCase().padStart('0',4));
-
-    const op_name = Op.getOpForOpcode(rn);
-    if (op_name === undefined) {
-        console.error('Whoa, a real live MID!  Moving on...');
-        continue;
-    }
-    const op = Op.getOpForString(op_name);
-    const inst = new Instruction(op);
-    inst.setParamsFromOpcode(rn);
-    const pl = inst.getParamList();
-    //console.debug(`int=${inst.op.op} base_opcode=${inst.op.opcode.toString(16).toUpperCase().padStart('0',4)} actual_opcode=${inst.getEffectiveOpcode().toString(16).toUpperCase().padStart('0',4)} args=${pl.join(',')}`);
-    for (let param_name of pl) {
-        //console.debug(`param '${param_name}' = ` + inst.getParam(param_name));
-    }
-    if (--counter < 1) {
-        break;
-    }
-}
-
-
-
-
 // And away we go!
 console.info('Outside: calling run(50)')
 console.info('Outside: run(50) result state: "%s"', window.sim.run(50));
-// Nothing should go below here.
-// Nothing should go below here.
-// Nothing should go below here.
-        </script>
+</script>
 
-        <!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
+<!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
 
-        <script>
-
+<script>
 "use strict";
-
 const sim = window.sim;
+
 function update_viz(vizel) {
 /*
     const word_count = 32768;
@@ -96,18 +40,18 @@ function update_viz(vizel) {
 */
 
     const word_count = 0x2000; // That means it'll STOP here.
-    const start_word_count_inclusive = 0;
-    const end_word_count_inclusive = word_count - 1;
     const words_per_row = 64;
-    const total_rows = Math.ceil((word_count - start_word_count_inclusive) / words_per_row);
     const pixel_size = 8;
-
+    const start_word_count_inclusive = 0;
+    // Calculated, leave alone.
+    const end_word_count_inclusive = word_count - 1;
+    const total_rows = Math.ceil((word_count - start_word_count_inclusive) / words_per_row);
 
     vizel.innerHTML = '';
     vizel.appendChild(
-        createMemoryVisualizer(
+        create_memory_visualizer(
             window.sim.state.getMemoryDataView(),
-            word_count, start_word_count_inclusive, end_word_count_inclusive,
+            start_word_count_inclusive, end_word_count_inclusive,
             words_per_row, total_rows, pixel_size
         )
     );
@@ -131,7 +75,6 @@ window.addEventListener('memory_updated', function (event) {
 
 
 const Tab_Width = 4;
-
 addEventListener('DOMContentLoaded', function() {
     const codebox = document.getElementById('codebox');
     // Turn tabs into 4-char indents.
@@ -185,8 +128,7 @@ addEventListener('DOMContentLoaded', function() {
  * @param {number} total_rows
  * @param {number} pixel_size
  **/
-function createMemoryVisualizer(memory, word_count, start_word_count_inclusive, end_word_count_inclusive, words_per_row, total_rows, pixel_size) {
-    const WORDS_IN_DATAVIEW = word_count;
+function create_memory_visualizer(memory, start_word_count_inclusive, end_word_count_inclusive, words_per_row, total_rows, pixel_size) {
     const WORDS_PER_VISUAL_ROW = words_per_row;
     const TOTAL_VISUAL_ROWS = total_rows;
     const BLOCK_SIZE = pixel_size;
@@ -196,7 +138,7 @@ function createMemoryVisualizer(memory, word_count, start_word_count_inclusive, 
     canvas.height = TOTAL_VISUAL_ROWS * BLOCK_SIZE;
 
     const ctx = canvas.getContext('2d');
-    const imageData = ctx.createImageData(canvas.width, canvas.height);
+    const image_data = ctx.createImageData(canvas.width, canvas.height);
 
     for (let i = start_word_count_inclusive; i < end_word_count_inclusive; i++) {
         const word = memory.getUint16(i * 2);
@@ -214,29 +156,21 @@ function createMemoryVisualizer(memory, word_count, start_word_count_inclusive, 
             for (let k = 0; k < BLOCK_SIZE; k++) {
                 const pixelX = blockX + k;
                 const pixelY = blockY + j;
-                const pixelOffset = (pixelY * canvas.width + pixelX) * 4;
-                imageData.data[pixelOffset] = red;
-                imageData.data[pixelOffset + 1] = green;
-                imageData.data[pixelOffset + 2] = blue;
-                imageData.data[pixelOffset + 3] = 255;
+                const pixel_offset = (pixelY * canvas.width + pixelX) * 4;
+                image_data.data[pixel_offset] = red;
+                image_data.data[pixel_offset + 1] = green;
+                image_data.data[pixel_offset + 2] = blue;
+                image_data.data[pixel_offset + 3] = 255;
             }
         }
     }
 
-    ctx.putImageData(imageData, 0, 0);
-    /*
-    canvas.addEventListener('click', function (event) {
-        const rect = canvas.getBoundingClientRect()
-        const x = event.clientX - rect.left
-        const y = event.clientY - rect.top
-        console.log("x: " + x + " y: " + y)
-    });
-    */
+    ctx.putImageData(image_data, 0, 0);
     return canvas;
 }
-        </script>
+</script>
 
-        <!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
+<!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
 
         <style>
             /* https://paletton.com/#uid=53u0I0kgX6j8zeBb67ClS4Srx3b */
