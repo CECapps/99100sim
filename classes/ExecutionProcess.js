@@ -72,7 +72,7 @@ export class ExecutionProcess {
         // second word right now.
         if (this.#ni.isTwoWordInstruction()) {
             throw new Error('Two word support NYI sorry.');
-            this.#ni.setSecondWord(this.#simstate.memory.getWord(this.#ni_pc + 2));
+            this.#ni.setSecondWord(this.#simstate.getWord(this.#ni_pc + 2));
         }
         this.#ni.finalize();
     }

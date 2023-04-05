@@ -171,8 +171,8 @@ export class Flow {
      */
     stateReset() {
         // The power-on / interrupt 0 / reset vectors are at the start of memory space.
-        this.#reset_vector_wp = this.simstate.memory.getWord(0x0000);
-        this.#reset_vector_pc = this.simstate.memory.getWord(0x0002);
+        this.#reset_vector_wp = this.simstate.getWord(0x0000);
+        this.#reset_vector_pc = this.simstate.getWord(0x0002);
         this.#reset_vector_mask = 0b000;
         return this.enterState('Begin');
     }
@@ -518,23 +518,23 @@ export class Flow {
 
         if (this.simstate.interrupt_list.hasRaisedNMI()) {
             // The NMI vectors are at the end of memory space.
-            this.#reset_vector_pc = this.simstate.memory.getWord(0xFFFC);
-            this.#reset_vector_wp = this.simstate.memory.getWord(0xFFFE);
+            this.#reset_vector_pc = this.simstate.getWord(0xFFFC);
+            this.#reset_vector_wp = this.simstate.getWord(0xFFFE);
             this.#reset_vector_mask = 0b000;
             return this.enterState('Begin');
         }
 
         if (this.#_E_NYI_isEnabledInternalInterrupt()) {
             // Internals are always dealt with through interrupt 2
-            this.#reset_vector_wp = this.simstate.memory.getWord(0x0008);
-            this.#reset_vector_pc = this.simstate.memory.getWord(0x000A);
+            this.#reset_vector_wp = this.simstate.getWord(0x0008);
+            this.#reset_vector_pc = this.simstate.getWord(0x000A);
             this.#reset_vector_mask = 0b001; // thus permitting only 0 and 1
             return this.enterState('Begin');
         }
 
         if (this.#_E_NYI_isLevel0InterruptExternal()) {
-            this.#reset_vector_wp = this.simstate.memory.getWord(0x0000);
-            this.#reset_vector_pc = this.simstate.memory.getWord(0x0002);
+            this.#reset_vector_wp = this.simstate.getWord(0x0000);
+            this.#reset_vector_pc = this.simstate.getWord(0x0002);
             this.#reset_vector_mask = 0b000;
             return this.enterState('Begin');
         }
@@ -544,8 +544,8 @@ export class Flow {
         if (int_level == 0) {
             throw new Error('Bottom of state E reached without a raised interrupt, look for bugs!');
         }
-        this.#reset_vector_wp = this.simstate.memory.getWord(0x0000 + (int_level * 4));
-        this.#reset_vector_pc = this.simstate.memory.getWord(0x0002 + (int_level * 4));
+        this.#reset_vector_wp = this.simstate.getWord(0x0000 + (int_level * 4));
+        this.#reset_vector_pc = this.simstate.getWord(0x0002 + (int_level * 4));
         this.#reset_vector_mask = int_level - 1;
         return this.enterState('Begin');
     }

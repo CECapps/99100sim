@@ -57,7 +57,7 @@ class Units {
     static #units = {
         'NOP': class extends ExecutionUnit {
             execute() {
-                console.debug('NOP execute()');
+                console.warn('NOP execute()');
                 return true;
             }
         },

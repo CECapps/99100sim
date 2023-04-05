@@ -24,8 +24,6 @@ export class SimulationState {
 
     /** @type {Memory} */
     #mem;
-    /** @returns {Memory} */
-    get memory()                    { return this.#mem; }
 
     /** @type {StatusRegister} */
     #st;
@@ -61,7 +59,7 @@ export class SimulationState {
     }
 
     getInstructionAtPc() {
-        return Instruction.newFromOpcode(this.memory.getWord(this.#pc));
+        return Instruction.newFromOpcode(this.#mem.getWord(this.#pc));
     }
 
     getPc() {
@@ -78,6 +76,38 @@ export class SimulationState {
         this.#pc -= 2;
     }
 
+
+    getMemoryDataView() {
+        return this.#mem.getDV();
+    }
+
+    /** @param {number} word_at_address */
+    getWord(word_at_address) {
+        return this.#mem.getWord(word_at_address);
+    }
+
+    /**
+     * @param {number} word_at_address
+     * @param {number} word_value
+     **/
+    setWord(word_at_address, word_value) {
+        this.#mem.setWord(word_at_address, word_value);
+    }
+
+    /** @param {number} byte_at_address */
+    getByte(byte_at_address) {
+        return this.#mem.getByte(byte_at_address);
+    }
+
+    /**
+     * @param {number} byte_at_address
+     * @param {number} byte_value
+     **/
+    setByte(byte_at_address, byte_value) {
+        this.#mem.setByte(byte_at_address, byte_value);
+    }
+
+
     /**
      * @param {number} register
      * @param {number} word
@@ -86,7 +116,7 @@ export class SimulationState {
         if (register > 15 || register < 0) {
             register = 0;
         }
-        this.memory.setWord(this.#wp + (register * 2), word);
+        this.#mem.setWord(this.#wp + (register * 2), word);
     }
 
     /**
@@ -96,7 +126,7 @@ export class SimulationState {
         if (register > 15 || register < 0) {
             register = 0;
         }
-        this.memory.getWord(this.#wp + (register * 2));
+        this.#mem.getWord(this.#wp + (register * 2));
     }
 
 }

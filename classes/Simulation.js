@@ -35,13 +35,13 @@ export class Simulation {
     resetIVs() {
         // Set all interrupts to WP = 1100 and PC = 1200
         for (let addr = 0; addr < 64; addr += 2) {
-            this.state.memory.setWord(addr, 0x1100);
+            this.state.setWord(addr, 0x1100);
             addr += 2;
-            this.state.memory.setWord(addr, 0x1200);
+            this.state.setWord(addr, 0x1200);
         }
         // Including the NMI
-        this.state.memory.setWord(0xFFFC, 0x1100);
-        this.state.memory.setWord(0xFFFE, 0x1200);
+        this.state.setWord(0xFFFC, 0x1100);
+        this.state.setWord(0xFFFE, 0x1200);
     }
 
     /**

@@ -32,13 +32,13 @@ for (let x = 0; x < 256; x++) {
 
     for (let y = 0; y < 128; y++) {
         // lol math
-        window.sim.state.memory.setByte(0xF000, x); // starting_point + x_factor + (y * 2), x);
-        window.sim.state.memory.setByte(0xF000, y); // starting_point + x_factor + (y * 2) + 1, y);
+        window.sim.state.setByte(0xF000, x); // starting_point + x_factor + (y * 2), x);
+        window.sim.state.setByte(0xF000, y); // starting_point + x_factor + (y * 2) + 1, y);
     }
 }
 */
 for (let i = 0; i < 32768; i++) {
-    window.sim.state.memory.setWord(i, 0x1000);
+    window.sim.state.setWord(i, 0x1000);
 }
 window.sim.resetIVs();
 
@@ -106,7 +106,7 @@ function update_viz(vizel) {
     vizel.innerHTML = '';
     vizel.appendChild(
         createMemoryVisualizer(
-            window.sim.state.memory.getDV(),
+            window.sim.state.getMemoryDataView(),
             word_count, start_word_count_inclusive, end_word_count_inclusive,
             words_per_row, total_rows, pixel_size
         )
