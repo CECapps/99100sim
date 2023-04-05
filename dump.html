@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>99100 Sim</title>
+        <link rel="icon" href="favicon.png" sizes="100x100" type="image/png">
+<script type="module">
+// @ts-check
+    /**
+     * For Very Important Reasons, you can only import modules if you yourself are
+     * a module.  But if you're a module, you can't actually do certain things.
+     * So, let's stash what we need in the global window object and switch back.
+     * @TODO I'm sure there's a better way to deal with this problem.
+     **/
+    import { Simulation } from "./classes/Simulation.js";
+    import { Instruction } from "./classes/Instruction.js";
+
+    Reflect.set(window, 'Instruction', Instruction);
+
+    /** @type {Simulation} sim */
+    let sim = new Simulation();
+    Reflect.set(window, 'sim', sim);
+    window.dispatchEvent(new CustomEvent('simready'));
+</script>
+
+<!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
+
+<script>
+// @ts-check
+
+    window.addEventListener('simready', function (event) {
+        /** @type {Simulation} sim */
+        sim = Reflect.get(window, 'sim');
+        sim.reset();
+
+        document.getElementById('button_convert_name').addEventListener('click', button_convert_name_callback);
+        document.getElementById('button_convert_opcode').addEventListener('click', button_convert_opcode_callback);
+        document.getElementById('button_dump').addEventListener('click', button_dump_callback);
+        document.getElementById('button_reset').addEventListener('click', button_reset_callback);
+    });
+
+    function button_dump_callback(event) {
+        for (let opcode = 0; opcode <= 0xFFFF; opcode++) {
+            const inst = Instruction.newFromOpcode(opcode);
+            inst.finalize();
+            document.getElementById('here').appendChild(processInstruction(inst, opcode));
+        }
+    }
+
+    function button_reset_callback(event) {
+        document.getElementById('here').innerHTML = '';
+    }
+
+    function button_convert_name_callback(event) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        const op_input = document.getElementById('op_text_input');
+        if ( !(op_input instanceof HTMLInputElement)) {
+            throw new Error();
+        }
+        const op_name = op_input.value.toUpperCase();
+        const inst = Instruction.newFromString(op_name);
+        inst.finalize();
+        document.getElementById('here').appendChild(processInstruction(inst));
+
+        return false;
+    };
+
+    function button_convert_opcode_callback(event) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        const op_input = document.getElementById('op_text_input');
+        if ( !(op_input instanceof HTMLInputElement)) {
+            throw new Error();
+        }
+        const op_num = 0xFFFF & parseInt(op_input.value, 16);
+        const inst = Instruction.newFromOpcode(op_num);
+        inst.finalize();
+        document.getElementById('here').appendChild(processInstruction(inst));
+
+        return false;
+    }
+
+    /**
+     * @param {Instruction} inst
+     * @param {number|null} opcode_override
+     * @returns {Element}
+     **/
+    function processInstruction(inst, opcode_override = null) {
+        const el = document.createElement('pre');
+        const op_code = inst.getEffectiveOpcode();
+        const op_name = inst.op.name.padEnd(4, ' ');
+
+        let op_code_base = inst.op.opcode;
+        if (opcode_override !== null) {
+            op_code_base = opcode_override;
+        }
+
+        // Let's get the assembly back.
+        const params = [];
+        const param_list = inst.getParamList();
+        for (let p of param_list) {
+            params.push(inst.getParam(p));
+        }
+        const f_opcode = op_code.toString(16).toUpperCase().padStart(4, '0');
+        const f_opcode_base = op_code_base.toString(16).toUpperCase().padStart(4, '0');
+        const f_pad = ' '.repeat(4 + (4 - op_name.length));
+        const f_params = params.join(',').padEnd(10, ' ');
+        if (!inst.isLegal()) {
+            el.textContent = `0x${f_opcode} 0x${f_opcode_base}    ; MID?`;
+        } else {
+            el.textContent = `0x${f_opcode} 0x${f_opcode_base}    ${op_name}${f_pad}${f_params} ; ${param_list.join(',')}`;
+        }
+
+        if (inst.isTwoWordInstruction()) {
+            const f_stuff = "\x0a                 ; Second word: " + inst.getSecondWord().toString(16).toUpperCase().padStart(4, '0');
+            el.textContent = el.textContent + f_stuff;
+        }
+        return el;
+    }
+
+    function doInstruction(op_name) {
+        /** @type {Instruction} */
+        const inst = Instruction.newFromString(op_name);
+        inst.finalize();
+        document.getElementById('here').appendChild(processInstruction(inst));
+    }
+
+</script>
+
+<!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
+
+        <style>
+            /* https://paletton.com/#uid=53u0I0kgX6j8zeBb67ClS4Srx3b */
+            html {
+                color: #f0f0f0;
+                background-color: #101a20;
+                /* font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif; */
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: 100;
+                font-size: 0.2in;
+            }
+            input, textarea {
+                color: #f0f0f0;
+                background-color: #101a20;
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: normal;
+                font-size: 1rem;
+            }
+
+        </style>
+    </head>
+    <body>
+        <section>
+            <pre>LI      1,0x1000
+:LOOP
+MOV     1,1,0,1     ; D=ref,R1,S=reg,R1
+INCT    0,1         ; S=reg,R=1
+JMP     :LOOP</pre>
+        </section>
+        <section>
+
+        </section>
+        <hr>
+        <section>
+            <input type="text" id="op_text_input">
+            <button id="button_convert_name">Convert Name</button>
+            <button id="button_convert_opcode">Convert opcode</button>
+        </section>
+        <hr>
+        <section>
+            <button id="button_dump">Dump</button>
+            <button id="button_reset">Reset</button>
+        </section>
+        <section id="here">
+
+        </section>
+    </body>
+</html>
