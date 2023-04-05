@@ -44,13 +44,21 @@ export class Simulation {
         this.state.setWord(0xFFFE, 0x1200);
     }
 
-    /**
-     * @param {number} state_change_limit
-     * @return {string}
-     **/
-    run(state_change_limit) {
-        this.flow.run(state_change_limit);
-        return this.flow.flow_state;
+    run(step_limit = 1) {
+        while (step_limit-- > 0) {
+            this.stepInstruction();
+        }
+        return this.flow.prev_flow_state;
+    }
+
+    step() {
+        this.flow.run(1);
+        return this.flow.prev_flow_state;
+    }
+
+    stepInstruction() {
+        this.flow.runUntilExecutionState();
+        return this.flow.prev_flow_state;
     }
 
 }

@@ -121,12 +121,13 @@ export class SimulationState {
 
     /**
      * @param {number} register
+     * @returns {number}
      **/
     getRegisterWord(register) {
         if (register > 15 || register < 0) {
             register = 0;
         }
-        this.#mem.getWord(this.#wp + (register * 2));
+        return this.#mem.getWord(this.#wp + (register * 2));
     }
 
 }

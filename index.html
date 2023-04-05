@@ -18,32 +18,165 @@
  * @TODO I'm sure there's a better way to deal with this problem.
  **/
 import { Simulation } from "./classes/Simulation.js";
+import { Instruction } from "./classes/Instruction.js";
+import { Op } from "./ops.js";
+
+Reflect.set(window, 'Instruction', Instruction);
+Reflect.set(window, 'Op', Op);
 
 /** @type {Simulation} sim */
 window.sim = new Simulation();
 for (let i = 0; i < 32768; i++) {
-    window.sim.state.setWord(i, 0x1000);
+    window.sim.state.setWord(i, 0x8080);
 }
 window.sim.resetIVs();
 // And away we go!
-console.info('Outside: calling run(50)')
-console.info('Outside: run(50) result state: "%s"', window.sim.run(50));
+//console.info('Outside: calling run(50)')
+//console.info('Outside: run(50) result state: "%s"', window.sim.run(50));
 </script>
 
 <!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
 
 <script>
+// @ts-check
+// hmm no
 "use strict";
 
 window.addEventListener('DOMContentLoaded', tab_fixer_onload);
+
 window.addEventListener('DOMContentLoaded', viz_redraw_init);
 window.addEventListener('memory_updated', viz_request_redraw);
 
-/*
-window.addEventListener('memory_updated', function (event) {
-        viz_needs_redraw = true;
+window.addEventListener('DOMContentLoaded', txt2asm_init);
+
+function update() {
+    /** @type {Simulation} */
+    const sim = window.sim;
+
+    window.document.getElementById('nstate_el').innerText = sim.flow.flow_state;
+    window.document.getElementById('pstate_el').innerText = sim.flow.prev_flow_state;
+
+    window.document.getElementById('wp_el').innerText = '0x' + sim.state.workspace_pointer.toString(16).toUpperCase().padStart(4, '0');
+    window.document.getElementById('pc_el').innerText = '0x' + sim.state.getPc().toString(16).toUpperCase().padStart(4, '0');
+    window.document.getElementById('st_el').innerText = '0b' + sim.state.status_register.getRegisterString();
+
+    const regrow = window.document.getElementById('regrow');
+    regrow.innerHTML = '';
+    for (let regnum = 0; regnum <= 7; regnum++) {
+        const regcell = window.document.createElement('td');
+        regcell.textContent = '0x' + sim.state.getRegisterWord(regnum).toString(16).toUpperCase().padStart(4, '0');
+        regrow.appendChild(regcell);
+    }
+
+    /** @type {ExecutionProcess} */
+    let ep = sim.flow.ep;
+    const inst = ep.getCurrentInstruction();
+    if (inst.op.name != 'NOP') {
+        const op_name = inst.op.name;
+        const op_code = inst.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
+        window.document.getElementById('epci_el').innerText = `${op_name} 0x${op_code}`;
+    } else {
+        window.document.getElementById('epci_el').innerText = '--';
+    }
+
+    const inst2 = ep.getNextInstruction();
+    if (inst2.op.name != 'NOP') {
+        const op2_name = inst2.op.name;
+        const op2_code = inst2.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
+        window.document.getElementById('epni_el').innerText = `${op2_name} 0x${op2_code}`;
+    } else {
+        window.document.getElementById('epni_el').innerText = '--';
+    }
+}
+
+
+var running = false;
+
+function run_frame_callback() {
+    window.sim.stepInstruction();
+    update();
+    if (running) {
+        window.requestAnimationFrame(run_frame_callback);
+    }
+}
+
+function assemble_codebox() {
+    const ta = document.getElementById('codebox');
+    const asm = new Asm();
+    asm.setLines(ta.value);
+    const results = asm.process();
+    if (results && results instanceof Array) {
+        for (let i in results) {
+            //console.log(0x1200 + (i * 2), results[i][1]);
+            window.sim.state.setWord(0x1200 + (i * 2), results[i][1]);
+        }
+    }
+}
+
+window.addEventListener('DOMContentLoaded', function () {
+    assemble_codebox();
+
+    document.getElementById('step_state_button').addEventListener('click', function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        window.sim.step();
+        update();
+        return false;
     });
-*/
+    document.getElementById('inst_state_button').addEventListener('click', function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        window.sim.stepInstruction();
+        update();
+        return false;
+    });
+
+    document.getElementById('codebox_process_button').addEventListener('click', function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        assemble_codebox();
+        return false;
+    });
+
+    document.getElementById('run_button').addEventListener('click', function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+        if (running) {
+            return;
+        }
+
+        running = true;
+        window.document.getElementById('run_el').innerText = 'Yes';
+        run_frame_callback();
+    });
+    document.getElementById('stop_button').addEventListener('click', function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+        if (!running) {
+            return;
+        }
+
+        window.document.getElementById('run_el').innerText = 'No';
+        running = false;
+    });
+    document.getElementById('reset_button').addEventListener('click', function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+
+        window.document.getElementById('run_el').innerText = 'No';
+        running = false;
+        window.sim.reset();
+        for (let i = 0; i < 32768; i++) {
+            window.sim.state.setWord(i, 0x8080);
+        }
+        window.sim.resetIVs();
+        assemble_codebox();
+        update();
+    });
+});
 
 </script>
 
@@ -57,7 +190,7 @@ window.addEventListener('memory_updated', function (event) {
                 /* font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif; */
                 font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
                 font-weight: 100;
-                font-size: 0.2in;
+                font-size: 0.175in;
             }
             input, textarea {
                 color: #f0f0f0;
@@ -66,16 +199,95 @@ window.addEventListener('memory_updated', function (event) {
                 font-weight: normal;
                 font-size: 1rem;
             }
+            button {
+                color: #f0f0f0;
+                background-color: #1A2227;
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: normal;
+                font-size: 1rem;
+                padding: 2px 1em;
+
+                border: 2px outset #37434A;
+                border-radius: 5px;
+            }
+            button:hover {
+                background-color: #37434A;
+            }
+            button:active {
+                background-color: #030B10;
+                border: 2px inset #101A20;
+            }
+            button:focus {
+                outline: 2px dotted #37434A;
+            }
 
             #flexcontainer {
                 display: flex;
             }
+
+            #machine_status_table {
+                width: 100%;
+            }
+            #machine_status_table > tbody > tr > th {
+                text-align: right;
+                padding-right: 0.5em;
+                width: 25%;
+            }
+            #register_table th {
+                min-width: 3.5em;
+            }
+
         </style>
     </head>
     <body>
         <div id="flexcontainer">
             <div style="flex: auto;">
-                <textarea id="codebox" rows="10" cols="40" spellcheck="false" ></textarea>
+                <section>
+                    <textarea id="codebox" rows="10" cols="40" spellcheck="false">LI      1           ; R1
+.data   0x1300
+MOV     1,1,0,1     ; R1,*R1
+INCT    0,1         ; R1
+JMP     -4</textarea>
+                    <br>
+                    <button id="codebox_process_button">Assemble &amp; Load</button>
+                    <div></div>
+                </section>
+                <br>
+                <br>
+                <table id="machine_status_table">
+                    <tr><th>Running:</th>       <td id="run_el">No</td></tr>
+                    <tr><th>Prev State:</th>    <td id="pstate_el">Crash</td></tr>
+                    <tr><th>Next State:</th>    <td id="nstate_el">Crash</td></tr>
+                    <tr>
+                        <td colspan="2">
+                            <table id="register_table">
+                                <tr>
+                                    <th>0</th><th>1</th><th>2</th><th>3</th>
+                                    <th>4</th><th>5</th><th>6</th><th>7</th>
+                                    <!-- <th>8</th><th>9</th><th>10</th><th>11</th>
+                                    <th>12</th><th>13</th><th>14</th><th>15</th> -->
+                                </tr>
+                                <tr id="regrow">
+                                    <td>--</td><td>--</td><td>--</td><td>--</td>
+                                    <td>--</td><td>--</td><td>--</td><td>--</td>
+                                    <!-- <td>--</td><td>--</td><td>--</td><td>--</td>
+                                    <td>--</td><td>--</td><td>--</td><td>--</td> -->
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                    <tr><th>WP:</th>            <td id="wp_el">0x0000</td></tr>
+                    <tr><th>PC:</th>            <td id="pc_el">0x0000</td></tr>
+                    <tr><th>ST:</th>            <td id="st_el">0b0000000000000000</td></tr>
+                    <tr><th>Now:</th>           <td id="epci_el">--</td></tr>
+                    <tr><th>Next:</th>          <td id="epni_el">--</td></tr>
+                </table>
+                <button id="step_state_button">State Step</button>
+                <button id="inst_state_button">Instruction Step</button>
+                &bull;
+                <button id="run_button">Run</button>
+                <button id="stop_button">Stop</button>
+                <button id="reset_button">Reset</button>
             </div>
             <div id="viz" style="flex: auto;"></div>
         </div>

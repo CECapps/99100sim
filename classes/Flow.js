@@ -39,6 +39,7 @@ export class Flow {
     /** @type {ExecutionProcess} */
     ep;
     flow_state = 'PowerOn';
+    prev_flow_state = 'Crash';
 
     /**
      * @see areActiveInterruptsRaised for docs
@@ -77,10 +78,20 @@ export class Flow {
         // Flow state is set inside enterState.  We pick it up here so we can
         // resume where we left off if we get interrupted.
         let next_function = this.#getStateFunction(this.flow_state);
+        //console.debug(next_function);
         let counter = state_change_limit;
-        while (next_function !== null && --counter > 0) {
+        while (next_function !== null && counter-- > 0) {
             let chained_state = next_function.call(this);
             next_function = chained_state;
+        }
+    }
+
+    runUntilExecutionState() {
+        if (this.prev_flow_state == 'B') {
+            this.run(1);
+        }
+        while (this.prev_flow_state != 'B') {
+            this.run(1);
         }
     }
 
@@ -106,6 +117,7 @@ export class Flow {
             state_value = 'Crash';
             next_state = this.#getStateFunction(state_value);
         }
+        this.prev_flow_state = this.flow_state;
         this.flow_state = state_value;
         //console.info(`Flow: "${prev_state}" => "${state_value}"`);
         return next_state;
@@ -369,14 +381,15 @@ export class Flow {
      * Doing it in that order anyway.
      */
     stateB() {
+        /** @TODO this returns a value, what do? */
+        this.ep.execute();
+
         // Fetch the next instruction, but do not execute it yet.
         // This automatically uses and stashes the PC but does NOT advance it.
         this.ep.fetchNextInstruction();
         this.#recordStateOfAppSignal(); // For a check during state C2
         this.simstate.advancePc();
 
-        /** @TODO this returns a value, what do? */
-        this.ep.execute();
         /** @TODO this returns a value, what do? */
         this.ep.writeResults();
 
@@ -405,7 +418,8 @@ export class Flow {
         // This automatically uses and stashes the PC but does NOT advance it.
         this.ep.fetchNextInstruction();
         this.#recordStateOfAppSignal(); // For a check during state C2
-        this.simstate.advancePc();
+        /** @FIXME why did commenting this out work?  the docs say to inc PC here... */
+        //this.simstate.advancePc();
 
         return this.enterState('C2');
     }

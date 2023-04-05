@@ -78,6 +78,7 @@ export class Instruction {
         if (this.#working_opcode != 0) {
             return this.#working_opcode;
         }
+        console.warn('getEffectiveOpcode fallthrough');
         return this.#base_opcode;
     }
 
@@ -90,8 +91,7 @@ export class Instruction {
      **/
     getParam(param_name) {
         if (!this.#is_finalized) {
-            console.error('getParam: Instruction is not yet Finalized.  The call is bugged!');
-            return;
+            console.warn('getParam: Instruction is not yet Finalized.  The call may be bugged!');
         }
         if (this.#working_opcode == 0) {
             console.error('getParam called before known good state: probable bug');
@@ -123,6 +123,57 @@ export class Instruction {
         }
     }
 
+    /**
+     * @param {string} param_name
+     * @param {string|number} value
+     **/
+    setParam(param_name, value) {
+        if (this.#is_finalized) {
+            console.error('setParam: Instruction is Finalized.  The call is bugged!');
+            return false;
+        }
+        //console.debug(' => ', this.op.args, param_name, Reflect.get(this.op.args, param_name));
+        if (!this.op.args[param_name]) {
+            console.error('setParam: unknown param name', param_name);
+            return false;
+        }
+
+        let running_offset = this.op.arg_start_bit;
+        for (let k in this.op.args) {
+            const arg_length = this.op.args[k];
+            // We have to count up the total bits skipped, which means we have
+            // to start at the beginning of the list.
+            if (k.toLowerCase() !== param_name.toLowerCase()) {
+                running_offset += arg_length;
+                continue;
+            }
+
+            let opcode_binstring = this.#working_opcode.toString(2).padStart(16,'0');
+            if (this.isTwoWordInstruction()) {
+                opcode_binstring += this.#second_word.toString(2).padStart(16,'0');
+            }
+            const before = opcode_binstring.substring(0, running_offset);
+            const middle = opcode_binstring.substring(running_offset, running_offset + arg_length);
+            const after = opcode_binstring.substring(running_offset + arg_length);
+
+            let bitmask = parseInt('1'.repeat(arg_length), 2);
+            //console.debug('bitmask', bitmask.toString(2));
+            const after_value = bitmask & parseInt(value.toString());
+            //console.log('param=', k, 'before=', this.getParam(k), 'after=', after_value);
+            //console.debug([middle, parseInt(middle, 2), value, after_value]);
+
+            const new_bitstring = before + after_value.toString(2).padStart(arg_length, '0') + after;
+            this.#working_opcode = parseInt(new_bitstring.substring(0, 16), 2);
+            if (this.isTwoWordInstruction()) {
+                this.#second_word = parseInt(new_bitstring.substring(16), 2);
+            }
+            //console.log('old=', opcode_binstring);
+            //console.log('new=', new_bitstring);
+            //console.log('param=', k, 'now=', this.getParam(k), 'expected=', after_value);
+
+        }
+    }
+
     /** @param {number} opcode */
     setParamsFromOpcode(opcode) {
         if (this.#is_finalized) {
@@ -133,6 +184,10 @@ export class Instruction {
             return;
         }
         this.#working_opcode = opcode;
+    }
+
+    getSecondWord() {
+        return this.#second_word;
     }
 
     /** @param {number} word */
@@ -162,7 +217,11 @@ export class Instruction {
         }
         // Everything else will fail during the path that gets us here, and
         // an empty Op object will have opcode=0 and op=NOP
-        return this.op.op == '' || this.op.opcode == 0 || this.op.op == 'NOP';
+        const op_name_is_empty = this.#opcode_info.op == '';
+        const op_name_is_NOP = this.#opcode_info.op == 'NOP'
+        const op_code_is_zero = this.#opcode_info.opcode == 0;
+        const is_illegal = op_name_is_empty || op_name_is_NOP || op_code_is_zero;
+        return !is_illegal;
     }
 
     /**

@@ -36,7 +36,7 @@ function update_viz(vizel) {
     const pixel_size = 6;
     */
 
-    const word_count = 0x2000; // That means it'll STOP here.
+    const word_count = 0x8000; // That means it'll STOP here.
     const words_per_row = 64;
     const pixel_size = 8;
     const start_word_count_inclusive = 0;
@@ -124,7 +124,7 @@ function update_viz(vizel) {
     }
     const image_data = ctx.createImageData(canvas.width, canvas.height);
 
-    for (let i = start_word_count_inclusive; i < end_word_count_inclusive; i++) {
+    for (let i = start_word_count_inclusive; i <= end_word_count_inclusive; i++) {
         const word = memory.getUint16(i * 2);
         const red = (word >> 11) << 3;
         const green = ((word >> 5) & 0x3f) << 2;

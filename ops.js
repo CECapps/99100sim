@@ -62,6 +62,17 @@ class Op {
     }
 
     /**
+     * @param {string} op_name
+     * @returns { Op | false }
+     **/
+    static getOpcodeForString(op_name) {
+        if (Ops.op_names.includes(op_name.toUpperCase())) {
+            return Reflect.get(Ops, op_name.toUpperCase()).opcode;
+        }
+        return false;
+    }
+
+    /**
      * @param {number} opcode
      **/
     static opcodeCouldBeMID(opcode) {
@@ -73,6 +84,9 @@ class Op {
         return false;
     }
 
+    get name() {                        return this.op; }
+
+    // These all get overridden
     get op() {                          return "NOP"; }
     get shortdesc() {                   return "NOP (IMPOSSIBLE ERROR)"; }
     get opcode() {                      return 0; }

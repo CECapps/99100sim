@@ -53,6 +53,10 @@ export class ExecutionProcess {
         return this.#ci;
     }
 
+    getNextInstruction() {
+        return this.#ni;
+    }
+
     getCurrentInstructionPC() {
         return this.#ci_pc;
     }
@@ -75,12 +79,13 @@ export class ExecutionProcess {
             this.#ni.setSecondWord(this.#simstate.getWord(this.#ni_pc + 2));
         }
         this.#ni.finalize();
+
     }
 
     promoteNextInstructionToCurrentInstruction() {
         this.#ci_pc = this.#ni_pc;
         this.#ci = this.#ni;
-        console.debug('Current Instruction is now ', this.#ci.op.op, this.#ci);
+        //console.debug('Current Instruction is now ', this.#ci.op.op, this.#ci);
 
         this.#eu = ExecutionUnit.newFromInstruction(this.#ci, this.#simstate);
 
@@ -150,7 +155,7 @@ export class ExecutionProcess {
             return false;
         }
         if (this.#finished_begin) {
-            throw new Error('ExeuctionProcess.begin called twice, you have a bug.');
+            throw new Error('ExecutionProcess.begin called twice, you have a bug.');
         }
         this.#finished_begin = true;
 
@@ -164,10 +169,10 @@ export class ExecutionProcess {
             return false;
         }
         if (this.#finished_fetch) {
-            throw new Error('ExeuctionProcess.fetchOperands called twice, you have a bug.');
+            throw new Error('ExecutionProcess.fetchOperands called twice, you have a bug.');
         }
         if (!this.#finished_begin) {
-            throw new Error('ExeuctionProcess.fetchOperands called before begin, you have a bug.');
+            throw new Error('ExecutionProcess.fetchOperands called before begin, you have a bug.');
         }
         this.#finished_fetch = true;
 
@@ -179,10 +184,10 @@ export class ExecutionProcess {
             return false;
         }
         if (this.#finished_exec) {
-            throw new Error('ExeuctionProcess.execute called twice, you have a bug.');
+            throw new Error('ExecutionProcess.execute called twice, you have a bug.');
         }
         if (!this.#finished_fetch) {
-            throw new Error('ExeuctionProcess.execute called before fetchOperands, you have a bug.');
+            throw new Error('ExecutionProcess.execute called before fetchOperands, you have a bug.');
         }
         this.#finished_exec = true;
 
@@ -194,10 +199,10 @@ export class ExecutionProcess {
             return false;
         }
         if (this.#finished_write) {
-            throw new Error('writeResults.execute called twice, you have a bug.');
+            throw new Error('ExecutionProcess.writeResults called twice, you have a bug.');
         }
         if (!this.#finished_exec) {
-            throw new Error('ExeuctionProcess.writeResults called before execute, you have a bug.');
+            throw new Error('ExecutionProcess.writeResults called before execute, you have a bug.');
         }
         this.#finished_write = true;
 
