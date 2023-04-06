@@ -1,5 +1,7 @@
 // @ts-check
 
+//import { Instruction } from "./classes/Instruction";
+
 const Tab_Width = 4;
 function tab_fixer_onload() {
     const codebox = document.getElementById('codebox');
@@ -50,13 +52,27 @@ function txt2asm_init() {
         return;
     }
     codebox.addEventListener('keydown', txt2asm_keydown_listener);
+    codebox.addEventListener('focus', txt2asm_keydown_listener);
+    codebox.addEventListener('blur', txt2asm_keydown_listener);
 }
 
 /**
  * @param {Event} event
  **/
 function txt2asm_keydown_listener(event) {
-    console.log(event);
+    event.stopPropagation();
+    const textarea = event.target;
+    if ( !(textarea instanceof HTMLTextAreaElement)) {
+        return;
+    }
+    resize_textarea(textarea);
+
+}
+
+/** @param {HTMLTextAreaElement} textarea */
+function resize_textarea(textarea) {
+    const rawlines = textarea.value.replaceAll(/\r\n/g, "\n").split(/\n/);
+    textarea.rows = rawlines.length + 2;
 }
 
 class Asm {
@@ -64,198 +80,199 @@ class Asm {
     /** @type string[] */
     #lines = [];
 
+    /**
+     * @type {AsmParseLineResult[]}
+     **/
+    #parsed_lines = [];
+
+
     /** @param {string} lines */
     setLines(lines) {
+        this.reset();
         this.#lines = lines.split(/[\r\n]/);
     }
 
-    process() {
-        const labels = new Map();
-        const start_word = 0;
+    reset() {
+        this.#lines = [];
+        this.#parsed_lines = [];
+    }
 
-        const processed = [];
+    /** @param {string} line */
+    #parseLine(line) {
 
-        let words_processed = 0;
-        // First pull them out...
-        for (let i in this.#lines) {
-            let line = this.#lines[i];
-            const matches = line.match(/^\:([A-Z]+)/);
-            if (matches) {
-                const matched_label = matches[1];
-                //console.debug(matched_label);
-                labels.set(matched_label, words_processed);
+        const result = new AsmParseLineResult();
+
+        result.line_type = 'pending';
+        result.instruction = '';
+        result.instruction_argument = '';
+
+        // Step 1: No whitespace.
+        line = line.trim();
+        line = line.replaceAll(/[\s\t\r\n]+/g, "\x20").trim();
+        // Step 2: Snip off comments.
+        result.comments = '';
+        const semicolon_index = line.indexOf(';');
+        if (semicolon_index !== -1) {
+            result.comments = line.substring(semicolon_index + 1).trim();
+            line = line.substring(0, semicolon_index).trim();
+        }
+        if (line.length == 0) {
+            result.line_type = 'comment';
+        }
+        // Step 3: Filter out instructions
+        const instruction_match = line.match(/^([A-Z]{1,4})([\b\s]|$)/);
+        if (instruction_match) {
+            result.line_type = 'instruction';
+            result.instruction = instruction_match[1];
+            // All remaining things in the line must be arguments.
+            result.instruction_argument = line.substring(result.instruction.length).trim();
+        }
+        // Step 4: Processing instructions.
+        const pi_match = line.match(/^\.([a-zA-Z_0-9]+)([\b\s]|$)/);
+        if (result.line_type == 'pending' && pi_match) {
+            result.line_type = 'pi';
+            result.instruction = pi_match[1].toLowerCase();
+            // All remaining things in the line must be arguments.
+            result.instruction_argument = line.substring(result.instruction.length + 1).trim();
+        }
+        // Step 5: Labels.
+        const label_match = line.match(/^\:([a-zA-Z_0-9]+)([\b\s]|$)/);
+        if (result.line_type == 'pending' && label_match) {
+            result.line_type = 'label';
+            result.instruction = label_match[1].toLowerCase();
+            // Nope, no arguments.
+        }
+        // Step 6: Fallthrough.
+        if (result.line_type == 'pending') {
+            result.line_type = 'fallthrough';
+        }
+        result.line = line;
+
+        this.#parsed_lines.push(result);
+    }
+
+    #checkLines() {
+        for (let line of this.#parsed_lines) {
+            if (line.line_type == 'instruction') {
+                const new_opcode = this.#checkLineInstructionToOpcode(line);
+                if (new_opcode) {
+                    line.word = new_opcode;
+                }
                 continue;
             }
 
-            for (let kv of labels) {
-                const replace_regex = new RegExp('\\:' + kv[0] + '\\b');
-                let matches2 = line.match(replace_regex);
-                while (matches2) {
-                    const repl = kv[1];
-                    line = line.replace(replace_regex, 0 - words_processed + repl);
-                    matches2 = line.match(replace_regex);
+            if (line.line_type == 'pi' && line.instruction == 'data') {
+                // @TODO cleanup
+                if (line.instruction_argument.startsWith('0x')) {
+                    line.word = parseInt(line.instruction_argument.substring(2), 16);
+                } else if (line.instruction_argument.startsWith('0b')) {
+                    line.word = parseInt(line.instruction_argument.substring(2), 2);
+                } else if (line.instruction_argument.match(/^\d+$/)) {
+                    line.word = parseInt(line.instruction_argument.substring(2), 10);
                 }
             }
 
-            const res = txt2asm(line);
-            if (res && res instanceof Array) {
-                console.log('res=', res);
-                processed.push(res);
-                const instr = res[0];
-                words_processed += 1 + (instr && instr.isTwoWordInstruction() ? 1 : 0);
+        }
+    }
+
+    /** @param {AsmParseLineResult} line */
+    #checkLineInstructionToOpcode(line) {
+        const inst = Instruction.newFromString(line.instruction);
+        if (!inst.isLegal()) {
+            console.error('illegal op', line, inst);
+            return null;
+        }
+        const param_list = inst.getParamList();
+        const split_params = line.instruction_argument.split(',');
+        if (param_list.length != split_params.length) {
+            let operand_adjust = 0;
+            if (param_list.includes('Ts')) {
+                operand_adjust++;
+            }
+            if (param_list.includes('Td')) {
+                operand_adjust++;
+            }
+            if (param_list.length == (split_params.length - operand_adjust)) {
+                throw new Error('can not yet scan Rs sorry');
+            }
+            console.error('param count mismatch', param_list, split_params);
+            return null;
+        }
+        for (let i in param_list) {
+            inst.setParam(param_list[i], split_params[i]);
+        }
+        inst.finalize();
+
+        if (!inst.isLegal()) {
+            console.error('illegal op (2)', line, inst);
+            return null;
+        }
+        return inst.getEffectiveOpcode();
+    }
+
+    process() {
+        this.#parsed_lines = [];
+        for (let line of this.#lines) {
+            this.#parseLine(line);
+        }
+        this.#checkLines();
+        return this.#parsed_lines;
+    }
+
+    toWords() {
+        /** @type number[] */
+        const words = [];
+        for (let line of this.#parsed_lines) {
+            const is_instruction = line.line_type == 'instruction';
+            const is_pi_data = ((line.line_type == 'pi') && (line.instruction == 'data'));
+            if (is_instruction || is_pi_data) {
+                words.push(line.word);
             }
         }
+        return words;
+    }
 
-        return processed;
+    toAsm() {
+        /** @type string[] */
+        const asm = [];
+        for (let line of this.#parsed_lines) {
+            const is_pi_data = ((line.line_type == 'pi') && (line.instruction == 'data'));
+            if (is_pi_data) {
+                const f_word = line.word.toString(16).toUpperCase().padStart(4, '0');
+                const f_comments = line.comments.length ? ' ; ' + line.comments : '';
+                const f_string = '.data   0x' + f_word;
+                asm.push(f_string.padEnd(18, ' ') + f_comments);
+            }
+
+            const is_instruction = line.line_type == 'instruction';
+            if (!is_instruction) {
+                continue;
+            }
+
+            const instr = Instruction.newFromOpcode(line.word);
+            instr.finalize();
+            const f_instr = instr.op.name.padEnd(8, ' ');
+            const f_params = [];
+            for (let param_name of instr.getParamList()) {
+                const param_value = instr.getParam(param_name);
+                if (param_value === undefined) {
+                    throw new Error('hey look another params check failed');
+                }
+                f_params.push(param_value);
+            }
+            const f_comments = line.comments.length ? ' ; ' + line.comments : '';
+            asm.push(f_instr + f_params.join(',').padEnd(10, ' ') + f_comments);
+        }
+        return asm;
     }
 
 }
 
-
-
-/**
- * Our incoming text will look something like:
- * "0x1234 ABCD 1,2,3,4 ; FOO BAR"
- *  -- or something like
- * "LI"
- *
- * Turn this stuff into an Instruction.
- *
- * @param {string} line
- * @x returns {Instruction|false}
- **/
-function txt2asm(line) {
-    const Op = Reflect.get(window, 'Op');
-    const Instruction = Reflect.get(window, 'Instruction');
-
-    line = line.trim();
-    //console.debug('line=', line);
-
-    // We don't care about labels.
-    if (line.startsWith(':') || line.startsWith(';')) {
-        //console.debug('txt2asm: starts with a colon (label) or semicolon (comment)');
-        return false;
-    }
-
-    if (line.startsWith('.')) {
-        const dot_matches = line.match(/^\.([a-z_]+)\s+(0([xbo]))?([0-9a-f\-]+)\s*(;.+)?$/i);
-        if (dot_matches && dot_matches[1].toLowerCase() == 'data') {
-            //console.debug(dot_matches);
-            let data_value = parseInt(dot_matches[4], 10);
-            if (dot_matches[3] == 'x') {
-                data_value = parseInt(dot_matches[4], 16);
-            } else if (dot_matches[3] == 'b') {
-                data_value = parseInt(dot_matches[4], 2);
-            } else if (dot_matches[3] == 'o') {
-                data_value = parseInt(dot_matches[4], 8);
-            }
-            return [ false, data_value, '.data  0x' + data_value.toString(16).toUpperCase().padStart(4, '0') ];
-        }
-        return false;
-    }
-
-    let hex_part = 0;
-    let op_name_part = '';
-    /** @type Array<number|string> */
-    let args_part = [];
-    let comment_part = '';
-
-    const line_regex = /^(0x)?([0-9a-fA-F]{4})?\s*([A-Z]{1,4})?\s*([0-9A-Za-z:\,\-]+)?\s*(;.+)?$/;
-    const matches = line.match(line_regex);
-    console.debug('matches=', matches);
-    if (!matches) {
-        console.debug('txt2asm: regex fail', line);
-        return false;
-    }
-
-    if (matches[2]) {
-        hex_part = parseInt(matches[2], 16);
-    }
-    if (matches[3]) {
-        op_name_part = matches[3].trim();
-    }
-    if (matches[4]) {
-        args_part = matches[4].trim().split(',');
-    }
-    if (matches[5]) {
-        comment_part = matches[5].trim();
-    }
-    //console.debug('comment_part=', comment_part);
-
-    let is_hex_valid = false;
-    let hex_op_name = '';
-    if (hex_part > 0) {
-        hex_op_name = Op.getOpNameForOpcode(hex_part);
-        //console.debug('txt2asm: hex_op_name=', hex_op_name);
-        is_hex_valid = !!hex_op_name.length;
-    }
-
-    let is_op_name_valid = false;
-    let possible_hex_part = 0;
-    if (op_name_part.length) {
-        possible_hex_part = Op.getOpcodeForString(op_name_part);
-        //console.debug(possible_hex_part);
-        //console.debug('txt2asm: possible_hex_part=', possible_hex_part, op_name_part);
-        if (!possible_hex_part) {
-            possible_hex_part = 0;
-        }
-        if (possible_hex_part > 0) {
-            is_op_name_valid = true;
-        }
-    }
-
-    if (!is_hex_valid && !is_op_name_valid) {
-        //console.debug('txt2asm: !is_hex_valid && !is_op_name_valid');
-        return false;
-    }
-
-    if (is_hex_valid && !is_op_name_valid) {
-        op_name_part = hex_op_name;
-    }
-
-    if (is_op_name_valid && !is_hex_valid) {
-        //console.debug('txt2asm: is_op_name_valid && !is_hex_valid', op_name_part);
-        const new_opcode = Op.getOpcodeForString(op_name_part);
-        if (new_opcode !== false) {
-            hex_part = new_opcode;
-        }
-    }
-
-    if (Op.getOpNameForOpcode(hex_part) !== op_name_part) {
-        console.error('txt2asm: hex_part -> name != op_name', hex_part, op_name_part);
-        return false;
-    }
-
-    if (Op.getOpcodeForString(op_name_part) !== hex_part) {
-        console.error('txt2asm: name -> opcode != hex_part', op_name_part, hex_part);
-        return false;
-    }
-
-    const instr = Instruction.newFromOpcode(hex_part);
-    if (args_part.length != instr.getParamList().length) {
-        console.error('txt2asm: args_part length mismatch');
-        return false;
-    }
-
-    let ki = 0;
-    for (let k of instr.getParamList()) {
-        instr.setParam(k, args_part[ki++]);
-    }
-
-    while (comment_part.startsWith(';')) {
-        comment_part = comment_part.substr(1).trim();
-    }
-    comment_part = comment_part.length ? ' ; ' + comment_part : '';
-
-    instr.finalize();
-    const new_opcode = instr.getEffectiveOpcode();
-    const new_hex_part = new_opcode.toString(16).toUpperCase().padStart(4, '0');
-    const new_op_name = instr.op.op.padEnd(4, ' ');
-    const new_args_list = [];
-    for (let k of instr.getParamList()) {
-        new_args_list.push(instr.getParam(k));
-    }
-    const final_string = `0x${new_hex_part}  ${new_op_name} ${new_args_list.join(',')}${comment_part}`;
-
-    return [instr, new_opcode, final_string];
+class AsmParseLineResult {
+    line_type =             'ERROR';
+    line =                  'ERROR';
+    instruction =           'ERROR';
+    instruction_argument =  'ERROR';
+    comments =              'ERROR';
+    word =                  0;
 }

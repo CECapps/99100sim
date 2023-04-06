@@ -36,9 +36,9 @@ function update_viz(vizel) {
     const pixel_size = 6;
     */
 
-    const word_count = 0x8000; // That means it'll STOP here.
-    const words_per_row = 64;
-    const pixel_size = 8;
+    const word_count = 0x7fff; // That means it'll STOP here.
+    const words_per_row = 128;
+    const pixel_size = 3;
     const start_word_count_inclusive = 0;
     // Calculated, leave alone.
     const end_word_count_inclusive = word_count - 1;

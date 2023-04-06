@@ -84,7 +84,14 @@ class Op {
         return false;
     }
 
-    get name() {                        return this.op; }
+    get name() { return this.op; }
+
+    get has_immediate_operand() {           return this.format == 8; }
+    get has_possible_immediate_source() {   return !!this.args['Ts']; }
+    get has_possible_immediate_dest() {     return !!this.args['Td']; }
+    get has_second_opcode_word() {          return (this.format > 11) && (this.format != 18); }
+    get minimum_instruction_words() {       return 1 + (this.has_immediate_operand?1:0) + (this.has_second_opcode_word?1:0); }
+    get maximum_instruction_words() {       return this.minimum_instruction_words + (this.has_possible_immediate_source?1:0) + (this.has_possible_immediate_dest?1:0); }
 
     // These all get overridden
     get op() {                          return "NOP"; }

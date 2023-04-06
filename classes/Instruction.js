@@ -209,13 +209,9 @@ export class Instruction {
 
     /**
      * @TODO check for other legality things
+     * @TODO is there anything that can happen pre-finalization that makes us illegal?
      **/
     isLegal() {
-        if (!this.#is_finalized) {
-            console.error('isLegal: Instruction is not yet Finalized.  The call is bugged!');
-            return false;
-        }
-        // Everything else will fail during the path that gets us here, and
         // an empty Op object will have opcode=0 and op=NOP
         const op_name_is_empty = this.#opcode_info.op == '';
         const op_name_is_NOP = this.#opcode_info.op == 'NOP'

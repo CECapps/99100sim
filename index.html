@@ -26,10 +26,6 @@ Reflect.set(window, 'Op', Op);
 
 /** @type {Simulation} sim */
 window.sim = new Simulation();
-for (let i = 0; i < 32768; i++) {
-    window.sim.state.setWord(i, 0x8080);
-}
-window.sim.resetIVs();
 // And away we go!
 //console.info('Outside: calling run(50)')
 //console.info('Outside: run(50) result state: "%s"', window.sim.run(50));
@@ -49,9 +45,31 @@ window.addEventListener('memory_updated', viz_request_redraw);
 
 window.addEventListener('DOMContentLoaded', txt2asm_init);
 
+var running = false;
+var fast_mode = true;
+var fast_mode_steps = 1777; // prime, makes fast mode inst count "look" fast
+var inst_execution_count = 0;
+
+function reset() {
+    running = false;
+    fast_mode = false;
+    inst_execution_count = 0;
+
+    window.sim.reset();
+    for (let i = 0; i < 32768; i++) {
+        window.sim.state.setWord(i * 2, 0x1000);
+    }
+    window.sim.resetIVs();
+    assemble_codebox();
+    window.document.getElementById('errors').innerHTML = '';
+    update();
+}
+
 function update() {
     /** @type {Simulation} */
     const sim = window.sim;
+
+    window.document.getElementById('run_el').innerText = running ? (fast_mode ? 'Yes (fast)' : 'Yes') : 'No';
 
     window.document.getElementById('nstate_el').innerText = sim.flow.flow_state;
     window.document.getElementById('pstate_el').innerText = sim.flow.prev_flow_state;
@@ -60,9 +78,11 @@ function update() {
     window.document.getElementById('pc_el').innerText = '0x' + sim.state.getPc().toString(16).toUpperCase().padStart(4, '0');
     window.document.getElementById('st_el').innerText = '0b' + sim.state.status_register.getRegisterString();
 
+    window.document.getElementById('instcount_el').innerText = inst_execution_count;
+
     const regrow = window.document.getElementById('regrow');
     regrow.innerHTML = '';
-    for (let regnum = 0; regnum <= 7; regnum++) {
+    for (let regnum = 0; regnum <= 15; regnum++) {
         const regcell = window.document.createElement('td');
         regcell.textContent = '0x' + sim.state.getRegisterWord(regnum).toString(16).toUpperCase().padStart(4, '0');
         regrow.appendChild(regcell);
@@ -89,38 +109,61 @@ function update() {
     }
 }
 
-
-var running = false;
-
 function run_frame_callback() {
-    window.sim.stepInstruction();
-    update();
     if (running) {
+        const steps = fast_mode ? fast_mode_steps : 1;
+        for (let i = 0; i < steps; i++) {
+            try {
+                window.sim.stepInstruction();
+                inst_execution_count++;
+            } catch (e) {
+                const whoops = window.document.createElement('div');
+                whoops.textContent = e.toString();
+                const targ_el = window.document.getElementById('errors');
+
+                if (targ_el.hasChildNodes()) {
+                    targ_el.insertBefore(whoops, targ_el.firstChild);
+                } else {
+                    targ_el.appendChild(whoops);
+                }
+                running = false;
+                throw e; // lol
+            }
+        }
         window.requestAnimationFrame(run_frame_callback);
     }
+    update();
 }
 
 function assemble_codebox() {
     const ta = document.getElementById('codebox');
     const asm = new Asm();
     asm.setLines(ta.value);
-    const results = asm.process();
+    asm.process();
+    const results = asm.toWords();
+    window.document.getElementById('assembled').innerText = asm.toAsm().join("\n");
+
     if (results && results instanceof Array) {
         for (let i in results) {
             //console.log(0x1200 + (i * 2), results[i][1]);
-            window.sim.state.setWord(0x1200 + (i * 2), results[i][1]);
+            window.sim.state.setWord(0x0100 + (i * 2), results[i]);
         }
     }
 }
 
 window.addEventListener('DOMContentLoaded', function () {
-    assemble_codebox();
+    reset();
+    resize_textarea(document.getElementById('codebox'));
 
     document.getElementById('step_state_button').addEventListener('click', function (event) {
         event.stopPropagation();
         event.preventDefault();
 
-        window.sim.step();
+        running = false;
+        const last_state = window.sim.step();
+        if (last_state == 'B') {
+            inst_execution_count++;
+        }
         update();
         return false;
     });
@@ -128,7 +171,9 @@ window.addEventListener('DOMContentLoaded', function () {
         event.stopPropagation();
         event.preventDefault();
 
+        running = false;
         window.sim.stepInstruction();
+        inst_execution_count++;
         update();
         return false;
     });
@@ -144,12 +189,23 @@ window.addEventListener('DOMContentLoaded', function () {
     document.getElementById('run_button').addEventListener('click', function (event) {
         event.stopPropagation();
         event.preventDefault();
+        fast_mode = false;
         if (running) {
             return;
         }
 
         running = true;
-        window.document.getElementById('run_el').innerText = 'Yes';
+        run_frame_callback();
+    });
+    document.getElementById('runfast_button').addEventListener('click', function (event) {
+        event.stopPropagation();
+        event.preventDefault();
+        fast_mode = true;
+        if (running) {
+            return;
+        }
+
+        running = true;
         run_frame_callback();
     });
     document.getElementById('stop_button').addEventListener('click', function (event) {
@@ -159,21 +215,15 @@ window.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        window.document.getElementById('run_el').innerText = 'No';
         running = false;
+        update();
     });
     document.getElementById('reset_button').addEventListener('click', function (event) {
         event.stopPropagation();
         event.preventDefault();
 
-        window.document.getElementById('run_el').innerText = 'No';
         running = false;
-        window.sim.reset();
-        for (let i = 0; i < 32768; i++) {
-            window.sim.state.setWord(i, 0x8080);
-        }
-        window.sim.resetIVs();
-        assemble_codebox();
+        reset();
         update();
     });
 });
@@ -198,6 +248,7 @@ window.addEventListener('DOMContentLoaded', function () {
                 font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
                 font-weight: normal;
                 font-size: 1rem;
+                line-height: 1rem;
             }
             button {
                 color: #f0f0f0;
@@ -237,20 +288,54 @@ window.addEventListener('DOMContentLoaded', function () {
                 min-width: 3.5em;
             }
 
+            #codebox_grid_container {
+                width: 100%;
+                display: grid;
+                place-items: start;
+                place-content: start;
+            }
+            #codebox_grid_container textarea {
+                grid-column-start: 1;
+                grid-row-start: 1;
+            }
+            #codebox_grid_container pre {
+                padding-left: 1rem;
+                grid-column-start: 2;
+                font-size: 1.15rem;
+                font-weight: normal;
+                line-height: 1.1rem;
+            }
+            #codebox_grid_container button {
+                grid-column-start: 1;
+                grid-row-start: 2;
+            }
+
+            #errors {
+                color: red;
+                font-weight: bold;
+            }
+
         </style>
     </head>
     <body>
+        <div id="errors"></div>
         <div id="flexcontainer">
             <div style="flex: auto;">
                 <section>
-                    <textarea id="codebox" rows="10" cols="40" spellcheck="false">LI      1           ; R1
-.data   0x1300
-MOV     1,1,0,1     ; R1,*R1
+                    <section id="codebox_grid_container">
+                        <textarea id="codebox" cols="40" spellcheck="false">; Hello World?
+LI      1           ; R1
+.data   0x0200
+LI      2           ; R2
+.data   0xFFFF
+:loop
+MOV     1,1,0,2     ; R2,*R1
 INCT    0,1         ; R1
-JMP     -4</textarea>
-                    <br>
-                    <button id="codebox_process_button">Assemble &amp; Load</button>
-                    <div></div>
+DECT    0,2         ; R2
+JMP     -6</textarea>
+                        <pre id="assembled"></pre>
+                        <button id="codebox_process_button">Assemble &amp; Load</button>
+                    </section>
                 </section>
                 <br>
                 <br>
@@ -264,14 +349,14 @@ JMP     -4</textarea>
                                 <tr>
                                     <th>0</th><th>1</th><th>2</th><th>3</th>
                                     <th>4</th><th>5</th><th>6</th><th>7</th>
-                                    <!-- <th>8</th><th>9</th><th>10</th><th>11</th>
-                                    <th>12</th><th>13</th><th>14</th><th>15</th> -->
+                                    <th>8</th><th>9</th><th>10</th><th>11</th>
+                                    <th>12</th><th>13</th><th>14</th><th>15</th>
                                 </tr>
                                 <tr id="regrow">
                                     <td>--</td><td>--</td><td>--</td><td>--</td>
                                     <td>--</td><td>--</td><td>--</td><td>--</td>
-                                    <!-- <td>--</td><td>--</td><td>--</td><td>--</td>
-                                    <td>--</td><td>--</td><td>--</td><td>--</td> -->
+                                    <td>--</td><td>--</td><td>--</td><td>--</td>
+                                    <td>--</td><td>--</td><td>--</td><td>--</td>
                                 </tr>
                             </table>
                         </td>
@@ -281,11 +366,13 @@ JMP     -4</textarea>
                     <tr><th>ST:</th>            <td id="st_el">0b0000000000000000</td></tr>
                     <tr><th>Now:</th>           <td id="epci_el">--</td></tr>
                     <tr><th>Next:</th>          <td id="epni_el">--</td></tr>
+                    <tr><th>Inst Count:</th>    <td id="instcount_el">--</td></tr>
                 </table>
                 <button id="step_state_button">State Step</button>
                 <button id="inst_state_button">Instruction Step</button>
                 &bull;
                 <button id="run_button">Run</button>
+                <button id="runfast_button">Run (fast)</button>
                 <button id="stop_button">Stop</button>
                 <button id="reset_button">Reset</button>
             </div>

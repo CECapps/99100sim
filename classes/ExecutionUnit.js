@@ -22,12 +22,12 @@ export class ExecutionUnit {
      * @param { SimulationState } simstate
      **/
     static newFromInstruction(inst, simstate) {
-        const class_for_instruction = Units.getClassForOpName(inst.op.op);
+        const class_for_instruction = Units.getClassForOpName(inst.op.name);
         if (!class_for_instruction) {
             /** @FIXME This should not happen because validateOpcode will include this check, RIGHT!? */
-            console.error('impossible error 6 I think');
-            console.debug('op=', inst.op.op, inst);
-            throw new Error('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA');
+            console.debug('failed finding op=', inst.op.op, inst);
+            const opstr = inst.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
+            throw new Error(`Found no Execution impl "${inst.op.name}" opcode=${opstr}.  @FIXME this should become ILLOP`);
         }
         return new class_for_instruction(inst, simstate);
     }
@@ -225,7 +225,37 @@ class Units {
                 return true;
             }
         },
-
+        'DECT': class extends ExecutionUnit {
+            register = 0;
+            nv = 0;
+            fetchOperands() {
+                const ts = this.inst.getParam('Ts');
+                let s = this.inst.getParam('S');
+                if (!s || s < 0 || s > 15) {
+                    s = 0;
+                }
+                if (ts == 0) {
+                    this.nv = this.simstate.getRegisterWord(s);
+                }
+                return true;
+            }
+            execute() {
+                //console.debug('DECT execute()');
+                this.nv -= 2;
+                return true;
+            }
+            writeResults() {
+                const ts = this.inst.getParam('Ts');
+                let s = this.inst.getParam('S');
+                if (!s || s < 0 || s > 15) {
+                    s = 0;
+                }
+                if (ts == 0) {
+                    this.simstate.setRegisterWord(s, 0xFFFF & this.nv);
+                }
+                return true;
+            }
+        },
     }
 
     /**
