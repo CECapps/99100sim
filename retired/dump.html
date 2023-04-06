@@ -90,9 +90,9 @@
     function processInstruction(inst, opcode_override = null) {
         const el = document.createElement('pre');
         const op_code = inst.getEffectiveOpcode();
-        const op_name = inst.op.name.padEnd(4, ' ');
+        const op_name = inst.opcode_info.name.padEnd(4, ' ');
 
-        let op_code_base = inst.op.opcode;
+        let op_code_base = inst.opcode_info.opcode;
         if (opcode_override !== null) {
             op_code_base = opcode_override;
         }

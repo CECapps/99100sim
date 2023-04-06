@@ -251,7 +251,7 @@ class Asm {
 
             const instr = Instruction.newFromOpcode(line.word);
             instr.finalize();
-            const f_instr = instr.op.name.padEnd(8, ' ');
+            const f_instr = instr.opcode_info.name.padEnd(8, ' ');
             const f_params = [];
             for (let param_name of instr.getParamList()) {
                 const param_value = instr.getParam(param_name);

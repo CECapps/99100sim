@@ -22,12 +22,12 @@ export class ExecutionUnit {
      * @param { SimulationState } simstate
      **/
     static newFromInstruction(inst, simstate) {
-        const class_for_instruction = Units.getClassForOpName(inst.op.name);
+        const class_for_instruction = Units.getClassForOpName(inst.opcode_info.name);
         if (!class_for_instruction) {
             /** @FIXME This should not happen because validateOpcode will include this check, RIGHT!? */
-            console.debug('failed finding op=', inst.op.op, inst);
+            console.debug('failed finding op=', inst.opcode_info.name, inst);
             const opstr = inst.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
-            throw new Error(`Found no Execution impl "${inst.op.name}" opcode=${opstr}.  @FIXME this should become ILLOP`);
+            throw new Error(`Found no Execution impl "${inst.opcode_info.name}" opcode=${opstr}.  @FIXME this should become ILLOP`);
         }
         return new class_for_instruction(inst, simstate);
     }

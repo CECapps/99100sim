@@ -19,10 +19,11 @@
  **/
 import { Simulation } from "./classes/Simulation.js";
 import { Instruction } from "./classes/Instruction.js";
-import { Op } from "./ops.js";
+import { OpInfo } from "./classes/OpInfo.js";
 
+Reflect.set(window, 'Simulation', Simulation);
 Reflect.set(window, 'Instruction', Instruction);
-Reflect.set(window, 'Op', Op);
+Reflect.set(window, 'OpInfo', OpInfo);
 
 /** @type {Simulation} sim */
 window.sim = new Simulation();
@@ -91,8 +92,8 @@ function update() {
     /** @type {ExecutionProcess} */
     let ep = sim.flow.ep;
     const inst = ep.getCurrentInstruction();
-    if (inst.op.name != 'NOP') {
-        const op_name = inst.op.name;
+    if (inst.opcode_info.name != 'NOP') {
+        const op_name = inst.opcode_info.name;
         const op_code = inst.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
         window.document.getElementById('epci_el').innerText = `${op_name} 0x${op_code}`;
     } else {
@@ -100,8 +101,8 @@ function update() {
     }
 
     const inst2 = ep.getNextInstruction();
-    if (inst2.op.name != 'NOP') {
-        const op2_name = inst2.op.name;
+    if (inst2.opcode_info.name != 'NOP') {
+        const op2_name = inst2.opcode_info.name;
         const op2_code = inst2.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
         window.document.getElementById('epni_el').innerText = `${op2_name} 0x${op2_code}`;
     } else {

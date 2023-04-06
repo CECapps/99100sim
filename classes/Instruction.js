@@ -1,6 +1,6 @@
 // @ts-check
 
-import { Op } from "../ops.js";
+import { OpInfo } from "./OpInfo";
 
 /**
  * Instruction: An Op with defined Parameters.
@@ -30,9 +30,8 @@ export class Instruction {
     #base_opcode = 0;
     #working_opcode = 0;
     #second_word = 0;
-    /** @type {Op} */
-    #opcode_info;
-    get op() { return this.#opcode_info; }
+    /** @type {OpInfo} */
+    opcode_info;
 
     #is_finalized = false;
 
@@ -41,10 +40,9 @@ export class Instruction {
      * @returns {Instruction}
      **/
     static newFromString(op_name) {
-        /** @value {Op} */
-        const opcode_info = Op.getOpForString(op_name);
-        if (opcode_info === false) {
-            return new Instruction(new Op());
+        const opcode_info = OpInfo.newFromString(op_name);
+        if (opcode_info === null) {
+            return new Instruction(new OpInfo());
         }
         return new Instruction(opcode_info);
     }
@@ -54,22 +52,22 @@ export class Instruction {
      * @returns {Instruction}
      **/
     static newFromOpcode(opcode) {
-        const op_name = Op.getOpNameForOpcode(opcode);
-        if (op_name === undefined) {
-            return new Instruction(new Op());
+        const op_name = OpInfo.getOpNameForOpcode(opcode);
+        if (op_name === null) {
+            return new Instruction(new OpInfo());
         }
-        const op_info = Op.getOpForString(op_name);
-        if (op_info === false) {
-            return new Instruction(new Op());
+        const op_info = OpInfo.newFromString(op_name);
+        if (op_info === null) {
+            return new Instruction(new OpInfo());
         }
         const inst = new Instruction(op_info);
         inst.setParamsFromOpcode(opcode);
         return inst;
     }
 
-    /** @param {Op} op */
+    /** @param {OpInfo} op */
     constructor(op) {
-        this.#opcode_info = op;
+        this.opcode_info = op;
         this.#base_opcode = op.opcode;
         this.#working_opcode = op.opcode;
     }
@@ -83,7 +81,7 @@ export class Instruction {
     }
 
     getParamList() {
-        return Object.keys(this.op.args);
+        return Object.keys(this.opcode_info.args);
     }
 
     /**
@@ -97,13 +95,13 @@ export class Instruction {
             console.error('getParam called before known good state: probable bug');
             return 0;
         }
-        if (!this.op.args[param_name]) {
+        if (!this.opcode_info.args[param_name]) {
             console.error('getParam with invalid param: probable bug');
             return 0;
         }
-        let running_offset = this.op.arg_start_bit;
+        let running_offset = this.opcode_info.arg_start_bit;
         /** @type Object<string,number> args */
-        const args = this.op.args;
+        const args = this.opcode_info.args;
         for (let k in args) {
             // We have to count up the total bits skipped, which means we have
             // to start at the beginning of the list.
@@ -132,15 +130,15 @@ export class Instruction {
             console.error('setParam: Instruction is Finalized.  The call is bugged!');
             return false;
         }
-        //console.debug(' => ', this.op.args, param_name, Reflect.get(this.op.args, param_name));
-        if (!this.op.args[param_name]) {
+        //console.debug(' => ', this.opcode_info.args, param_name, Reflect.get(this.opcode_info.args, param_name));
+        if (!this.opcode_info.args[param_name]) {
             console.error('setParam: unknown param name', param_name);
             return false;
         }
 
-        let running_offset = this.op.arg_start_bit;
-        for (let k in this.op.args) {
-            const arg_length = this.op.args[k];
+        let running_offset = this.opcode_info.arg_start_bit;
+        for (let k in this.opcode_info.args) {
+            const arg_length = this.opcode_info.args[k];
             // We have to count up the total bits skipped, which means we have
             // to start at the beginning of the list.
             if (k.toLowerCase() !== param_name.toLowerCase()) {
@@ -180,7 +178,7 @@ export class Instruction {
             console.error('setParamsFromOpcode: Instruction is Finalized.  The call is bugged!');
             return;
         }
-        if (opcode < this.op.opcode || opcode > this.op.opcode_legal_max) {
+        if (opcode < this.opcode_info.opcode || opcode > this.opcode_info.opcode_legal_max) {
             return;
         }
         this.#working_opcode = opcode;
@@ -213,9 +211,9 @@ export class Instruction {
      **/
     isLegal() {
         // an empty Op object will have opcode=0 and op=NOP
-        const op_name_is_empty = this.#opcode_info.op == '';
-        const op_name_is_NOP = this.#opcode_info.op == 'NOP'
-        const op_code_is_zero = this.#opcode_info.opcode == 0;
+        const op_name_is_empty = this.opcode_info.name == '';
+        const op_name_is_NOP = this.opcode_info.name == 'NOP'
+        const op_code_is_zero = this.opcode_info.opcode == 0;
         const is_illegal = op_name_is_empty || op_name_is_NOP || op_code_is_zero;
         return !is_illegal;
     }
@@ -232,11 +230,7 @@ export class Instruction {
     }
 
     isTwoWordInstruction() {
-        // Formats 11 and higher are all two-word instructions, except for 18.
-        if (this.op.format >= 11 && this.op.format != 18) {
-            return true;
-        }
-        return false;
+        return this.opcode_info.has_second_opcode_word;
     }
 
 }

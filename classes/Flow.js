@@ -761,7 +761,7 @@ export class Flow {
      * @param {string} op_name
      **/
     #checkInstructionIs(op_name) {
-        return this.ep.getCurrentInstruction().op.op.toUpperCase() == op_name.toUpperCase();
+        return this.ep.getCurrentInstruction().opcode_info.name == op_name.toUpperCase();
     }
 
     #recordStateOfAppSignal() {

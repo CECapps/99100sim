@@ -1,6 +1,6 @@
 // @ts-check
 
-import { Op } from "../ops";
+import { OpInfo } from "./OpInfo";
 import { ExecutionUnit } from "./ExecutionUnit";
 import { Instruction } from "./Instruction";
 import { SimulationState } from "./SimulationState";
@@ -23,9 +23,9 @@ export class ExecutionProcess {
     #simstate;
 
     #ni_pc = 0;
-    #ni = new Instruction(new Op());
+    #ni = new Instruction(new OpInfo());
     #ci_pc = 0;
-    #ci = new Instruction(new Op());
+    #ci = new Instruction(new OpInfo());
     /** @type {ExecutionUnit|null} */
     #eu = null;
 
@@ -43,9 +43,9 @@ export class ExecutionProcess {
 
     reset() {
         this.#ni_pc = 0;
-        this.#ni = new Instruction(new Op());
+        this.#ni = new Instruction(new OpInfo());
         this.#ci_pc = 0;
-        this.#ci = new Instruction(new Op());
+        this.#ci = new Instruction(new OpInfo());
         this.#eu = null;
     }
 
@@ -85,11 +85,11 @@ export class ExecutionProcess {
     promoteNextInstructionToCurrentInstruction() {
         this.#ci_pc = this.#ni_pc;
         this.#ci = this.#ni;
-        //console.debug('Current Instruction is now ', this.#ci.op.op, this.#ci);
+        //console.debug('Current Instruction is now ', this.#ci.opcode_info.name, this.#ci);
 
         this.#eu = ExecutionUnit.newFromInstruction(this.#ci, this.#simstate);
 
-        this.#ni = new Instruction(new Op());
+        this.#ni = new Instruction(new OpInfo());
         this.#ni_pc = 0;
 
         this.#finished_begin = false;
@@ -129,7 +129,7 @@ export class ExecutionProcess {
      * @returns {boolean} True if Instruction needs to be handled as MID.
      **/
     currentInstructionIsMID() {
-        return (!this.currentInstructionIsLegal()) && Op.opcodeCouldBeMID(this.#ci.getEffectiveOpcode());
+        return (!this.currentInstructionIsLegal()) && OpInfo.opcodeCouldBeMID(this.#ci.getEffectiveOpcode());
     }
 
     currentInstructionNeedsPrivilegedMode() {
@@ -147,7 +147,7 @@ export class ExecutionProcess {
      * @returns {boolean} True if Instruction is a Jump
      **/
     currentInstructionIsJump() {
-        return this.#ci.op.format == 2 && (this.#ci.op.op.indexOf('J') === 0);
+        return this.#ci.opcode_info.format == 2 && (this.#ci.opcode_info.name.startsWith('J'));
     }
 
     begin() {
