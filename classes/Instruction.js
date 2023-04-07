@@ -30,6 +30,12 @@ export class Instruction {
     #base_opcode = 0;
     #working_opcode = 0;
     #second_word = 0;
+    #immediate_operand = 0;
+    #has_immediate_source_operand = false;
+    #immediate_source_operand = 0;
+    #has_immediate_dest_operand = false;
+    #immediate_dest_operand = 0;
+
     /** @type {OpInfo} */
     opcode_info;
 
@@ -88,9 +94,6 @@ export class Instruction {
      * @param {string} param_name
      **/
     getParam(param_name) {
-        if (!this.#is_finalized) {
-            console.warn('getParam: Instruction is not yet Finalized.  The call may be bugged!');
-        }
         if (this.#working_opcode == 0) {
             console.error('getParam called before known good state: probable bug');
             return 0;
@@ -170,6 +173,7 @@ export class Instruction {
             //console.log('param=', k, 'now=', this.getParam(k), 'expected=', after_value);
 
         }
+        this.#refreshImmediateOperandState();
     }
 
     /** @param {number} opcode */
@@ -179,30 +183,60 @@ export class Instruction {
             return;
         }
         if (opcode < this.opcode_info.opcode || opcode > this.opcode_info.opcode_legal_max) {
+            console.error('Op out of range (HOW!?)');
             return;
         }
         this.#working_opcode = opcode;
+        this.#refreshImmediateOperandState();
     }
 
-    getSecondWord() {
-        return this.#second_word;
-    }
-
-    /** @param {number} word */
-    setSecondWord(word) {
-        if (!this.isTwoWordInstruction()) {
-            console.error('Instruction received a second word when it does not need one, this is a bug.');
-            return;
+    #refreshImmediateOperandState() {
+        if (this.opcode_info.has_possible_immediate_source && this.getParam('Ts') == 2) {
+            this.#has_immediate_source_operand = true;
         }
-        if (this.#is_finalized) {
-            console.error('setSecondWord: Instruction is Finalized.  The call is bugged!');
-            return;
+        if (this.opcode_info.has_possible_immediate_dest && this.getParam('Td') == 2) {
+            this.#has_immediate_source_operand = true;
         }
-        this.#second_word = word;
     }
 
     finalize() {
         this.#is_finalized = true;
+    }
+
+    hasSecondOpcodeWord() {
+        return this.opcode_info.has_second_opcode_word;
+    }
+
+    /** @param {number} word */
+    setSecondOpcodeWord(word) {
+        this.#second_word = word;
+    }
+
+    hasImmediateValue() {
+        return this.opcode_info.has_immediate_operand;
+    }
+
+    /** @param {number} word */
+    setImmediateValue(word) {
+        this.#immediate_operand = word;
+    }
+
+    hasImmediateSourceValue() {
+        return this.#has_immediate_source_operand;
+    }
+
+    /** @param {number} word */
+    setImmediateSourceValue(word) {
+        this.#immediate_source_operand = word;
+    }
+
+    hasImmediateDestValue() {
+        return this.#has_immediate_dest_operand;
+    }
+
+    /** @param {number} word */
+    setImmediateDestValue(word) {
+        this.#immediate_dest_operand = word;
     }
 
     /**
@@ -232,5 +266,6 @@ export class Instruction {
     isTwoWordInstruction() {
         return this.opcode_info.has_second_opcode_word;
     }
+
 
 }

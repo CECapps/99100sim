@@ -1,6 +1,6 @@
 // @ts-check
 
-//import { Instruction } from "./classes/Instruction";
+import { Instruction } from "./classes/Instruction";
 
 const Tab_Width = 4;
 function tab_fixer_onload() {
@@ -175,6 +175,35 @@ class Asm {
         }
     }
 
+    /**
+     * @param {AsmParseLineResult} line
+     * @param {number} type
+     * @param {number} value
+     **/
+    #checkLineAddressingModeHelper(line, type, value) {
+        let string = '';
+        if (type == 0) {
+            // S is the number of the workspace register containing the value
+            string = `R${value}`;
+        } else if (type == 1 || type == 3) {
+            // S is the workspace register containing the address with the value
+            string = `*R${value}`;
+            if (type == 3) {
+                string += '+';
+            }
+        } else if (type == 2) {
+            // We must be in symbolic or indexed memory mode.  In both cases,
+            // a word will follow with our actual value.
+            string = `@0x${line.word.toString(16).toUpperCase().padStart(4, '0')}`;
+            if (value > 0) {
+                // S is not zero, so we're in indexed mode.  The first word
+                // after the instruction is our base value.
+                string += `(${value})`;
+            }
+        }
+        return string;
+    }
+
     /** @param {AsmParseLineResult} line */
     #checkLineInstructionToOpcode(line) {
         const inst = Instruction.newFromString(line.instruction);
@@ -184,6 +213,11 @@ class Asm {
         }
         const param_list = inst.getParamList();
         const split_params = line.instruction_argument.split(',');
+
+        if (inst.opcode_info.has_possible_immediate_source) {
+
+        }
+
         if (param_list.length != split_params.length) {
             let operand_adjust = 0;
             if (param_list.includes('Ts')) {
