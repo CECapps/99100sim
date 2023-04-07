@@ -1,4 +1,5 @@
 // @ts-check
+"use strict";
 
 // comment this to run, thanks type checker!
 //import { Simulation } from "./classes/Simulation";

@@ -5,6 +5,7 @@
         <link rel="icon" href="favicon.png" sizes="100x100" type="image/png">
         <script src="./viz.js"></script>
         <script src="./txt2asm.js"></script>
+        <script src="./simui.js"></script>
         <script>
             /** @type {Simulation} sim */
             window.sim = '';
@@ -27,206 +28,23 @@ Reflect.set(window, 'OpInfo', OpInfo);
 
 /** @type {Simulation} sim */
 window.sim = new Simulation();
-// And away we go!
-//console.info('Outside: calling run(50)')
-//console.info('Outside: run(50) result state: "%s"', window.sim.run(50));
+
 </script>
 
 <!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
 
 <script>
-// @ts-check
-// hmm no
-"use strict";
 
 window.addEventListener('DOMContentLoaded', tab_fixer_onload);
+window.addEventListener('DOMContentLoaded', txt2asm_init);
 
 window.addEventListener('DOMContentLoaded', viz_redraw_init);
 window.addEventListener('memory_updated', viz_request_redraw);
 
-window.addEventListener('DOMContentLoaded', txt2asm_init);
-
-var running = false;
-var fast_mode = true;
-var fast_mode_steps = 1777; // prime, makes fast mode inst count "look" fast
-var inst_execution_count = 0;
-
-function reset() {
-    running = false;
-    fast_mode = false;
-    inst_execution_count = 0;
-
-    window.sim.reset();
-    for (let i = 0; i < 32768; i++) {
-        window.sim.state.setWord(i * 2, 0x1000);
-    }
-    window.sim.resetIVs();
-    assemble_codebox();
-    window.document.getElementById('errors').innerHTML = '';
-    update();
-}
-
-function update() {
-    /** @type {Simulation} */
-    const sim = window.sim;
-
-    window.document.getElementById('run_el').innerText = running ? (fast_mode ? 'Yes (fast)' : 'Yes') : 'No';
-
-    window.document.getElementById('nstate_el').innerText = sim.flow.flow_state;
-    window.document.getElementById('pstate_el').innerText = sim.flow.prev_flow_state;
-
-    window.document.getElementById('wp_el').innerText = '0x' + sim.state.workspace_pointer.toString(16).toUpperCase().padStart(4, '0');
-    window.document.getElementById('pc_el').innerText = '0x' + sim.state.getPc().toString(16).toUpperCase().padStart(4, '0');
-    window.document.getElementById('st_el').innerText = '0b' + sim.state.status_register.getRegisterString();
-
-    window.document.getElementById('instcount_el').innerText = inst_execution_count;
-
-    const regrow = window.document.getElementById('regrow');
-    regrow.innerHTML = '';
-    for (let regnum = 0; regnum <= 15; regnum++) {
-        const regcell = window.document.createElement('td');
-        regcell.textContent = '0x' + sim.state.getRegisterWord(regnum).toString(16).toUpperCase().padStart(4, '0');
-        regrow.appendChild(regcell);
-    }
-
-    /** @type {ExecutionProcess} */
-    let ep = sim.flow.ep;
-    const inst = ep.getCurrentInstruction();
-    if (inst.opcode_info.name != 'NOP') {
-        const op_name = inst.opcode_info.name;
-        const op_code = inst.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
-        window.document.getElementById('epci_el').innerText = `${op_name} 0x${op_code}`;
-    } else {
-        window.document.getElementById('epci_el').innerText = '--';
-    }
-
-    const inst2 = ep.getNextInstruction();
-    if (inst2.opcode_info.name != 'NOP') {
-        const op2_name = inst2.opcode_info.name;
-        const op2_code = inst2.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
-        window.document.getElementById('epni_el').innerText = `${op2_name} 0x${op2_code}`;
-    } else {
-        window.document.getElementById('epni_el').innerText = '--';
-    }
-}
-
-function run_frame_callback() {
-    if (running) {
-        const steps = fast_mode ? fast_mode_steps : 1;
-        for (let i = 0; i < steps; i++) {
-            try {
-                window.sim.stepInstruction();
-                inst_execution_count++;
-            } catch (e) {
-                const whoops = window.document.createElement('div');
-                whoops.textContent = e.toString();
-                const targ_el = window.document.getElementById('errors');
-
-                if (targ_el.hasChildNodes()) {
-                    targ_el.insertBefore(whoops, targ_el.firstChild);
-                } else {
-                    targ_el.appendChild(whoops);
-                }
-                running = false;
-                throw e; // lol
-            }
-        }
-        window.requestAnimationFrame(run_frame_callback);
-    }
-    update();
-}
-
-function assemble_codebox() {
-    const ta = document.getElementById('codebox');
-    const asm = new Asm();
-    asm.setLines(ta.value);
-    asm.process();
-    const results = asm.toWords();
-    window.document.getElementById('assembled').innerText = asm.toAsm().join("\n");
-
-    if (results && results instanceof Array) {
-        for (let i in results) {
-            //console.log(0x1200 + (i * 2), results[i][1]);
-            window.sim.state.setWord(0x0100 + (i * 2), results[i]);
-        }
-    }
-}
-
+window.addEventListener('DOMContentLoaded', button_onclick_setup);
 window.addEventListener('DOMContentLoaded', function () {
-    reset();
+    reset_simui();
     resize_textarea(document.getElementById('codebox'));
-
-    document.getElementById('step_state_button').addEventListener('click', function (event) {
-        event.stopPropagation();
-        event.preventDefault();
-
-        running = false;
-        const last_state = window.sim.step();
-        if (last_state == 'B') {
-            inst_execution_count++;
-        }
-        update();
-        return false;
-    });
-    document.getElementById('inst_state_button').addEventListener('click', function (event) {
-        event.stopPropagation();
-        event.preventDefault();
-
-        running = false;
-        window.sim.stepInstruction();
-        inst_execution_count++;
-        update();
-        return false;
-    });
-
-    document.getElementById('codebox_process_button').addEventListener('click', function (event) {
-        event.stopPropagation();
-        event.preventDefault();
-
-        assemble_codebox();
-        return false;
-    });
-
-    document.getElementById('run_button').addEventListener('click', function (event) {
-        event.stopPropagation();
-        event.preventDefault();
-        fast_mode = false;
-        if (running) {
-            return;
-        }
-
-        running = true;
-        run_frame_callback();
-    });
-    document.getElementById('runfast_button').addEventListener('click', function (event) {
-        event.stopPropagation();
-        event.preventDefault();
-        fast_mode = true;
-        if (running) {
-            return;
-        }
-
-        running = true;
-        run_frame_callback();
-    });
-    document.getElementById('stop_button').addEventListener('click', function (event) {
-        event.stopPropagation();
-        event.preventDefault();
-        if (!running) {
-            return;
-        }
-
-        running = false;
-        update();
-    });
-    document.getElementById('reset_button').addEventListener('click', function (event) {
-        event.stopPropagation();
-        event.preventDefault();
-
-        running = false;
-        reset();
-        update();
-    });
 });
 
 </script>

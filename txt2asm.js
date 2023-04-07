@@ -1,6 +1,8 @@
 // @ts-check
+"use strict";
 
-import { Instruction } from "./classes/Instruction";
+// comment this to run, thanks type checker!
+//import { Instruction } from "./classes/Instruction";
 
 const Tab_Width = 4;
 function tab_fixer_onload() {

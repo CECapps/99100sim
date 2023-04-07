@@ -65,21 +65,6 @@ export class ExecutionProcess {
         this.#ni_pc = this.#simstate.getPc();
         // This does not advance the PC.  This is on purpose.
         this.#ni = this.#simstate.getInstructionAtPc();
-
-        // The exact acquisition point of the second word in two-word ops is not
-        // expressly stated anywhere in the narrative text in the manual.  The
-        // only concrete reference I found is in the instruction sequence / timing
-        // bits, such as for SLAM/SRAM as documented on page 86, in which it's
-        // documented that the second word is fetched before the operands, and
-        // that the PC is not touched during this process.  We need to know the
-        // total legality of ourself before operand fetching, so let's get the
-        // second word right now.
-        if (this.#ni.isTwoWordInstruction()) {
-            throw new Error('Two word support NYI sorry.');
-            this.#ni.setSecondWord(this.#simstate.getWord(this.#ni_pc + 2));
-        }
-        this.#ni.finalize();
-
     }
 
     promoteNextInstructionToCurrentInstruction() {
@@ -98,46 +83,6 @@ export class ExecutionProcess {
         this.#finished_write = false;
     }
 
-    /**
-     * Is the current instruction legal?  Legal here means:
-     *  - The Op was found in the list provided in Ops.
-     *    (The default Op has opcode = 0 and op name "NOP")
-     *  - The Parameters derived from the opcode are legal, including any found
-     *    in the optional second word.
-     *
-     * @returns {boolean} True if Instruction is Legal.
-     **/
-    currentInstructionIsLegal() {
-        return this.#ci.isLegal() && (this.#ci.isTwoWordInstruction() ? this.#ci.checkSecondWordLegality() : true);
-    }
-
-    currentInstructionIsTwoWords() {
-        return this.#ci.isTwoWordInstruction();
-    }
-
-    currentInstructionSecondWordIsLegal() {
-        return this.#ci.checkSecondWordLegality();
-    }
-
-    /**
-     * Does the current instruction need handling as a MID?  Any instructions
-     * that are defined in Ops are not MID by definition, so invoking any others
-     * means we're not legal.  Likewise, there are a set of defined ranges for
-     * all MID instructions and while there's in practice a 100% overlap between
-     * undefined instructions and MID areas, it's better to be explicit here.
-     *
-     * @returns {boolean} True if Instruction needs to be handled as MID.
-     **/
-    currentInstructionIsMID() {
-        return (!this.currentInstructionIsLegal()) && OpInfo.opcodeCouldBeMID(this.#ci.getEffectiveOpcode());
-    }
-
-    currentInstructionNeedsPrivilegedMode() {
-        if (!this.#eu) {
-            return false;
-        }
-        return this.#eu.doParamsNeedPrivilege();
-    }
 
     /**
      * Is this a Jump instruction?  The Flow needs to know so it can do PC math.
@@ -157,10 +102,16 @@ export class ExecutionProcess {
         if (this.#finished_begin) {
             throw new Error('ExecutionProcess.begin called twice, you have a bug.');
         }
-        this.#finished_begin = true;
+
+        let addtl_words_offset = 0;
+        if (this.#ci.hasSecondOpcodeWord()) {
+            addtl_words_offset += 2;
+            this.#ci.setSecondOpcodeWord(this.#simstate.getWord(this.#ci_pc + addtl_words_offset));
+        }
 
         const a = this.#eu.validateOpcode();
         const b = this.#eu.validateParams();
+        this.#finished_begin = true;
         return a && b;
     }
 
@@ -174,9 +125,25 @@ export class ExecutionProcess {
         if (!this.#finished_begin) {
             throw new Error('ExecutionProcess.fetchOperands called before begin, you have a bug.');
         }
-        this.#finished_fetch = true;
 
-        return this.#eu.fetchOperands();
+        let addtl_words_offset = 0;
+        if (this.#ci.hasImmediateValue()) {
+            addtl_words_offset += 2;
+            this.#ci.setImmediateValue(this.#simstate.getWord(this.#ci_pc + addtl_words_offset));
+        }
+        if (this.#ci.hasImmediateSourceValue()) {
+            addtl_words_offset += 2;
+            this.#ci.setImmediateSourceValue(this.#simstate.getWord(this.#ci_pc + addtl_words_offset));
+        }
+        if (this.#ci.hasImmediateDestValue()) {
+            addtl_words_offset += 2;
+            this.#ci.setImmediateDestValue(this.#simstate.getWord(this.#ci_pc + addtl_words_offset));
+        }
+
+        const c = this.#eu.fetchOperands();
+        this.#ci.finalize();
+        this.#finished_fetch = true;
+        return c;
     }
 
     execute() {
@@ -189,9 +156,10 @@ export class ExecutionProcess {
         if (!this.#finished_fetch) {
             throw new Error('ExecutionProcess.execute called before fetchOperands, you have a bug.');
         }
-        this.#finished_exec = true;
 
-        return this.#eu.execute();
+        const e = this.#eu.execute();
+        this.#finished_exec = true;
+        return e;
     }
 
     writeResults() {
@@ -204,9 +172,10 @@ export class ExecutionProcess {
         if (!this.#finished_exec) {
             throw new Error('ExecutionProcess.writeResults called before execute, you have a bug.');
         }
-        this.#finished_write = true;
 
-        this.#eu.writeResults();
+        const f = this.#eu.writeResults();
+        this.#finished_write = true;
+        return f;
     }
 
 }

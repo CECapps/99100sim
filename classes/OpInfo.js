@@ -1143,7 +1143,7 @@ export class OpInfo {
             get opcode() {                      return 15360; } // 3C00
             get opcode_legal_max() {            return 16383; } // 3FFF
             get arg_start_bit() {               return 6; }
-            get args() {                        return {'D': 4, 'Ts': 2, 'S': 4}; }
+            get args() {                        return {'O': 4, 'Ts': 2, 'S': 4}; }
             get platforms() {
                 return { // Platform base (Base instruction set, all platforms)
                     '990/10'  :  true,
@@ -2293,7 +2293,7 @@ export class OpInfo {
             get opcode() {                      return 14336; } // 3800
             get opcode_legal_max() {            return 15359; } // 3BFF
             get arg_start_bit() {               return 6; }
-            get args() {                        return {'D': 4, 'Ts': 2, 'S': 4}; }
+            get args() {                        return {'O': 4, 'Ts': 2, 'S': 4}; }
             get platforms() {
                 return { // Platform base (Base instruction set, all platforms)
                     '990/10'  :  true,
@@ -3668,7 +3668,7 @@ export class OpInfo {
             get opcode() {                      return 11264; } // 2C00
             get opcode_legal_max() {            return 12287; } // 2FFF
             get arg_start_bit() {               return 6; }
-            get args() {                        return {'D': 4, 'Ts': 2, 'S': 4}; }
+            get args() {                        return {'O': 4, 'Ts': 2, 'S': 4}; }
             get platforms() {
                 return { // Platform base (Base instruction set, all platforms)
                     '990/10'  :  true, // HW Flag.  Sets priv=0.

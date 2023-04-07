@@ -713,7 +713,7 @@ export class Flow {
      * @TODO the underlying check here is busted
      **/
     #_G_NYI_isSecondWordOfTwoWordOpcodeIllegal() {
-        return this.ep.currentInstructionSecondWordIsLegal();
+        return false;
     }
 
     /**

@@ -29,10 +29,14 @@ export class Instruction {
 
     #base_opcode = 0;
     #working_opcode = 0;
+
     #second_word = 0;
+
     #immediate_operand = 0;
+
     #has_immediate_source_operand = false;
     #immediate_source_operand = 0;
+
     #has_immediate_dest_operand = false;
     #immediate_dest_operand = 0;
 
@@ -115,7 +119,7 @@ export class Instruction {
 
             // To hell with bitwise manipulation I just want it working so strings it is!
             let opcode_binstring = this.#working_opcode.toString(2).padStart(16,'0');
-            if (this.isTwoWordInstruction()) {
+            if (this.hasSecondOpcodeWord()) {
                 // Yup, just tack it on the end, this works.
                 opcode_binstring += this.#second_word.toString(2).padStart(16,'0');
             }
@@ -150,7 +154,7 @@ export class Instruction {
             }
 
             let opcode_binstring = this.#working_opcode.toString(2).padStart(16,'0');
-            if (this.isTwoWordInstruction()) {
+            if (this.hasSecondOpcodeWord()) {
                 opcode_binstring += this.#second_word.toString(2).padStart(16,'0');
             }
             const before = opcode_binstring.substring(0, running_offset);
@@ -165,7 +169,7 @@ export class Instruction {
 
             const new_bitstring = before + after_value.toString(2).padStart(arg_length, '0') + after;
             this.#working_opcode = parseInt(new_bitstring.substring(0, 16), 2);
-            if (this.isTwoWordInstruction()) {
+            if (this.hasSecondOpcodeWord()) {
                 this.#second_word = parseInt(new_bitstring.substring(16), 2);
             }
             //console.log('old=', opcode_binstring);
@@ -262,10 +266,5 @@ export class Instruction {
         }
         return true;
     }
-
-    isTwoWordInstruction() {
-        return this.opcode_info.has_second_opcode_word;
-    }
-
 
 }
