@@ -277,6 +277,8 @@ export class Flow {
         /** @TODO this returns a value, what do? */
         this.ep.begin();
         if (this.ep.currentInstructionIsJump()) {
+            // Jumps will never have second words or immediate operands, so
+            // bumping the PC down by two is safe here.
             this.simstate.reducePc();
         }
         /** @TODO this returns a value, what do? */
@@ -387,9 +389,24 @@ export class Flow {
     stateB() {
         /** @TODO this returns a value, what do? */
         this.ep.execute();
+        // Two-word instructions and instructions with the various kinds of
+        // immediate operands have been fetched by the ExecutionProcess
+        // (with two-word instructions being done in begin() and operands fetched
+        // in fetchOperands() (golly)), the PC has not been adjusted.  Now that
+        // we're done with the previous instruction, we can safely move the PC
+        // up to where it should be. It will previously be pointing at the word
+        // immediately after the first and possibly only word in our instruction.
+        let addtl_words_offset = this.ep.getPCOffset();
+        if (addtl_words_offset > 0 && addtl_words_offset % 2 !== 0) {
+            throw new Error('impossible non-even addtl_words_offset');
+        }
+        while (addtl_words_offset > 0) {
+            addtl_words_offset -= 2;
+            this.simstate.advancePc();
+        }
 
         // Fetch the next instruction, but do not execute it yet.
-        // This automatically uses and stashes the PC but does NOT advance it.
+        // This call automatically uses and stashes the PC but does NOT advance it.
         this.ep.fetchNextInstruction();
         this.#recordStateOfAppSignal(); // For a check during state C2
         this.simstate.advancePc();

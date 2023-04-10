@@ -106,7 +106,7 @@ export class Instruction {
         if (!this.opcode_info.args[param_name]) {
             throw new Error(`getParam with invalid param: "${param_name}" probable bug`);
         }
-        const format_info = FormatInfo.newFromNumber(this.opcode_info.format);
+        const format_info = FormatInfo.getFormat(this.opcode_info.format);
 
         if (param_name == 'S' && Object.hasOwn(format_info.opcode_params, 'Ts') && this.getParam('Ts') == 2) {
             return this.getImmediateSourceValue();
@@ -153,7 +153,7 @@ export class Instruction {
             console.error('setParam: unknown param name', param_name);
             return false;
         }
-        const format_info = FormatInfo.newFromNumber(this.opcode_info.format);
+        const format_info = FormatInfo.getFormat(this.opcode_info.format);
 
         if (param_name == 'S' && Object.hasOwn(format_info.opcode_params, 'Ts') && this.getParam('Ts') == 2) {
             this.setImmediateSourceValue(parseInt(value.toString(/* lol */)));

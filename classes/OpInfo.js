@@ -1,5 +1,7 @@
 // @ts-check
 
+import { FormatInfo } from "./Format";
+
 export class OpInfo {
 
     /** @type string[] */
@@ -78,6 +80,7 @@ export class OpInfo {
     get has_second_opcode_word() {          return (this.format > 11) && (this.format != 18); }
     get minimum_instruction_words() {       return 1 + (this.has_immediate_operand?1:0) + (this.has_second_opcode_word?1:0); }
     get maximum_instruction_words() {       return this.minimum_instruction_words + (this.has_possible_immediate_source?1:0) + (this.has_possible_immediate_dest?1:0); }
+    get format_info() {                     return FormatInfo.getFormat(this.format); }
 
     // These all get overridden.  Receiving "NOP" is or opcode = 0 is considered
     // to be an error condition.

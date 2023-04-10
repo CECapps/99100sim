@@ -166,7 +166,7 @@ class FormatInfo {
      * @param {number} num
      * @returns {FormatInfo}
      **/
-    static newFromNumber(num) {
+    static getFormat(num) {
         if (num < 1 || num > 21) {
             throw new Error('Format out of range, how did you do that!?');
         }
@@ -193,7 +193,7 @@ class FormatParamConverter {
 
         result.opcode = op_info.opcode;
 
-        const format_info = FormatInfo.newFromNumber(op_info.format);
+        const format_info = FormatInfo.getFormat(op_info.format);
 
         /** @type Object<string,string> */
         const asm_params = {};
@@ -268,7 +268,8 @@ class FormatParamConverter {
         }
         result.opcode = instr.opcode_info.opcode;
 
-        const format_info = FormatInfo.newFromNumber(instr.opcode_info.format);
+        const format_info = FormatInfo.getFormat
+(instr.opcode_info.format);
         console.debug(format_info);
 
         /** @type Object<string,string|number> */

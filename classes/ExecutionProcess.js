@@ -39,6 +39,8 @@ export class ExecutionProcess {
     #finished_exec = false;
     #finished_write = false;
 
+    #pc_offset_for_addtl_words = 0;
+
     /**
      * @param {SimulationState} simstate
      **/
@@ -86,8 +88,13 @@ export class ExecutionProcess {
         this.#finished_fetch = false;
         this.#finished_exec = false;
         this.#finished_write = false;
+
+        this.#pc_offset_for_addtl_words = 0;
     }
 
+    getPCOffset() {
+        return this.#pc_offset_for_addtl_words;
+    }
 
     /**
      * Is this a Jump instruction?  The Flow needs to know so it can do PC math.
@@ -108,16 +115,14 @@ export class ExecutionProcess {
             throw new Error('ExecutionProcess.begin called twice, you have a bug.');
         }
 
-        let addtl_words_offset = 0;
         if (this.#ci.hasSecondOpcodeWord()) {
-            addtl_words_offset += 2;
-            this.#ci.setSecondOpcodeWord(this.#simstate.getWord(this.#ci_pc + addtl_words_offset));
+            this.#pc_offset_for_addtl_words += 2;
+            this.#ci.setSecondOpcodeWord(this.#simstate.getWord(this.#ci_pc + this.#pc_offset_for_addtl_words));
         }
 
         const a = this.#eu.validateOpcode();
-        const b = this.#eu.validateParams();
         this.#finished_begin = true;
-        return a && b;
+        return a;
     }
 
     fetchOperands() {
@@ -131,24 +136,24 @@ export class ExecutionProcess {
             throw new Error('ExecutionProcess.fetchOperands called before begin, you have a bug.');
         }
 
-        let addtl_words_offset = 0;
         if (this.#ci.hasImmediateValue()) {
-            addtl_words_offset += 2;
-            this.#ci.setImmediateValue(this.#simstate.getWord(this.#ci_pc + addtl_words_offset));
+            this.#pc_offset_for_addtl_words += 2;
+            this.#ci.setImmediateValue(this.#simstate.getWord(this.#ci_pc + this.#pc_offset_for_addtl_words));
         }
         if (this.#ci.hasImmediateSourceValue()) {
-            addtl_words_offset += 2;
-            this.#ci.setImmediateSourceValue(this.#simstate.getWord(this.#ci_pc + addtl_words_offset));
+            this.#pc_offset_for_addtl_words += 2;
+            this.#ci.setImmediateSourceValue(this.#simstate.getWord(this.#ci_pc + this.#pc_offset_for_addtl_words));
         }
         if (this.#ci.hasImmediateDestValue()) {
-            addtl_words_offset += 2;
-            this.#ci.setImmediateDestValue(this.#simstate.getWord(this.#ci_pc + addtl_words_offset));
+            this.#pc_offset_for_addtl_words += 2;
+            this.#ci.setImmediateDestValue(this.#simstate.getWord(this.#ci_pc + this.#pc_offset_for_addtl_words));
         }
 
-        const c = this.#eu.fetchOperands();
+        const b = this.#eu.fetchOperands();
+        const c = this.#eu.validateParams();
         this.#ci.finalize();
         this.#finished_fetch = true;
-        return c;
+        return b && c;
     }
 
     execute() {

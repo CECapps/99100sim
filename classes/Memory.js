@@ -57,12 +57,12 @@ export class Memory {
         const masked = value & 0xFFFF;
         if (value != masked) {
             if (value !== undefined) {
-                throw new Error(`setWord out of range value 0x${value.toString(16).toUpperCase()}`);
-                return;
+                console.error(`setWord out of range value 0x${value.toString(16).toUpperCase()}, value clamped to 0x${masked.toString(16).toUpperCase()}`)
+            } else {
+                throw new Error(`setWord got undefined value somehow.  There be bugs!`)
             }
-            throw new Error(`setWord got undefined value somehow.  There be bugs!`)
         }
-        this.#buffer.setUint16(offset, value, /* force BE */ false);
+        this.#buffer.setUint16(offset, masked, /* force BE */ false);
         window.dispatchEvent(new CustomEvent('memory_updated'));
     }
 };

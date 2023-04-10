@@ -47,9 +47,9 @@ export class ExecutionUnit {
     }
 
     validateOpcode() { return false; }
+    fetchOperands() { return false; }
     validateParams() { return false; }
     doParamsNeedPrivilege() { return false; }
-    fetchOperands() { return false; }
     execute() { return false; }
     writeResults() { return false; }
 
@@ -58,26 +58,46 @@ export class ExecutionUnit {
      * @param {number} register_or_index
      **/
     resolveAddressingModeAndGet(mode, register_or_index) {
-        if (mode === 0) {
-            const x = this.simstate.getRegisterWord(register_or_index);
-            //console.log('resolveAddressingModeAndGet:', mode, register_or_index, x);
-            return x;
+        let register_value = 0;
+        let operand_value = 0;
+
+        const is_indirect_mode = mode == 1 || mode == 3;
+        const is_symbolic_mode = mode == 2 && register_or_index == 0;
+        const is_indexed_mode = mode == 2 && register_or_index > 0;
+        const is_direct_mode = !is_symbolic_mode && !is_indexed_mode && !is_indirect_mode
+
+        if (!is_symbolic_mode) {
+            register_value = this.simstate.getRegisterWord(register_or_index);
         }
-        if (mode === 1) {
-            const x = this.simstate.getWord(this.simstate.getRegisterWord(register_or_index));
-            //console.log('resolveAddressingModeAndGet:', mode, register_or_index, x);
-            return x;
-        }
-        if (mode === 2) {
-            if (register_or_index === 0) {
-                throw new Error('resolveAddressingModeAndGet does not yet support Symbolic mode');
+
+        if (is_symbolic_mode) {
+            // Our immediate source operand contains the memory address of our
+            // actual value.
+            operand_value = this.simstate.getWord(this.inst.getImmediateSourceValue());
+        } else if (is_indexed_mode) {
+            // Our immediate source operand contains a memory address.  We add
+            // the value in our register to that memory address to get the real
+            // pointer to the memory word that contains our source value.
+            operand_value = this.simstate.getWord( this.inst.getImmediateSourceValue() + register_value );
+        } else if (is_indirect_mode) {
+            // Our register contains a pointer to the memory word that contains
+            // our source value.
+            operand_value = this.simstate.getWord(register_value);
+            if (mode == 3) {
+                // We're in autoinc mode, so autoinc here.  Yes, really, here.
+                // If we need to care about the previous value of this register,
+                // we're going to need to stash it away elsewhere.
+                /** @FIXME per _F 3.2.3 this is supposed to inc by 1 if it's a byte op */
+                this.simstate.setRegisterWord(register_or_index, register_value + 2);
             }
-            throw new Error('resolveAddressingModeAndGet does not yet support Indexed mode');
+        } else if (is_direct_mode) {
+            // Our register contains our source value.
+            operand_value = register_value;
+        } else {
+            throw new Error('Impossible fallthrough');
         }
-        if (mode === 3) {
-            throw new Error('resolveAddressingModeAndGet does not yet support WR Indirect Autoinc');
-        }
-        throw new Error('resolveAddressingModeAndGet: fell through!');
+
+        return operand_value;
     }
 
     /**
@@ -86,26 +106,48 @@ export class ExecutionUnit {
      * @param {number} new_value
      **/
     resolveAddressingModeAndSet(mode, register_or_index, new_value) {
-        if (mode === 0) {
-            const x = this.simstate.setRegisterWord(register_or_index, new_value);
-            //console.log('resolveAddressingModeAndSet:', mode, register_or_index, new_value);
-            return x;
+        const is_indirect_mode = mode == 1 || mode == 3;
+        const is_symbolic_mode = mode == 2 && register_or_index == 0;
+        const is_indexed_mode = mode == 2 && register_or_index > 0;
+        const is_direct_mode = !is_symbolic_mode && !is_indexed_mode && !is_indirect_mode
+
+        let target_memory_word = 0;
+
+        if (is_direct_mode) {
+            this.simstate.setRegisterWord(register_or_index, new_value);
+            return;
         }
-        if (mode === 1) {
-            const x = this.simstate.setWord(this.simstate.getRegisterWord(register_or_index), new_value);
-            //console.log('resolveAddressingModeAndSet:', mode, register_or_index, new_value);
-            return x;
-        }
-        if (mode === 2) {
-            if (register_or_index === 0) {
-                throw new Error('resolveAddressingModeAndSet does not yet support Symbolic mode');
+
+        let register_value = this.simstate.getRegisterWord(register_or_index);
+
+        if (is_indirect_mode) {
+            // Our register contains a pointer to the memory word we need to set.
+
+            // We'll already have autoinced at this point.  Unautoinc to get our
+            // actual target address.
+            /** @FIXME per _F 3.2.3 this is supposed to inc by 1 if it's a byte op */
+            if (mode == 3) {
+                register_value -= 2;
             }
-            throw new Error('resolveAddressingModeAndSet does not yet support Indexed mode');
+            this.simstate.setWord(register_value, new_value);
+            return;
         }
-        if (mode === 3) {
-            throw new Error('resolveAddressingModeAndSet does not yet support WR Indirect Autoinc');
+
+        if (is_symbolic_mode || is_indexed_mode) {
+            // Our immediate source operand contains the memory word that we
+            // need to set.
+            let target_word = this.inst.getImmediateSourceValue();
+            if (is_indexed_mode) {
+                // In indexed mode, we add the contents of our register to the
+                // word to get our final target.
+                target_word += register_value;
+            }
+            this.simstate.setWord(target_word, new_value);
+            return;
         }
-        throw new Error('resolveAddressingModeAndSet: fell through!');
+
+        throw new Error('Hey, look, another impossible fallthrough!');
+
     }
 
 }
@@ -134,7 +176,6 @@ class Units {
 
                 return true;
             }
-
             execute() {
                 const new_pc = this.simstate.getPc() + this.displacement;
                 //console.debug('JMP execute(): pc=', this.simstate.getPc(), 'disp=', this.displacement, 'new_pc=', new_pc);
@@ -146,24 +187,19 @@ class Units {
         'LI': class extends ExecutionUnit {
             #register_num = 0;
             #next_word = 0;
-
             fetchOperands() {
                 this.#register_num = this.inst.getParam('reg');
-                this.#next_word = this.simstate.getWord(this.simstate.getPc());
-                this.simstate.advancePc();
+                this.#next_word = this.inst.getImmediateValue();
                 return true;
             }
-
             execute() {
                 //console.debug('LI execute()');
                 return true;
             }
-
             writeResults() {
                 this.simstate.setRegisterWord(this.#register_num, this.#next_word);
                 return true;
             }
-
         },
         'MOV': class extends ExecutionUnit {
             source_value = 0;
@@ -191,12 +227,7 @@ class Units {
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
                 let s = this.inst.getParam('S');
-                if (!s || s < 0 || s > 15) {
-                    s = 0;
-                }
-                if (ts == 0) {
-                    this.nv = this.simstate.getRegisterWord(s);
-                }
+                this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
             execute() {
@@ -207,12 +238,7 @@ class Units {
             writeResults() {
                 const ts = this.inst.getParam('Ts');
                 let s = this.inst.getParam('S');
-                if (!s || s < 0 || s > 15) {
-                    s = 0;
-                }
-                if (ts == 0) {
-                    this.simstate.setRegisterWord(s, 0xFFFF & this.nv);
-                }
+                this.resolveAddressingModeAndSet(ts, s, this.nv);
                 return true;
             }
         },
@@ -222,12 +248,7 @@ class Units {
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
                 let s = this.inst.getParam('S');
-                if (!s || s < 0 || s > 15) {
-                    s = 0;
-                }
-                if (ts == 0) {
-                    this.nv = this.simstate.getRegisterWord(s);
-                }
+                this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
             execute() {
@@ -238,12 +259,7 @@ class Units {
             writeResults() {
                 const ts = this.inst.getParam('Ts');
                 let s = this.inst.getParam('S');
-                if (!s || s < 0 || s > 15) {
-                    s = 0;
-                }
-                if (ts == 0) {
-                    this.simstate.setRegisterWord(s, 0xFFFF & this.nv);
-                }
+                this.resolveAddressingModeAndSet(ts, s, this.nv);
                 return true;
             }
         },
