@@ -54,6 +54,14 @@ export class Memory {
         if (offset % 2 == 1) {
             offset--;
         }
+        const masked = value & 0xFFFF;
+        if (value != masked) {
+            if (value !== undefined) {
+                throw new Error(`setWord out of range value 0x${value.toString(16).toUpperCase()}`);
+                return;
+            }
+            throw new Error(`setWord got undefined value somehow.  There be bugs!`)
+        }
         this.#buffer.setUint16(offset, value, /* force BE */ false);
         window.dispatchEvent(new CustomEvent('memory_updated'));
     }

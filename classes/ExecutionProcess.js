@@ -6,13 +6,18 @@ import { Instruction } from "./Instruction";
 import { SimulationState } from "./SimulationState";
 
 /**
- * Execution Process: A Flow-oriented abstraction over instruction operations.
+ * Execution Process: An abstraction over Instruction operations.
+ *
+ * tl;dr: Flow is complex enough without trying to juggle the execution status
+ *        of the current and prefetched next instruction.  All of that logic
+ *        instead lives here.
  *
  * This code contains the upcoming and current Instructions, with the logic to
  * pull them and their operands out of memory, validate the result for legality,
  * and give confident answers back to Flow when it needs them.
  *
- * To achieve this, we request an ExecutionUnit to do the real work.
+ * To achieve this, we invoke an ExecutionUnit to do the real work and manage
+ * the begin/fetch/execute/write cycle.
  *
  * This code does not try to comply with the flowchart.  It only provides a single
  * programmatic interface so that the logic to deal with all of these separate

@@ -3,6 +3,13 @@
 /**
  * Error Flags: Extra Interrupt 2 error information accessed through the CRU
  *
+ * tl;dr: The 99100 processors store extra information about certain exceptions
+ *        in a "register" available at a specific CRU address.  This register
+ *        can be read/written by anything.  We exist only in the context of a
+ *        SimulationState.  All accesses should be through the SimulationState.
+ *
+ * Notes:
+ *
  * I had to write all this stuff out to make sense of it, so now you have to
  * read all of it.  I don't make the rules, keep reading.
  *

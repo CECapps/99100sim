@@ -1,8 +1,11 @@
 // @ts-check
 
 import { Instruction } from "./Instruction";
+import { OpInfo } from "./OpInfo";
 
-export class FormatInfo {
+export { FormatInfo, FormatParamConverter };
+
+class FormatInfo {
 
     // Generated
     get has_immediate_operand() {           return this.format_number == 8; }
@@ -174,14 +177,233 @@ export class FormatInfo {
 
 class FormatParamConverter {
 
-    static newFromOpcode() {}
-    static newFromAsmString() {}
-    static newFromInstruction() {}
+    /**
+     * @param {string} op_name
+     * @param {string} params
+     * @returns {FormatParamResult}
+     **/
+    static fromAsmString(op_name, params) {
+        const result = new FormatParamResult;
+        result.unparsed_param_string = params;
+
+        const op_info = OpInfo.newFromString(op_name);
+        if ( !(op_info instanceof OpInfo)) {
+            throw new Error('Impossible broken opcode "${op_name}"');
+        }
+
+        result.opcode = op_info.opcode;
+
+        const format_info = FormatInfo.newFromNumber(op_info.format);
+
+        /** @type Object<string,string> */
+        const asm_params = {};
+        /** @type Object<string,number> */
+        const parsed_params = {};
+
+        const param_list = params.split(',');
+
+        var i = 0;
+        for (let param_name of format_info.asm_param_order) {
+            asm_params[param_name] = param_list[i++];
+            console.log(param_name, '=', asm_params[param_name]);
+        }
+        result.unparsed_params = asm_params;
+
+        if (Object.hasOwn(format_info.opcode_params, 'Ts') && Object.hasOwn(asm_params, 'S')) {
+            /** @type number[] */
+            const type_and_value = this.#convertAddressingModeSyntax(asm_params['S']);
+            console.log(type_and_value);
+            parsed_params['Ts'] = type_and_value[0];
+            parsed_params['S'] = type_and_value[1];
+        }
+
+        if (Object.hasOwn(format_info.opcode_params, 'Td') && Object.hasOwn(asm_params, 'D')) {
+            /** @type number[] */
+            const type_and_value = this.#convertAddressingModeSyntax(asm_params['D']);
+            console.log(type_and_value);
+            parsed_params['Td'] = type_and_value[0];
+            parsed_params['D'] = type_and_value[1];
+        }
+
+        // All params are unsigned, except disp, which is a signed 8-bit integer.
+        // We get it signed, but we need to convert it to unsigned.
+        if (Object.hasOwn(asm_params, 'disp')) {
+            const disp = parseInt(asm_params['disp']);
+            parsed_params['disp'] = disp > 127 ? disp - 256 : disp;
+        }
+        if (Object.hasOwn(asm_params, '_immediate_word_')) {
+            let processed_iw = asm_params['_immediate_word_'];
+            if (processed_iw.startsWith('>') || processed_iw.startsWith('0x')) {
+                processed_iw = parseInt(processed_iw.replace(/^(0x|>)/, ''), 16).toString();
+            } else if (processed_iw.startsWith('0b')) {
+                processed_iw = parseInt(processed_iw.replace(/^(0b)/, ''), 2).toString();
+            }
+            asm_params['_immediate_word_'] = processed_iw;
+        }
+
+        const skip_these = [ 'Td', 'D', 'Ts', 'S', 'disp' ];
+        for (let param_name in format_info.opcode_params) {
+            if (!skip_these.includes(param_name)) {
+                parsed_params[param_name] = parseInt(asm_params[param_name]);
+            }
+            //console.log(param_name, parsed_params[param_name]);
+            result.parsed_params[param_name] = parsed_params[param_name];
+        }
+
+        result.parsed_param_string = Object.values(result.parsed_params).join(',');
+
+        return result;
+    }
+
 
     /**
-     * @param {FormatParamResult} result
+     * @param {Instruction} instr
+     * @returns {FormatParamResult}
      **/
-    static getAsmStringFromResult(result) {}
+    static fromInstruction(instr) {
+        const result = new FormatParamResult;
+
+        if (!instr.isFinalized()) {
+            throw new Error('Can not extract data from an unfinalized Instruction');
+        }
+        result.opcode = instr.opcode_info.opcode;
+
+        const format_info = FormatInfo.newFromNumber(instr.opcode_info.format);
+        console.debug(format_info);
+
+        /** @type Object<string,string|number> */
+        let assembled_params = {};
+
+        if (Object.hasOwn(format_info.opcode_params, 'Ts') && Object.hasOwn(format_info.opcode_params, 'S')) {
+            const type = instr.getParam('Ts');
+            const value = instr.getParam('S');
+
+            let register_syntax = 'R' + value;
+            let symindex_syntax = '';
+            if (type == 1 || type == 3) {
+                register_syntax = '*' + register_syntax;
+            }
+            if (type == 3) {
+                register_syntax = register_syntax + '+';
+            }
+            if (type == 2) {
+                symindex_syntax = '@' + instr.getImmediateSourceValue().toString(10);
+                if (value && value > 0 && value < 16) {
+                    /** @FIXME whoops need to store value separately from following word */
+                    symindex_syntax = symindex_syntax + `(${register_syntax})`;
+                }
+                register_syntax = '';
+            }
+            assembled_params['Ts'] = type;
+            assembled_params['S'] = symindex_syntax + register_syntax;
+        }
+
+        /** @FIXME resync/merge with above */
+        if (Object.hasOwn(format_info.opcode_params, 'Td') && Object.hasOwn(format_info.opcode_params, 'D')) {
+            const type = instr.getParam('Td');
+            const value = instr.getParam('D');
+
+            let register_syntax = 'R' + value.toString();
+            let symindex_syntax = '';
+            if (type == 1 || type == 3) {
+                register_syntax = '*' + register_syntax;
+            }
+            if (type == 3) {
+                register_syntax = register_syntax + '+';
+            }
+            if (type == 2) {
+                symindex_syntax = '@' + instr.getImmediateSourceValue().toString(10);
+                if (value && value > 0) {
+                    symindex_syntax = symindex_syntax + `(${register_syntax})`;
+                }
+                register_syntax = '';
+            }
+            assembled_params['Td'] = type;
+            assembled_params['D'] = symindex_syntax + register_syntax;
+            console.log(assembled_params['D']);
+        }
+
+        for (let param_name of format_info.asm_param_order) {
+            if (param_name != 'S' && param_name != 'D') {
+                assembled_params[param_name] = instr.getParam(param_name);
+            }
+        }
+        for (let param_name of format_info.asm_param_order) {
+            result.unparsed_params[param_name] = assembled_params[param_name].toString();
+        }
+        result.unparsed_param_string = Object.values(result.unparsed_params).join(',');
+
+        for (let param_name of format_info.asm_param_order) {
+            const pn = instr.getParam(param_name);
+            console.debug(param_name, pn);
+            if (param_name == 'S' || param_name == 'D') {
+                assembled_params[param_name] = result.unparsed_params[param_name];
+                continue;
+            }
+            assembled_params[param_name] = pn;
+            result.unparsed_params[param_name] = pn.toString(10);
+        }
+
+        result.parsed_param_string = Object.values(assembled_params).join(',');
+        for (let param_name in format_info.opcode_params) {
+            const gp = instr.getParam(param_name);
+            result.parsed_params[param_name] = gp;
+        }
+
+        return result;
+    }
+
+    /**
+     * @param {string} value
+     * @returns number[]
+     **/
+    static #convertAddressingModeSyntax(value) {
+        let type = 0;
+        let new_value = 0;
+        const register_extract_regex = /(^|WR|R)(\d{1,2})([^\d]|$)/;
+        if (value.startsWith('*') && value.endsWith('+')) {
+            type = 3;
+        }
+        if (type == 0 && value.startsWith('*')) {
+            type = 1;
+        }
+        if (type == 0 && value.startsWith('@')) {
+            type = 2;
+            // Type 2 means there's a following word that's the actual data.
+            // We'll only get a positive integer value here for an index register.
+            // Thus the fallthrough is just fine.
+            /** @FIXME this is wrong */
+            const extract = value.match(/^\@(0x|0b|>)?(\d+)\((WR|R)?(\d{1,2})\)/);
+            if (extract) {
+                new_value = parseInt(extract[3]);
+            } else {
+                if (value.startsWith('@')) {
+                    value = value.substring(1);
+                }
+                if (value.startsWith('>')) {
+                    value = parseInt(value.substring(1), 16).toString();
+                }
+                if (value.startsWith('0x')) {
+                    value = parseInt(value.substring(2), 16).toString();
+                }
+                if (value.startsWith('0b')) {
+                    value = parseInt(value.substring(2), 2).toString();
+                }
+                if (value.match(/^\d+$/)) {
+                    new_value = parseInt(value);
+                } else {
+                    throw new Error('Probably impossible or a bug');
+                }
+            }
+        }
+
+        if (type != 2) {
+            const extract = value.match(register_extract_regex);
+            new_value = extract ? parseInt(extract[2]) : 0;
+        }
+
+        return [type, new_value];
+    }
 
 }
 
@@ -191,12 +413,20 @@ class FormatParamResult {
     parsed_param_string = '';
 
     /**
-     * @type object<string,number>[]
+     * @type Object<string,string>
      **/
-    unparsed_params = [];
+    unparsed_params = {};
 
     /**
-     * @type object<string,number>[]
+     * @type Object<string,number>
      */
-    parsed_params = [];
+    parsed_params = {};
+
+    /** @type {number|null} */
+    immediate_operand = null;
+    /** @type {number|null} */
+    immediate_source_operand = null;
+    /** @type {number|null} */
+    immediate_dest_operand = null;
+
 }

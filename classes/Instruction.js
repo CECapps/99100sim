@@ -1,5 +1,6 @@
 // @ts-check
 
+import { FormatInfo } from "./Format";
 import { OpInfo } from "./OpInfo";
 
 /**
@@ -96,16 +97,25 @@ export class Instruction {
 
     /**
      * @param {string} param_name
+     * @return number
      **/
     getParam(param_name) {
         if (this.#working_opcode == 0) {
-            console.error('getParam called before known good state: probable bug');
-            return 0;
+            throw new Error('getParam called before known good state: probable bug');
         }
         if (!this.opcode_info.args[param_name]) {
-            console.error('getParam with invalid param: probable bug');
-            return 0;
+            throw new Error(`getParam with invalid param: "${param_name}" probable bug`);
         }
+        const format_info = FormatInfo.newFromNumber(this.opcode_info.format);
+
+        if (param_name == 'S' && Object.hasOwn(format_info.opcode_params, 'Ts') && this.getParam('Ts') == 2) {
+            return this.getImmediateSourceValue();
+        }
+
+        if (param_name == 'D' && Object.hasOwn(format_info.opcode_params, 'Td') && this.getParam('Td') == 2) {
+            return this.getImmediateDestValue();
+        }
+
         let running_offset = this.opcode_info.arg_start_bit;
         /** @type Object<string,number> args */
         const args = this.opcode_info.args;
@@ -126,6 +136,7 @@ export class Instruction {
             const extracted = opcode_binstring.substring(running_offset, running_offset + args[k]);
             return parseInt(extracted, 2);
         }
+        throw new Error('getParam fallthrough');
     }
 
     /**
@@ -141,6 +152,19 @@ export class Instruction {
         if (!this.opcode_info.args[param_name]) {
             console.error('setParam: unknown param name', param_name);
             return false;
+        }
+        const format_info = FormatInfo.newFromNumber(this.opcode_info.format);
+
+        if (param_name == 'S' && Object.hasOwn(format_info.opcode_params, 'Ts') && this.getParam('Ts') == 2) {
+            this.setImmediateSourceValue(parseInt(value.toString(/* lol */)));
+            this.#refreshImmediateOperandState();
+            return;
+        }
+
+        if (param_name == 'D' && Object.hasOwn(format_info.opcode_params, 'Td') && this.getParam('Td') == 2) {
+            this.setImmediateDestValue(parseInt(value.toString(/* lol */)));
+            this.#refreshImmediateOperandState();
+            return;
         }
 
         let running_offset = this.opcode_info.arg_start_bit;
@@ -199,12 +223,16 @@ export class Instruction {
             this.#has_immediate_source_operand = true;
         }
         if (this.opcode_info.has_possible_immediate_dest && this.getParam('Td') == 2) {
-            this.#has_immediate_source_operand = true;
+            this.#has_immediate_dest_operand = true;
         }
     }
 
     finalize() {
         this.#is_finalized = true;
+    }
+
+    isFinalized() {
+        return this.#is_finalized;
     }
 
     hasSecondOpcodeWord() {
@@ -216,6 +244,10 @@ export class Instruction {
         this.#second_word = word;
     }
 
+    getSecondOpcodeWord() {
+        return this.#second_word;
+    }
+
     hasImmediateValue() {
         return this.opcode_info.has_immediate_operand;
     }
@@ -223,6 +255,10 @@ export class Instruction {
     /** @param {number} word */
     setImmediateValue(word) {
         this.#immediate_operand = word;
+    }
+
+    getImmediateValue() {
+        return this.#immediate_operand;
     }
 
     hasImmediateSourceValue() {
@@ -234,6 +270,10 @@ export class Instruction {
         this.#immediate_source_operand = word;
     }
 
+    getImmediateSourceValue() {
+        return this.#immediate_source_operand;
+    }
+
     hasImmediateDestValue() {
         return this.#has_immediate_dest_operand;
     }
@@ -241,6 +281,10 @@ export class Instruction {
     /** @param {number} word */
     setImmediateDestValue(word) {
         this.#immediate_dest_operand = word;
+    }
+
+    getImmediateDestValue() {
+        return this.#immediate_dest_operand;
     }
 
     /**

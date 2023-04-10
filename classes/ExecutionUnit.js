@@ -3,6 +3,11 @@
 import { Instruction } from "./Instruction";
 import { SimulationState } from "./SimulationState";
 
+/**
+ * ExecutionUnit: An interface between ExecutionProcess and Instructions
+ *
+ * tl;dr:
+ **/
 export class ExecutionUnit {
 
     /**
@@ -122,13 +127,9 @@ class Units {
             displacement = 0;
             fetchOperands() {
                 let disp = this.inst.getParam('disp');
-                if (!disp) {
-                    disp = 0;
-                }
                 if (disp > 127) {
                     disp -= 256;
                 }
-                //console.debug('disp=', disp);
                 this.displacement = disp;
 
                 return true;
@@ -147,11 +148,7 @@ class Units {
             #next_word = 0;
 
             fetchOperands() {
-                const reg = this.inst.getParam('reg');
-                this.#register_num = 0;
-                if (reg) {
-                    this.#register_num = reg;
-                }
+                this.#register_num = this.inst.getParam('reg');
                 this.#next_word = this.simstate.getWord(this.simstate.getPc());
                 this.simstate.advancePc();
                 return true;
@@ -173,9 +170,6 @@ class Units {
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
                 const s = this.inst.getParam('S');
-                if (ts === undefined || s === undefined) {
-                    throw new Error('Missing Ts/S');
-                }
                 this.source_value = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
@@ -186,9 +180,6 @@ class Units {
             writeResults() {
                 const td = this.inst.getParam('Td');
                 const d = this.inst.getParam('D');
-                if (td === undefined || d === undefined) {
-                    throw new Error('Missing Td/D');
-                }
                 this.resolveAddressingModeAndSet(td, d, this.source_value);
 
                 return true;

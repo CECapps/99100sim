@@ -121,8 +121,8 @@ function assemble_codebox() {
     gebid_stfu('assembled').innerText = asm.toAsm().join("\n");
 
     if (results && results instanceof Array) {
-        for (let i of results) {
-            sim.state.setWord(0x0100 + (i * 2), results[i]);
+        for (let i in results) {
+            sim.state.setWord(0x0100 + (parseInt(i) * 2), results[i]);
         }
     }
 }

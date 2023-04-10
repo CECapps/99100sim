@@ -6,6 +6,10 @@ import { SimulationState } from "./SimulationState.js";
 /**
  * Flow: A state machine built from the operation flowchart in the manual.
  *
+ * tl;dr: Controls the decision making process around interrupts and instruction
+ *        handling.  There are lots of special conditions documented and they
+*        are all here.  Uses ExecutionProcess and the attached Instruction.
+ *
  * "The manual" here is "2250077-9701 990/12 Assembly Language Programmer's Guide"
  * <http://www.bitsavers.org/pdf/ti/990/assembler/2250077-9701A_-12asm_May79.pdf>
  *

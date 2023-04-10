@@ -21,6 +21,7 @@
 import { Simulation } from "./classes/Simulation.js";
 import { Instruction } from "./classes/Instruction.js";
 import { OpInfo } from "./classes/OpInfo.js";
+import { FormatParamConverter } from "./classes/Format.js";
 
 Reflect.set(window, 'Simulation', Simulation);
 Reflect.set(window, 'Instruction', Instruction);
@@ -28,6 +29,21 @@ Reflect.set(window, 'OpInfo', OpInfo);
 
 /** @type {Simulation} sim */
 window.sim = new Simulation();
+
+console.debug( FormatParamConverter.fromAsmString('MOV', 'R1,@>1234') );
+const inst = Instruction.newFromString('MOV');
+inst.setParam('Td', 0);
+inst.setParam('D', 1);
+inst.setParam('Ts', 2);
+inst.setParam('S', 1701);
+inst.finalize();
+console.debug(inst);
+console.debug( FormatParamConverter.fromInstruction(inst) );
+
+
+//console.debug( FormatParamConverter.fromAsmString('LI', 'R1,>CAFE') );
+//const inst = Instruction.newFromOpcode(49152);
+//inst.finalize();
 
 </script>
 
