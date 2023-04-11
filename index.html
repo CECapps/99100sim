@@ -30,6 +30,7 @@ Reflect.set(window, 'OpInfo', OpInfo);
 /** @type {Simulation} sim */
 window.sim = new Simulation();
 
+/*
 console.debug( FormatParamConverter.fromAsmString('MOV', 'R1,@>1234') );
 const inst = Instruction.newFromString('MOV');
 inst.setParam('Td', 0);
@@ -39,7 +40,7 @@ inst.setParam('S', 1701);
 inst.finalize();
 console.debug(inst);
 console.debug( FormatParamConverter.fromInstruction(inst) );
-
+*/
 
 //console.debug( FormatParamConverter.fromAsmString('LI', 'R1,>CAFE') );
 //const inst = Instruction.newFromOpcode(49152);
@@ -159,15 +160,14 @@ window.addEventListener('DOMContentLoaded', function () {
                 <section>
                     <section id="codebox_grid_container">
                         <textarea id="codebox" cols="40" spellcheck="false">; Hello World?
-LI      1           ; R1
-.data   0x0200
-LI      2           ; R2
-.data   0xFFFF
-:loop
-MOV     1,1,0,2     ; R2,*R1
-INCT    0,1         ; R1
-DECT    0,2         ; R2
-JMP     -6</textarea>
+    LI      1,0x0200
+    LI      2,0xFFFF
+label:
+    MOV     R2,*R1     ; R2,*R1
+    INCT    R1         ; R1
+    DECT    R2         ; R2
+    JMP     -6
+</textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>
                     </section>

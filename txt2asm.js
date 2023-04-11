@@ -138,7 +138,7 @@ class Asm {
             result.instruction_argument = line.substring(result.instruction.length + 1).trim();
         }
         // Step 5: Labels.
-        const label_match = line.match(/^\:([a-zA-Z_0-9]+)([\b\s]|$)/);
+        const label_match = line.match(/^([a-zA-Z_0-9]+):?([\b\s]|$)/);
         if (result.line_type == 'pending' && label_match) {
             result.line_type = 'label';
             result.instruction = label_match[1].toLowerCase();
@@ -160,6 +160,7 @@ class Asm {
                 if (new_opcode) {
                     line.word = new_opcode;
                 }
+                console.debug(line);
                 continue;
             }
 
@@ -200,7 +201,7 @@ class Asm {
             if (value > 0) {
                 // S is not zero, so we're in indexed mode.  The first word
                 // after the instruction is our base value.
-                string += `(${value})`;
+                string += `(R${value})`;
             }
         }
         return string;
@@ -209,33 +210,50 @@ class Asm {
     /** @param {AsmParseLineResult} line */
     #checkLineInstructionToOpcode(line) {
         const inst = Instruction.newFromString(line.instruction);
+        if (inst.opcode_info.has_second_opcode_word) {
+            throw new Error('hasSecondOpcodeWord NYI here');
+        }
+        if (inst.opcode_info.has_immediate_operand) {
+            // ???
+        }
+
         if (!inst.isLegal()) {
             console.error('illegal op', line, inst);
             return null;
         }
         const param_list = inst.getParamList();
+        // These are the ones we see in the assembly
+        const asm_param_list = inst.opcode_info.format_info.asm_param_order;
+        // These are the ones we put into the opcode
+        const opcode_param_list = Object.keys(inst.opcode_info.args);
+        // We're dealing with assembly-side things.
         const split_params = line.instruction_argument.split(',');
 
-        if (inst.opcode_info.has_possible_immediate_source) {
-
-        }
-
-        if (param_list.length != split_params.length) {
-            let operand_adjust = 0;
-            if (param_list.includes('Ts')) {
-                operand_adjust++;
+        let offset = 0;
+        for (let param_name of asm_param_list) {
+            if (param_name == 'S' && opcode_param_list.includes('Ts')) {
+                const res = this.#checkLineAddressingModeToOpcodeParams(split_params[offset]);
+                inst.setParam('Ts', res[0]);
+                inst.setParam('S', res[1]);
+                if (res[0] == 2 && res[1] == 0 && inst.opcode_info.has_possible_immediate_source) {
+                    inst.setImmediateSourceValue(res[2]);
+                }
+                continue;
             }
-            if (param_list.includes('Td')) {
-                operand_adjust++;
+            if (param_name == 'D' && opcode_param_list.includes('Td')) {
+                const res = this.#checkLineAddressingModeToOpcodeParams(split_params[offset]);
+                inst.setParam('Td', res[0]);
+                inst.setParam('D', res[1]);
+                if (res[0] == 2 && res[1] == 0 && inst.opcode_info.has_possible_immediate_dest) {
+                    inst.setImmediateDestValue(res[2]);
+                }
+                continue;
             }
-            if (param_list.length == (split_params.length - operand_adjust)) {
-                throw new Error('can not yet scan Rs sorry');
+            if (param_name == '_immediate_word_') {
+                inst.setImmediateValue(number_format_helper(split_params[offset++]));
+                continue;
             }
-            console.error('param count mismatch', param_list, split_params);
-            return null;
-        }
-        for (let i in param_list) {
-            inst.setParam(param_list[i], split_params[i]);
+            inst.setParam(param_name, number_format_helper(split_params[offset++]));
         }
         inst.finalize();
 
@@ -243,7 +261,56 @@ class Asm {
             console.error('illegal op (2)', line, inst);
             return null;
         }
+        console.debug(inst);
         return inst.getEffectiveOpcode();
+    }
+
+    /**
+     * @param {string} register_string
+     * @returns {number[]}
+     **/
+    #checkLineAddressingModeToOpcodeParams(register_string) {
+        let mode = 0;
+        let register = 0;
+        let immediate_word = 0;
+
+        if (register_string.startsWith('*')) {
+            mode = 1;
+            register_string = register_string.substring(1);
+            if (register_string.endsWith('+')) {
+                mode = 3
+                register_string = register_string.substring(0, register_string.length - 1);
+            }
+        }
+        if (register_string.startsWith('@')) {
+            mode = 2;
+            if (register_string.endsWith(')')) {
+                const reg_extract_regex = /\((WR|R)?(\d{1,2})\)$/;
+                const register_match = register_string.match(reg_extract_regex);
+                if (register_match) {
+                    register = parseInt(register_match[2]);
+                    register_string = register_string.replace(reg_extract_regex, '');
+                } else {
+                    throw new Error('Parse error finding indexed register');
+                }
+            }
+            const value_regex = /^\@(0x|0b|>)?([0-9A-F]+)/;
+            const value_test = register_string.match(value_regex);
+            if (value_test) {
+                immediate_word = number_format_helper(value_test[2]);
+            } else {
+                throw new Error('Parse error extracting a Symbolic or Indexed (mode=2) immediate value');
+            }
+        }
+        if (mode == 0) {
+            const modezero_test = register_string.match(/^(WR|R)?(\d{1,2})$/);
+            if (modezero_test) {
+                register = parseInt(modezero_test[2]);
+            } else {
+                throw new Error('Parse error extracting register value from mode=0 arg string');
+            }
+        }
+        return [mode, register, immediate_word];
     }
 
     process() {
@@ -269,6 +336,7 @@ class Asm {
     }
 
     toAsm() {
+        console.debug(this.#parsed_lines);
         /** @type string[] */
         const asm = [];
         for (let line of this.#parsed_lines) {
@@ -281,23 +349,48 @@ class Asm {
             }
 
             const is_instruction = line.line_type == 'instruction';
+            if (line.line_type == 'comment') {
+                asm.push('; ' + line.comments);
+                continue;
+            }
             if (!is_instruction) {
                 continue;
             }
 
-            const instr = Instruction.newFromOpcode(line.word);
+            console.debug(line);
+            const instr = Instruction.newFromString(line.instruction);
             instr.finalize();
+
             const f_instr = instr.opcode_info.name.padEnd(8, ' ');
             const f_params = [];
-            for (let param_name of instr.getParamList()) {
+            for (let param_name of instr.opcode_info.format_info.asm_param_order) {
+                if (param_name == '_immediate_word_') {
+                    f_params.push(instr.getImmediateValue());
+                    continue;
+                }
+
                 const param_value = instr.getParam(param_name);
                 if (param_value === undefined) {
                     throw new Error('hey look another params check failed');
                 }
-                f_params.push(param_value);
+
+                if (param_name == 'S' && Object.hasOwn(instr.opcode_info.args, 'Ts')) {
+                    f_params.push(this.#checkLineAddressingModeHelper(line, instr.getParam('Ts'), instr.getParam('S')));
+                    continue;
+                }
+                if (param_name == 'D' && Object.hasOwn(instr.opcode_info.args, 'Td')) {
+                    f_params.push(this.#checkLineAddressingModeHelper(line, instr.getParam('Td'), instr.getParam('D')));
+                    continue;
+                }
+                if (param_name == 'disp' && param_value > 127) {
+                    f_params.push(param_value - 256);
+                    continue;
+                }
+                const is_register_number = [ 'reg' ].includes(param_name);
+                f_params.push((is_register_number ? 'R' : '') + param_value);
             }
             const f_comments = line.comments.length ? ' ; ' + line.comments : '';
-            asm.push(f_instr + f_params.join(',').padEnd(10, ' ') + f_comments);
+            asm.push('    ' + f_instr + f_params.join(',').padEnd(10, ' ') + f_comments);
         }
         return asm;
     }
@@ -311,4 +404,47 @@ class AsmParseLineResult {
     instruction_argument =  'ERROR';
     comments =              'ERROR';
     word =                  0;
+    opcode_second_word =    0;
+    immediate_param_word =  0;
+    immediate_source_word = 0;
+    immediate_dest_word =   0;
+
+}
+
+/**
+ * @param {string} string
+ * @returns {number}
+ **/
+function number_format_helper(string) {
+    let is_hex = false;
+    let is_binary = false;
+    let is_decimal = false;
+
+    if (string.startsWith('R')) {
+        string = string.substring(1);
+    }
+    if (string.startsWith('WR')) {
+        string = string.substring(2);
+    }
+
+    if (string.startsWith('>')) {
+        is_hex = true;
+        string = string.substring(1);
+    }
+    if (string.startsWith('0x')) {
+        is_hex = true;
+        string = string.substring(2);
+    }
+    if (string.startsWith('0b')) {
+        is_binary = true;
+        string = string.substring(2);
+    }
+    if (!is_hex && !is_binary && string.match(/^-?\d+$/)) {
+        is_decimal = true;
+    }
+    if (!is_hex && !is_binary && !is_decimal) {
+        throw new Error('unparsable value');
+    }
+    const num = parseInt(string, is_decimal ? 10 : (is_hex ? 16 : 2));
+    return num;
 }

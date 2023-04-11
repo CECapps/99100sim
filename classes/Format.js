@@ -168,7 +168,7 @@ class FormatInfo {
      **/
     static getFormat(num) {
         if (num < 1 || num > 21) {
-            throw new Error('Format out of range, how did you do that!?');
+            throw new Error(`Format "${num}" is out of range, how did you do that!?`);
         }
         return this.#formats[num];
     }

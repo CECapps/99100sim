@@ -108,14 +108,6 @@ export class Instruction {
         }
         const format_info = FormatInfo.getFormat(this.opcode_info.format);
 
-        if (param_name == 'S' && Object.hasOwn(format_info.opcode_params, 'Ts') && this.getParam('Ts') == 2) {
-            return this.getImmediateSourceValue();
-        }
-
-        if (param_name == 'D' && Object.hasOwn(format_info.opcode_params, 'Td') && this.getParam('Td') == 2) {
-            return this.getImmediateDestValue();
-        }
-
         let running_offset = this.opcode_info.arg_start_bit;
         /** @type Object<string,number> args */
         const args = this.opcode_info.args;
@@ -155,16 +147,8 @@ export class Instruction {
         }
         const format_info = FormatInfo.getFormat(this.opcode_info.format);
 
-        if (param_name == 'S' && Object.hasOwn(format_info.opcode_params, 'Ts') && this.getParam('Ts') == 2) {
-            this.setImmediateSourceValue(parseInt(value.toString(/* lol */)));
-            this.#refreshImmediateOperandState();
-            return;
-        }
-
-        if (param_name == 'D' && Object.hasOwn(format_info.opcode_params, 'Td') && this.getParam('Td') == 2) {
-            this.setImmediateDestValue(parseInt(value.toString(/* lol */)));
-            this.#refreshImmediateOperandState();
-            return;
+        if (value === null || value === undefined) {
+            throw new Error('value must have a value but null or undefined was passed.  where is your typechecker god now!?');
         }
 
         let running_offset = this.opcode_info.arg_start_bit;
