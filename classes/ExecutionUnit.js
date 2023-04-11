@@ -58,6 +58,7 @@ export class ExecutionUnit {
      * @param {number} register_or_index
      **/
     resolveAddressingModeAndGet(mode, register_or_index) {
+        //console.debug('resolveAddressingModeAndGet', mode, register_or_index);
         let register_value = 0;
         let operand_value = 0;
 
@@ -106,6 +107,7 @@ export class ExecutionUnit {
      * @param {number} new_value
      **/
     resolveAddressingModeAndSet(mode, register_or_index, new_value) {
+        //console.debug('resolveAddressingModeAndSet', mode, register_or_index, new_value);
         const is_indirect_mode = mode == 1 || mode == 3;
         const is_symbolic_mode = mode == 2 && register_or_index == 0;
         const is_indexed_mode = mode == 2 && register_or_index > 0;
@@ -114,6 +116,7 @@ export class ExecutionUnit {
         let target_memory_word = 0;
 
         if (is_direct_mode) {
+            //console.debug('ramas: is_direct_mode, R', register_or_index, '=', new_value);
             this.simstate.setRegisterWord(register_or_index, new_value);
             return;
         }
@@ -129,6 +132,7 @@ export class ExecutionUnit {
             if (mode == 3) {
                 register_value -= 2;
             }
+            //console.debug('ramas: is_indirect_mode, R', register_or_index, ' (', register_value, ') =', new_value);
             this.simstate.setWord(register_value, new_value);
             return;
         }
@@ -142,6 +146,7 @@ export class ExecutionUnit {
                 // word to get our final target.
                 target_word += register_value;
             }
+            //console.debug('ramas: symbolic/indexed mode, word ', target_word, '=', new_value);
             this.simstate.setWord(target_word, new_value);
             return;
         }
@@ -206,6 +211,7 @@ class Units {
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
                 const s = this.inst.getParam('S');
+                //console.debug([ts, s]);
                 this.source_value = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
@@ -216,6 +222,7 @@ class Units {
             writeResults() {
                 const td = this.inst.getParam('Td');
                 const d = this.inst.getParam('D');
+                //console.debug([td, d]);
                 this.resolveAddressingModeAndSet(td, d, this.source_value);
 
                 return true;

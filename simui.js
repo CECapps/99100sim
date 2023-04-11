@@ -3,6 +3,7 @@
 
 //import { ExecutionProcess } from "./classes/ExecutionProcess";
 //import { Simulation } from "./classes/Simulation";
+//import { Asm } from "./classes/Asm";
 
 /** @type {Simulation} */
 var sim; // = new Simulation();
@@ -24,7 +25,8 @@ function gebid_stfu(element_id) {
 }
 
 function setup_simui() {
-    Reflect.set(window, 'sim', new Simulation());
+    sim = new Simulation();
+    Reflect.set(window, 'sim', sim);
 }
 
 function reset_simui() {
@@ -116,8 +118,9 @@ function assemble_codebox() {
     }
     const asm = new Asm();
     asm.setLines(ta.value);
-    asm.process();
+    console.debug(asm.process());
     const results = asm.toWords();
+    console.debug('asm.towords:', results);
     gebid_stfu('assembled').innerText = asm.toAsm().join("\n");
 
     if (results && results instanceof Array) {
@@ -146,7 +149,7 @@ function step_state_button_onclick(event) {
     event.preventDefault();
 
     running = false;
-    const last_state = window.sim.step();
+    const last_state = sim.step();
     if (last_state == 'B') {
         inst_execution_count++;
     }
@@ -160,7 +163,7 @@ function inst_state_button_onclick(event) {
     event.preventDefault();
 
     running = false;
-    window.sim.stepInstruction();
+    sim.stepInstruction();
     inst_execution_count++;
     update_simui();
     return false;

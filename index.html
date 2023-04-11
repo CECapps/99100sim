@@ -18,14 +18,17 @@
  * So, let's stash what we need in the global window object and switch back.
  * @TODO I'm sure there's a better way to deal with this problem.
  **/
+import { OpInfo } from "./classes/OpInfo.js";
 import { Simulation } from "./classes/Simulation.js";
 import { Instruction } from "./classes/Instruction.js";
-import { OpInfo } from "./classes/OpInfo.js";
-import { FormatParamConverter } from "./classes/Format.js";
+import { Asm } from "./classes/Asm.js";
+import { InstructionDecode } from "./classes/InstructionDecode.js";
 
+Reflect.set(window, 'OpInfo', OpInfo);
 Reflect.set(window, 'Simulation', Simulation);
 Reflect.set(window, 'Instruction', Instruction);
-Reflect.set(window, 'OpInfo', OpInfo);
+Reflect.set(window, 'Asm', Asm);
+Reflect.set(window, 'InstructionDecode', InstructionDecode);
 
 /** @type {Simulation} sim */
 window.sim = new Simulation();
