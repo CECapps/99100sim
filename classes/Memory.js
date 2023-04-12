@@ -42,7 +42,7 @@ export class Memory {
     setByte(offset, value) {
         //console.debug(`setByte ${offset.toString(16).padStart(4,"0")} is now ${value.toString(16).padStart(2,"0")}`);
         this.#buffer.setUint8(offset, value);
-        window.dispatchEvent(new CustomEvent('memory_updated'));
+        //window.dispatchEvent(new CustomEvent('memory_updated'));
     }
 
     /**
@@ -58,8 +58,8 @@ export class Memory {
         const clamped_value = value > 0xFFFF ? value - 0xFFFF : (value < 0 ? value + 0xFFFF : value);
         if (value != clamped_value) {
             if (value !== undefined) {
-                /** @FIXME This should be an error, but until overflow stuff is in this is too noisy. */
-                //console.error(`setWord out of range value 0x${value.toString(16).toUpperCase()}, value clamped to 0x${clamped_value.toString(16).toUpperCase()}`, value, clamped_value);
+                console.error(`setWord out of range value 0x${value.toString(16).toUpperCase()}, value clamped to 0x${clamped_value.toString(16).toUpperCase()}`, value, clamped_value);
+                throw new Error(`setWord out of range value.  Uncaught overflow?`)
             } else {
                 throw new Error(`setWord got undefined value somehow.  There be bugs!`)
             }
@@ -68,14 +68,14 @@ export class Memory {
         const clamped_offset = offset > 0xFFFF ? offset - 0xFFFF : (offset < 0 ? offset + 0xFFFF : offset);
         if (offset != clamped_offset) {
             if (offset !== undefined) {
-                /** @FIXME This should be an error, but until overflow stuff is in this is too noisy. */
-                // console.error(`setWord out of range OFFSET 0x${value.toString(16).toUpperCase()}, clamped to 0x${clamped_offset.toString(16).toUpperCase()}`, offset, clamped_offset);
+                console.error(`setWord out of range OFFSET 0x${value.toString(16).toUpperCase()}, clamped to 0x${clamped_offset.toString(16).toUpperCase()}`, offset, clamped_offset);
+                throw new Error(`setWord out of range OFFSET.  Uncaught overflow?`)
             } else {
                 throw new Error(`setWord got undefined OFFSET somehow.  There be bugs!`)
             }
         }
 
         this.#buffer.setUint16(clamped_offset, clamped_value, /* force BE */ false);
-        window.dispatchEvent(new CustomEvent('memory_updated'));
+        //window.dispatchEvent(new CustomEvent('memory_updated'));
     }
 };

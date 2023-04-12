@@ -58,6 +58,8 @@ export class Simulation {
 
     stepInstruction() {
         this.flow.runUntilExecutionState();
+        // This is a lie, but this lie makes us run faster
+        window.dispatchEvent(new CustomEvent('memory_updated'));
         return this.flow.prev_flow_state;
     }
 

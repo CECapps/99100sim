@@ -2,6 +2,7 @@
 
 import { Instruction } from "./Instruction";
 import { SimulationState } from "./SimulationState";
+import { StatusRegister } from "./StatusRegister";
 
 /**
  * ExecutionUnit: An interface between ExecutionProcess and Instructions
@@ -89,7 +90,13 @@ export class ExecutionUnit {
                 // If we need to care about the previous value of this register,
                 // we're going to need to stash it away elsewhere.
                 /** @FIXME per _F 3.2.3 this is supposed to inc by 1 if it's a byte op */
-                this.simstate.setRegisterWord(register_or_index, register_value + 2);
+                let next_value = register_value + 2;
+                while (next_value > 0xFFFF) {
+                    // Nothing anywhere in the overflow register docs say that
+                    // this operation triggers an overflow, so not doing that.
+                    next_value -= 0xFFFF;
+                }
+                this.simstate.setRegisterWord(register_or_index, next_value);
             }
         } else if (is_direct_mode) {
             // Our register contains our source value.
@@ -128,9 +135,14 @@ export class ExecutionUnit {
 
             // We'll already have autoinced at this point.  Unautoinc to get our
             // actual target address.
-            /** @FIXME per _F 3.2.3 this is supposed to inc by 1 if it's a byte op */
+            /** @FIXME per _F 3.2.3 this is supposed to have been inc'd by 1 if it's a byte op */
             if (mode == 3) {
                 register_value -= 2;
+            }
+            while (register_value < 0) {
+                // Nothing anywhere in the overflow register docs say that
+                // this operation triggers an overflow, so not doing that.
+                register_value += 0xFFFF;
             }
             //console.debug('ramas: is_indirect_mode, R', register_or_index, ' (', register_value, ') =', new_value);
             this.simstate.setWord(register_value, new_value);
@@ -232,7 +244,13 @@ class Units {
 
                 if (td == 3) {
                     /** @TODO when copying this, don't forget to set this to 1 instead of 2 for byte instructions instead of word! */
-                    this.simstate.setRegisterWord(d, 2 + this.simstate.getRegisterWord(d));
+                    let next_value = this.simstate.getRegisterWord(d) + 2;
+                    while (next_value > 0xFFFF) {
+                        // Nothing anywhere in the overflow register docs say that
+                        // this operation triggers an overflow, so not doing that.
+                        next_value -= 0xFFFF;
+                    }
+                    this.simstate.setRegisterWord(d, next_value);
                 }
                 return true;
             }
@@ -248,6 +266,12 @@ class Units {
             execute() {
                 //console.debug('INCT execute()');
                 this.nv += 1;
+                this.simstate.status_register.resetBit(StatusRegister.OVERFLOW);
+                if (this.nv > 0xFFFF) {
+                    this.nv -= 0xFFFF;
+                    console.warn('INC: Overflow!');
+                    this.simstate.status_register.setBit(StatusRegister.OVERFLOW);
+                }
                 return true;
             }
             writeResults() {
@@ -268,6 +292,12 @@ class Units {
             execute() {
                 //console.debug('INCT execute()');
                 this.nv += 2;
+                this.simstate.status_register.resetBit(StatusRegister.OVERFLOW);
+                if (this.nv > 0xFFFF) {
+                    this.nv -= 0xFFFF;
+                    console.warn('INCT: Overflow!');
+                    this.simstate.status_register.setBit(StatusRegister.OVERFLOW);
+                }
                 return true;
             }
             writeResults() {
@@ -288,6 +318,12 @@ class Units {
             execute() {
                 //console.debug('DECT execute()');
                 this.nv -= 1;
+                this.simstate.status_register.resetBit(StatusRegister.CARRY);
+                if (this.nv < 0) {
+                    this.nv += 0xFFFF;
+                    console.warn('DEC: Underflow!');
+                    this.simstate.status_register.setBit(StatusRegister.CARRY);
+                }
                 return true;
             }
             writeResults() {
@@ -308,6 +344,12 @@ class Units {
             execute() {
                 //console.debug('DECT execute()');
                 this.nv -= 2;
+                this.simstate.status_register.resetBit(StatusRegister.CARRY);
+                if (this.nv < 0) {
+                    this.nv += 0xFFFF;
+                    console.warn('DECT: Underflow!');
+                    this.simstate.status_register.setBit(StatusRegister.CARRY);
+                }
                 return true;
             }
             writeResults() {
