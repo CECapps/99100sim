@@ -213,6 +213,11 @@ class Units {
                 const s = this.inst.getParam('S');
                 //console.debug([ts, s]);
                 this.source_value = this.resolveAddressingModeAndGet(ts, s);
+
+                if (ts == 3) {
+                    /** @TODO when copying this, don't forget to set this to 1 instead of 2 for byte instructions instead of word! */
+                    this.simstate.setRegisterWord(s, 2 + this.simstate.getRegisterWord(s));
+                }
                 return true;
             }
             execute() {
@@ -225,11 +230,34 @@ class Units {
                 //console.debug([td, d]);
                 this.resolveAddressingModeAndSet(td, d, this.source_value);
 
+                if (td == 3) {
+                    /** @TODO when copying this, don't forget to set this to 1 instead of 2 for byte instructions instead of word! */
+                    this.simstate.setRegisterWord(d, 2 + this.simstate.getRegisterWord(d));
+                }
+                return true;
+            }
+        },
+        'INC': class extends ExecutionUnit {
+            nv = 0;
+            fetchOperands() {
+                const ts = this.inst.getParam('Ts');
+                let s = this.inst.getParam('S');
+                this.nv = this.resolveAddressingModeAndGet(ts, s);
+                return true;
+            }
+            execute() {
+                //console.debug('INCT execute()');
+                this.nv += 1;
+                return true;
+            }
+            writeResults() {
+                const ts = this.inst.getParam('Ts');
+                let s = this.inst.getParam('S');
+                this.resolveAddressingModeAndSet(ts, s, this.nv);
                 return true;
             }
         },
         'INCT': class extends ExecutionUnit {
-            register = 0;
             nv = 0;
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
@@ -249,8 +277,27 @@ class Units {
                 return true;
             }
         },
+        'DEC': class extends ExecutionUnit {
+            nv = 0;
+            fetchOperands() {
+                const ts = this.inst.getParam('Ts');
+                let s = this.inst.getParam('S');
+                this.nv = this.resolveAddressingModeAndGet(ts, s);
+                return true;
+            }
+            execute() {
+                //console.debug('DECT execute()');
+                this.nv -= 1;
+                return true;
+            }
+            writeResults() {
+                const ts = this.inst.getParam('Ts');
+                let s = this.inst.getParam('S');
+                this.resolveAddressingModeAndSet(ts, s, this.nv);
+                return true;
+            }
+        },
         'DECT': class extends ExecutionUnit {
-            register = 0;
             nv = 0;
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');

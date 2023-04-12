@@ -52,6 +52,7 @@ class InstructionDecode {
             inst.setSecondOpcodeWord(ei.second_word.value);
         }
 
+        // This is stored in the opcode itself, but we might not have gotten that form
         for (let kv of ei.opcode_params) {
             inst.setParam(kv[0], kv[1]);
         }
@@ -118,6 +119,9 @@ class EncodedInstruction {
 
     get words() {
         let res = [ this.opcode ];
+        if (this.second_word.is_needed && this.second_word.has_value) {
+            res.push(this.second_word.value);
+        }
         if (this.immediate_word.is_needed && this.immediate_word.has_value) {
             res.push(this.immediate_word.value);
         }

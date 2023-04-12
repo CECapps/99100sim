@@ -163,13 +163,12 @@ window.addEventListener('DOMContentLoaded', function () {
                 <section>
                     <section id="codebox_grid_container">
                         <textarea id="codebox" cols="40" spellcheck="false">; Hello World?
-    LI      1,0x0200
-    LI      2,0xFFFF
+    LI      R1,0x200
+    LI      R2,0xFFFF
 label:
-    MOV     R2,*R1     ; R2,*R1
-    INCT    R1         ; R1
-    DECT    R2         ; R2
-    JMP     -6
+    MOV     R2,*R1+    ; R2,*R1
+    DEC     R2         ; R2
+    JMP     -4
 </textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>

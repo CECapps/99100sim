@@ -54,15 +54,28 @@ export class Memory {
         if (offset % 2 == 1) {
             offset--;
         }
-        const masked = value & 0xFFFF;
-        if (value != masked) {
+
+        const clamped_value = value > 0xFFFF ? value - 0xFFFF : (value < 0 ? value + 0xFFFF : value);
+        if (value != clamped_value) {
             if (value !== undefined) {
-                console.error(`setWord out of range value 0x${value.toString(16).toUpperCase()}, value clamped to 0x${masked.toString(16).toUpperCase()}`)
+                /** @FIXME This should be an error, but until overflow stuff is in this is too noisy. */
+                //console.error(`setWord out of range value 0x${value.toString(16).toUpperCase()}, value clamped to 0x${clamped_value.toString(16).toUpperCase()}`, value, clamped_value);
             } else {
                 throw new Error(`setWord got undefined value somehow.  There be bugs!`)
             }
         }
-        this.#buffer.setUint16(offset, masked, /* force BE */ false);
+
+        const clamped_offset = offset > 0xFFFF ? offset - 0xFFFF : (offset < 0 ? offset + 0xFFFF : offset);
+        if (offset != clamped_offset) {
+            if (offset !== undefined) {
+                /** @FIXME This should be an error, but until overflow stuff is in this is too noisy. */
+                // console.error(`setWord out of range OFFSET 0x${value.toString(16).toUpperCase()}, clamped to 0x${clamped_offset.toString(16).toUpperCase()}`, offset, clamped_offset);
+            } else {
+                throw new Error(`setWord got undefined OFFSET somehow.  There be bugs!`)
+            }
+        }
+
+        this.#buffer.setUint16(clamped_offset, clamped_value, /* force BE */ false);
         window.dispatchEvent(new CustomEvent('memory_updated'));
     }
 };

@@ -252,6 +252,7 @@ export class Instruction {
     /** @param {number} word */
     setImmediateSourceValue(word) {
         this.#immediate_source_operand = word;
+        this.#refreshImmediateOperandState();
     }
 
     getImmediateSourceValue() {
@@ -265,6 +266,7 @@ export class Instruction {
     /** @param {number} word */
     setImmediateDestValue(word) {
         this.#immediate_dest_operand = word;
+        this.#refreshImmediateOperandState();
     }
 
     getImmediateDestValue() {
