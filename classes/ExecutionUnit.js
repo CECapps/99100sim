@@ -247,7 +247,7 @@ class Units {
                         disp -= 256;
                     }
                     const new_pc = this.simstate.getPc() + disp;
-                    console.debug(new_pc.toString(16), this.simstate.getPc().toString(16), disp.toString(16));
+                    //console.debug(new_pc.toString(16), this.simstate.getPc().toString(16), disp.toString(16));
                     this.simstate.setPc(new_pc);
                 } else {
                     // We were bumped back, so if we aren't jumping, undo the bump
@@ -329,7 +329,7 @@ class Units {
                 this.simstate.status_register.resetBit(StatusRegister.OVERFLOW);
                 if (this.nv > 0xFFFF) {
                     this.nv -= 0xFFFF;
-                    console.warn('INC: Overflow!');
+                    //console.warn('INC: Overflow!');
                     this.simstate.status_register.setBit(StatusRegister.OVERFLOW);
                 }
                 return true;
@@ -355,7 +355,7 @@ class Units {
                 this.simstate.status_register.resetBit(StatusRegister.OVERFLOW);
                 if (this.nv > 0xFFFF) {
                     this.nv -= 0xFFFF;
-                    console.warn('INCT: Overflow!');
+                    //console.warn('INCT: Overflow!');
                     this.simstate.status_register.setBit(StatusRegister.OVERFLOW);
                 }
                 return true;
@@ -381,7 +381,7 @@ class Units {
                 this.simstate.status_register.resetBit(StatusRegister.CARRY);
                 if (this.nv < 0) {
                     this.nv += 0xFFFF;
-                    console.warn('DEC: Underflow!');
+                    //console.warn('DEC: Underflow!');
                     this.simstate.status_register.setBit(StatusRegister.CARRY);
                 }
                 return true;
@@ -407,7 +407,7 @@ class Units {
                 this.simstate.status_register.resetBit(StatusRegister.CARRY);
                 if (this.nv < 0) {
                     this.nv += 0xFFFF;
-                    console.warn('DECT: Underflow!');
+                    //console.warn('DECT: Underflow!');
                     this.simstate.status_register.setBit(StatusRegister.CARRY);
                 }
                 return true;
