@@ -42,6 +42,7 @@ function reset_simui() {
     assemble_codebox();
     gebid_stfu('errors').innerHTML = '';
     update_simui();
+    viz_request_redraw();
 }
 
 function update_simui() {
@@ -154,6 +155,7 @@ function step_state_button_onclick(event) {
         inst_execution_count++;
     }
     update_simui();
+    viz_request_redraw();
     return false;
 }
 
@@ -166,6 +168,7 @@ function inst_state_button_onclick(event) {
     sim.stepInstruction();
     inst_execution_count++;
     update_simui();
+    viz_request_redraw();
     return false;
 }
 
@@ -175,6 +178,7 @@ function codebox_process_button_onclick(event) {
     event.preventDefault();
 
     assemble_codebox();
+    viz_request_redraw();
     return false;
 }
 
@@ -214,6 +218,7 @@ function stop_button_onclick(event) {
 
     running = false;
     update_simui();
+    viz_request_redraw();
 }
 
 /** @param {Event} event */
@@ -224,4 +229,5 @@ function reset_button_onclick(event) {
     running = false;
     reset_simui();
     update_simui();
+    viz_request_redraw();
 }

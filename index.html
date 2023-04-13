@@ -6,6 +6,7 @@
         <script src="./viz.js"></script>
         <script src="./txt2asm.js"></script>
         <script src="./simui.js"></script>
+        <script src="./utils.js"></script>
         <script>
             /** @type {Simulation} sim */
             window.sim = '';
@@ -63,7 +64,9 @@ window.addEventListener('memory_updated', viz_request_redraw);
 
 window.addEventListener('DOMContentLoaded', button_onclick_setup);
 window.addEventListener('DOMContentLoaded', function () {
+    setup_simui();
     reset_simui();
+    update_simui();
     resize_textarea(document.getElementById('codebox'));
 });
 
@@ -163,12 +166,20 @@ window.addEventListener('DOMContentLoaded', function () {
                 <section>
                     <section id="codebox_grid_container">
                         <textarea id="codebox" cols="40" spellcheck="false">; Hello World?
-    LI      R1,0x200
+    LI      R1,0x0200
     LI      R2,0xFFFF
-label:
-    MOV     R2,*R1+    ; R2,*R1
-    DEC     R2         ; R2
-    JMP     -4
+loop:
+    MOV     R2,*R1
+    INCT    R1
+    JNO     6       ; to noovf
+    LI      R1,0x0200
+noovf:
+    DEC     R2
+    JNC     -12     ; to loop
+
+    INCT    R1
+    LI      R2,0xFFFF
+    JMP     -14     ; to loop
 </textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>

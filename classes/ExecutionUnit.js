@@ -4,6 +4,8 @@ import { Instruction } from "./Instruction";
 import { SimulationState } from "./SimulationState";
 import { StatusRegister } from "./StatusRegister";
 
+import "../utils";
+
 /**
  * ExecutionUnit: An interface between ExecutionProcess and Instructions
  *
@@ -201,6 +203,64 @@ class Units {
             }
             writeResults() { return false; }
         },
+        'JNC': class extends ExecutionUnit {
+            run = false;
+            fetchOperands() {
+                if (!this.simstate.status_register.getBit(StatusRegister.CARRY)) {
+                    this.run = true;
+                }
+                return true;
+            }
+            execute() {
+                if (this.run) {
+                    let disp = this.inst.getParam('disp');
+                    if (disp > 127) {
+                        disp -= 256;
+                    }
+                    const new_pc = this.simstate.getPc() + disp;
+                    //console.debug(new_pc.toString(16), this.simstate.getPc().toString(16), disp.toString(16));
+                    this.simstate.setPc(new_pc);
+                } else {
+                    // We were bumped back, so if we aren't jumping, undo the bump
+                    this.simstate.advancePc();
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.CARRY)
+                return false;
+            }
+        },
+        'JNO': class extends ExecutionUnit {
+            run = false;
+            fetchOperands() {
+                if (!this.simstate.status_register.getBit(StatusRegister.OVERFLOW)) {
+                    this.run = true;
+                }
+                return true;
+            }
+            execute() {
+                if (this.run) {
+                    let disp = this.inst.getParam('disp');
+                    if (disp > 127) {
+                        disp -= 256;
+                    }
+                    const new_pc = this.simstate.getPc() + disp;
+                    console.debug(new_pc.toString(16), this.simstate.getPc().toString(16), disp.toString(16));
+                    this.simstate.setPc(new_pc);
+                } else {
+                    // We were bumped back, so if we aren't jumping, undo the bump
+                    this.simstate.advancePc();
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.OVERFLOW)
+                return false;
+            }
+        },
         'LI': class extends ExecutionUnit {
             #register_num = 0;
             #next_word = 0;
@@ -372,5 +432,6 @@ class Units {
         }
         return this.#units[processed_name];
     }
+
 
 }
