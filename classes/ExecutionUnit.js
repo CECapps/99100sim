@@ -53,7 +53,7 @@ export class ExecutionUnit {
     fetchOperands() { return false; }
     validateParams() { return false; }
     doParamsNeedPrivilege() { return false; }
-    execute() { return false; }
+    execute() { throw new Error('ExecutionUnit execute fallthrough'); return false; }
     writeResults() { return false; }
 
     /**
@@ -169,6 +169,151 @@ export class ExecutionUnit {
 
     }
 
+    /**
+     * @param {number} new_value
+     * @param {number} bits
+     * @returns {number}
+     **/
+    clampAndUpdateCarryAndOverflow(new_value, bits = 16) {
+        new_value = this.clampAndUpdateCarry(new_value, bits);
+        new_value = this.clampAndUpdateOverflow(new_value, bits);
+        return new_value;
+    }
+
+    /**
+     * @param {number} new_value
+     * @param {number} bits
+     * @returns {number}
+     **/
+    clampAndUpdateCarry(new_value, bits = 16) {
+        /** @FIXME This is probably wrong. */
+        this.simstate.status_register.resetBit(StatusRegister.CARRY);
+        const maxval = ((1 << bits) - 1);
+        if (new_value < 0) {
+            new_value = new_value + maxval;
+            this.simstate.status_register.setBit(StatusRegister.CARRY);
+        }
+        return new_value;
+    }
+
+    /**
+     * @param {number} new_value
+     * @param {number} bits
+     * @returns {number}
+     **/
+    clampAndUpdateOverflow(new_value, bits = 16) {
+        this.simstate.status_register.resetBit(StatusRegister.OVERFLOW);
+        const maxval = ((1 << bits) - 1);
+        if (new_value > maxval) {
+            new_value = new_value - maxval;
+            this.simstate.status_register.setBit(StatusRegister.OVERFLOW);
+        }
+        return new_value;
+    }
+
+    /**
+     * @param {number} left_value
+     * @param {number} right_value
+     * @param {number} bits
+     **/
+    updateEq(left_value, right_value, bits = 16) {
+        this.simstate.status_register.resetBit(StatusRegister.EQUAL);
+        if (left_value == right_value) {
+            /** @FIXME is == the right thing here? */
+            this.simstate.status_register.setBit(StatusRegister.EQUAL);
+        }
+    }
+
+    /**
+     * @param {number} left_value
+     * @param {number} right_value
+     * @param {number} bits
+     **/
+    updateGt(left_value, right_value, bits = 16) {
+        this.simstate.status_register.resetBit(StatusRegister.LGT);
+        if (left_value > right_value) {
+            this.simstate.status_register.setBit(StatusRegister.LGT);
+        }
+
+        const sign_mask = 1 << (bits - 1);
+        const left_signed = left_value & sign_mask ? left_value - (1 << bits) : left_value;
+        const right_signed = right_value & sign_mask ? right_value - (1 << bits) : right_value;
+
+        this.simstate.status_register.resetBit(StatusRegister.AGT);
+        if (left_signed > right_signed) {
+            this.simstate.status_register.setBit(StatusRegister.AGT);
+        }
+    }
+
+}
+
+
+class Format1Unit extends ExecutionUnit {
+    source_value = 0;
+    target_value = 0;
+    fetchOperands() {
+        const ts = this.inst.getParam('Ts');
+        const s = this.inst.getParam('S');
+        //console.debug([ts, s]);
+        this.source_value = this.resolveAddressingModeAndGet(ts, s);
+
+        if (ts == 3) {
+            /** @TODO when copying this, don't forget to set this to 1 instead of 2 for byte instructions instead of word! */
+            let next_value = this.simstate.getRegisterWord(s) + 2;
+            while (next_value > 0xFFFF) {
+                // Nothing anywhere in the overflow register docs say that
+                // this operation triggers an overflow, so not doing that.
+                next_value -= 0xFFFF;
+            }
+            this.simstate.setRegisterWord(s, next_value);
+        }
+        return true;
+    }
+
+    doTheThing() { throw new Error('You are supposed to implement this.') }
+
+    execute() {
+        this.doTheThing();
+        return true;
+    }
+    writeResults() {
+        const td = this.inst.getParam('Td');
+        const d = this.inst.getParam('D');
+        //console.debug([td, d]);
+        this.resolveAddressingModeAndSet(td, d, this.target_value);
+
+        if (td == 3) {
+            /** @TODO when copying this, don't forget to set this to 1 instead of 2 for byte instructions instead of word! */
+            let next_value = this.simstate.getRegisterWord(d) + 2;
+            while (next_value > 0xFFFF) {
+                // Nothing anywhere in the overflow register docs say that
+                // this operation triggers an overflow, so not doing that.
+                next_value -= 0xFFFF;
+            }
+            this.simstate.setRegisterWord(d, next_value);
+        }
+        return true;
+    }
+}
+
+
+class Format2Unit extends ExecutionUnit {
+    run = false;
+    execute() {
+        //console.debug(this.inst.opcode_info.name, 'run=', this.run, this);
+        if (this.run) {
+            let disp = this.inst.getParam('disp');
+            if (disp > 127) {
+                disp -= 256;
+            }
+            const new_pc = this.simstate.getPc() + disp;
+            this.simstate.setPc(new_pc);
+        } else {
+            // We were bumped back, so if we aren't jumping, undo the bump
+            this.simstate.advancePc();
+        }
+        return true;
+    }
 }
 
 class Units {
@@ -176,6 +321,38 @@ class Units {
     /** @typedef {typeof ExecutionUnit} AnonymousExecutionUnit */
     /** @type Object<string,AnonymousExecutionUnit> */
     static #units = {
+        'A': class extends Format1Unit {
+            doTheThing() {
+                const td = this.inst.getParam('Td');
+                const d = this.inst.getParam('D');
+                //console.debug([td, d]);
+                const current_value = this.resolveAddressingModeAndGet(td, d);
+                this.target_value = this.clampAndUpdateCarryAndOverflow(current_value + this.source_value);
+                this.updateEq(this.target_value, 0);
+                this.updateGt(this.target_value, 0);
+            }
+        },
+        'C': class extends Format1Unit {
+            doTheThing() {
+                const td = this.inst.getParam('Td');
+                const d = this.inst.getParam('D');
+                //console.debug([td, d]);
+                this.target_value = this.resolveAddressingModeAndGet(td, d)
+                this.updateEq(this.source_value, this.target_value);
+                this.updateGt(this.source_value, this.target_value);
+            }
+        },
+        'S': class extends Format1Unit {
+            doTheThing() {
+                const td = this.inst.getParam('Td');
+                const d = this.inst.getParam('D');
+                //console.debug([td, d]);
+                const current_value = this.resolveAddressingModeAndGet(td, d);
+                this.target_value = this.clampAndUpdateCarryAndOverflow(current_value - this.source_value);
+                this.updateEq(this.target_value, 0);
+                this.updateGt(this.target_value, 0);
+            }
+        },
         'NOP': class extends ExecutionUnit {
             fetchOperands() { return false; }
             execute() {
@@ -184,45 +361,123 @@ class Units {
             }
             writeResults() { return false; }
         },
-        'JMP': class extends ExecutionUnit {
-            displacement = 0;
+        'JEQ': class extends Format2Unit {
             fetchOperands() {
-                let disp = this.inst.getParam('disp');
-                if (disp > 127) {
-                    disp -= 256;
-                }
-                this.displacement = disp;
-
-                return true;
-            }
-            execute() {
-                const new_pc = this.simstate.getPc() + this.displacement;
-                //console.debug('JMP execute(): pc=', this.simstate.getPc(), 'disp=', this.displacement, 'new_pc=', new_pc);
-                this.simstate.setPc(new_pc);
-                return true;
-            }
-            writeResults() { return false; }
-        },
-        'JNC': class extends ExecutionUnit {
-            run = false;
-            fetchOperands() {
-                if (!this.simstate.status_register.getBit(StatusRegister.CARRY)) {
+                if (this.simstate.status_register.getBit(StatusRegister.EQUAL)) {
                     this.run = true;
                 }
                 return true;
             }
-            execute() {
-                if (this.run) {
-                    let disp = this.inst.getParam('disp');
-                    if (disp > 127) {
-                        disp -= 256;
-                    }
-                    const new_pc = this.simstate.getPc() + disp;
-                    //console.debug(new_pc.toString(16), this.simstate.getPc().toString(16), disp.toString(16));
-                    this.simstate.setPc(new_pc);
-                } else {
-                    // We were bumped back, so if we aren't jumping, undo the bump
-                    this.simstate.advancePc();
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                return false;
+            }
+        },
+        'JGT': class extends Format2Unit {
+            fetchOperands() {
+                if (this.simstate.status_register.getBit(StatusRegister.AGT)) {
+                    this.run = true;
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.AGT)
+                return false;
+            }
+        },
+        'JH': class extends Format2Unit {
+            fetchOperands() {
+                const is_lgt = this.simstate.status_register.getBit(StatusRegister.LGT);
+                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
+                if (is_lgt && !is_eq) {
+                    this.run = true;
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.LGT)
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                return false;
+            }
+        },
+        'JHE': class extends Format2Unit {
+            fetchOperands() {
+                const is_lgt = this.simstate.status_register.getBit(StatusRegister.LGT);
+                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
+                if (is_lgt || is_eq) {
+                    this.run = true;
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.LGT)
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                return false;
+            }
+        },
+        'JL': class extends Format2Unit {
+            fetchOperands() {
+                const is_lgt = this.simstate.status_register.getBit(StatusRegister.LGT);
+                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
+                if (!is_lgt && !is_eq) {
+                    this.run = true;
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.LGT)
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                return false;
+            }
+        },
+        'JLE': class extends Format2Unit {
+            fetchOperands() {
+                const is_lgt = this.simstate.status_register.getBit(StatusRegister.LGT);
+                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
+                if (!is_lgt || is_eq) {
+                    this.run = true;
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.LGT)
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                return false;
+            }
+        },
+        'JLT': class extends Format2Unit {
+            fetchOperands() {
+                const is_agt = this.simstate.status_register.getBit(StatusRegister.AGT);
+                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
+                if (!is_agt && !is_eq) {
+                    this.run = true;
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.AGT)
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                return false;
+            }
+        },
+        'JMP': class extends Format2Unit {
+            displacement = 0;
+            fetchOperands() {
+                this.run = true;
+                return true;
+            }
+        },
+        'JNC': class extends Format2Unit {
+            fetchOperands() {
+                if (!this.simstate.status_register.getBit(StatusRegister.CARRY)) {
+                    this.run = true;
                 }
                 return true;
             }
@@ -232,32 +487,42 @@ class Units {
                 return false;
             }
         },
-        'JNO': class extends ExecutionUnit {
-            run = false;
+        'JNE': class extends Format2Unit {
+            fetchOperands() {
+                if (!this.simstate.status_register.getBit(StatusRegister.EQUAL)) {
+                    this.run = true;
+                }
+                return true;
+            }
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                return false;
+            }
+        },
+        'JNO': class extends Format2Unit {
             fetchOperands() {
                 if (!this.simstate.status_register.getBit(StatusRegister.OVERFLOW)) {
                     this.run = true;
                 }
                 return true;
             }
-            execute() {
-                if (this.run) {
-                    let disp = this.inst.getParam('disp');
-                    if (disp > 127) {
-                        disp -= 256;
-                    }
-                    const new_pc = this.simstate.getPc() + disp;
-                    //console.debug(new_pc.toString(16), this.simstate.getPc().toString(16), disp.toString(16));
-                    this.simstate.setPc(new_pc);
-                } else {
-                    // We were bumped back, so if we aren't jumping, undo the bump
-                    this.simstate.advancePc();
+            writeResults() {
+                /** @FIXME This op does not actually clear the flag.  This is a hack. */
+                this.simstate.status_register.resetBit(StatusRegister.OVERFLOW)
+                return false;
+            }
+        },
+        'JOC': class extends Format2Unit {
+            fetchOperands() {
+                if (this.simstate.status_register.getBit(StatusRegister.CARRY)) {
+                    this.run = true;
                 }
                 return true;
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.OVERFLOW)
+                this.simstate.status_register.resetBit(StatusRegister.CARRY)
                 return false;
             }
         },
@@ -287,6 +552,7 @@ class Units {
                 this.source_value = this.resolveAddressingModeAndGet(ts, s);
 
                 if (ts == 3) {
+                    // Autoinc happens *NOW*
                     /** @TODO when copying this, don't forget to set this to 1 instead of 2 for byte instructions instead of word! */
                     this.simstate.setRegisterWord(s, 2 + this.simstate.getRegisterWord(s));
                 }

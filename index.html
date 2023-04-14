@@ -165,21 +165,30 @@ window.addEventListener('DOMContentLoaded', function () {
             <div style="flex: auto;">
                 <section>
                     <section id="codebox_grid_container">
-                        <textarea id="codebox" cols="40" spellcheck="false">; Hello World?
-    LI      R1,0x0200
-    LI      R2,0xFFFF
-loop:
-    MOV     R2,*R1
-    INCT    R1
-    JNO     6       ; to noovf
-    LI      R1,0x0200
-noovf:
-    DEC     R2
-    JNC     -12     ; to loop
+<textarea id="codebox" cols="40" spellcheck="false">
+    LI  R1,>0200  ; Low pixel bounds
+    LI  R2,>11FF  ; High pixel bounds
+    LI  R3,1      ; Color increment
+    LI  R4,2      ; Pixel increment
+    LI  R5,0      ; Initial color
+    MOV R1,R8     ; Next drawing target
+    MOV R5,R9     ; Next color
 
-    INCT    R1
-    LI      R2,0xFFFF
-    JMP     -14     ; to loop
+loop:
+    MOV R9,*R8  ; Draw pixel
+    A   R4,R8   ; Bump next pixel
+    JNO 4       ; No overflow => continue
+    MOV R1,R8   ; Reset to min
+
+    C   R8,R2   ; Out of bounds?
+    JLE 4       ; No bounds => continue
+    MOV R1,R8   ; Reset to min
+
+    A   R3,R9   ; Bump next color.
+    JNO -16     ; No overflow => loop
+    MOV R5,R9   ; Reset color
+
+    JMP -20     ; => loop
 </textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>
