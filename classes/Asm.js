@@ -6,6 +6,12 @@ import { InstructionDecode, EncodedInstruction } from "./InstructionDecode";
 
 export class Asm {
 
+    static #pi_list = [
+        'IDT','BYTE','CKPT','DATA','EQU','TEXT','WPNT','AORG','BES','BSS',
+        'DEND','DORG','DSEG','EVEN','PEND','PSEG','DFOP','DXOP','END','NOP',
+        'RT','XVEC'
+    ];
+
     /** @type string[] */
     #lines = [];
 
@@ -28,10 +34,11 @@ export class Asm {
 
     process() {
         this.#parsed_lines = [];
+        let i = 0;
         for (let line of this.#lines) {
-            this.#parseLine(line);
+            this.#parsed_lines[i] = this.#parseLine(line, i++);
         }
-        // From our parsed lines, we can now build operations.
+        // With parsed_lines now populated, we can proceed
         /** @TODO PI support, label support */
         for (let line of this.#parsed_lines) {
             if (line.line_type == 'instruction') {
@@ -40,7 +47,7 @@ export class Asm {
                     throw new Error('No.  Just no.');
                 }
                 const dec = InstructionDecode.getEncodedInstruction(inst);
-                line.dec = dec;
+                line.encoded_instruction = dec;
             }
         }
         return this.#parsed_lines;
@@ -53,8 +60,8 @@ export class Asm {
             const is_instruction = line.line_type == 'instruction';
             const is_pi_data = ((line.line_type == 'pi') && (line.instruction == 'data'));
             if (is_instruction || is_pi_data) {
-                if (line.dec !== null) {
-                    for (let word of line.dec.words) {
+                if (line.encoded_instruction !== null) {
+                    for (let word of line.encoded_instruction.words) {
                         words.push(word);
                     }
                 } else {
@@ -87,10 +94,10 @@ export class Asm {
             }
 
             //console.debug(line);
-            if (line.dec === null) {
+            if (line.encoded_instruction === null) {
                 throw new Error('Can not reconstuct asm line without an EncodedInstruction');
             }
-            const instr = InstructionDecode.getInstructionFromEncoded(line.dec);
+            const instr = InstructionDecode.getInstructionFromEncoded(line.encoded_instruction);
 
             const f_instr = instr.opcode_info.name.padEnd(8, ' ');
             const f_params = [];
@@ -126,58 +133,118 @@ export class Asm {
         return asm;
     }
 
-    /** @param {string} line */
-    #parseLine(line) {
-
+    /**
+     * TI assembler syntax sucks, but there's only so much I can do to make it
+     * suck less without making it harder to use other people's unmodified code.
+     *
+     * The core syntax is built on the assumption of a 60-character wide grid.
+     * You know.  PUNCHCARDS.
+     *
+     * The nature of the line is driven by the first character.  An asterisk
+     * means that it's a comment.  Whitespace means it's an instruction.  Anything
+     * else becomes a label/identifier, and then the rest of the line is treated
+     * as an instruction.
+     *
+     * Instructions come in the form of a 1-4 character long capitalized string.
+     * Most instructions have operands that immediately follow after whitespace.
+     * Parameters are divided by commas.  No whitespace is permitted within.
+     * Any whitespace signals the end of the operand.  Anything following is
+     * treated as comment.
+     *
+     * Some instructions are processing instructions, like DATA, EQU, and TEXT.
+     * Instructions and parameters are processed to replace labels with their
+     * associated values before any instructions are actually processed.  Some
+     * other instructions are treated as macros, like "RT" becoming "B *R11"
+     *
+     * @param {string} line
+     * @param {number} line_number
+     **/
+    #parseLine(line, line_number) {
         const result = new AsmParseLineResult();
 
+        result.line = line;
+        result.line_number = line_number
         result.line_type = 'pending';
+        result.label = '';
         result.instruction = '';
         result.instruction_argument = '';
-
-        // Step 1: No whitespace.
-        line = line.trim();
-        line = line.replaceAll(/[\s\t\r\n]+/g, "\x20").trim();
-        // Step 2: Snip off comments.
         result.comments = '';
-        const semicolon_index = line.indexOf(';');
-        if (semicolon_index !== -1) {
-            result.comments = line.substring(semicolon_index + 1).trim();
-            line = line.substring(0, semicolon_index).trim();
+
+        // Collapse all whitespace.
+        line = line.replaceAll(/[\s\t\r\n]+/g, "\x20");
+
+        // Comment lines start with asterisk by spec but I prefer semicolon.
+        if (line.startsWith('*') || line.startsWith(';')) {
+            result.line_type = 'comment';
+            result.comments += line.substring(1).trim();
         }
-        if (line.length == 0) {
+
+        // Labels will always be at the start of the line.  The spec says that
+        // they have a cap of six characters, to which I say "lol".  I also allow
+        // a trailing colon because it looks nicer.
+        const label_extract_regex = /^([a-zA-Z][a-zA-Z0-9_]+):?(\b|\s|$)/;
+        const label_extract_matches = line.match(label_extract_regex);
+        if (result.line_type == 'pending' && label_extract_matches) {
+            result.label = label_extract_matches[1];
+            line = line.substring(result.label.length);
+            if (line.startsWith(':')) {
+                line = line.substring(1);
+            }
+        }
+
+        // With the label stripped off the front, it's time to strip known
+        // comments from the end.  Whatever remains must be instruction-ish.
+        // All of my comments will start with a semicolon.
+        const inline_comment_regex = /;(.*)$/;
+        const inline_comment_matches = line.match(inline_comment_regex);
+        if (result.line_type == 'pending' && inline_comment_matches) {
+            result.comments += inline_comment_matches[1];
+            const inline_len = inline_comment_matches[1].length + 1;
+            line = line.substring(0, line.length - inline_len);
+        }
+
+        line = line.trim();
+
+        // All instructions are one to four all-capital letters.
+        const instruction_regex = /^([A-Z]{1,4})(\s|$)/;
+        const instruction_matches = line.match(instruction_regex);
+        if (result.line_type == 'pending' && instruction_matches) {
+            result.instruction = instruction_matches[1];
+            result.line_type = Asm.#pi_list.includes(result.instruction) ? 'pi' : 'instruction';
+            line = line.substring(result.instruction.length).trim();
+
+            // The next chunk, if present, must be parameters.  Glom up everything
+            // until we find whitespace.
+            const params_regex = /^([^\s]+)/;
+            const params_matches = line.match(params_regex);
+            if (params_matches) {
+                result.instruction_argument = params_matches[1];
+                line = line.substring(result.instruction_argument.length);
+                result.instruction_params = result.instruction_argument.split(',');
+            }
+
+            // Whatever remains must be a comment.
+            result.comments += line.trim();
+        }
+
+        // A label with no corresponding instruction is just a label.
+        if (result.line_type == 'pending' && result.label.length) {
+            result.line_type = 'label';
+        }
+
+        // We've either processed everything away or are dealing with a blank.
+        // Treat it as a comment.
+        if (result.line_type == 'pending' && line.length == 0) {
             result.line_type = 'comment';
         }
-        // Step 3: Filter out instructions
-        const instruction_match = line.match(/^([A-Z]{1,4})([\b\s]|$)/);
-        if (instruction_match) {
-            result.line_type = 'instruction';
-            result.instruction = instruction_match[1];
-            // All remaining things in the line must be arguments for the instruction
-            result.instruction_argument = line.substring(result.instruction.length).trim();
-        }
-        // Step 4: Processing instructions.
-        const pi_match = line.match(/^\.([a-zA-Z_0-9]+)([\b\s]|$)/);
-        if (result.line_type == 'pending' && pi_match) {
-            result.line_type = 'pi';
-            result.instruction = pi_match[1].toLowerCase();
-            // All remaining things in the line must be arguments to the PI
-            result.instruction_argument = line.substring(result.instruction.length + 1).trim();
-        }
-        // Step 5: Labels.
-        const label_match = line.match(/^([a-zA-Z_0-9]+):?([\b\s]|$)/);
-        if (result.line_type == 'pending' && label_match) {
-            result.line_type = 'label';
-            result.instruction = label_match[1].toLowerCase();
-            // Nope, no arguments.
-        }
-        // Step 6: Fallthrough.
+
+        // Whoops!
         if (result.line_type == 'pending') {
             result.line_type = 'fallthrough';
         }
-        result.line = line;
 
-        this.#parsed_lines.push(result);
+        //console.debug(result);
+        return result;
     }
 
     /** @param {AsmParseLineResult} line */
@@ -326,14 +393,18 @@ export class Asm {
 }
 
 class AsmParseLineResult {
+    line_number =           0;
     line_type =             'ERROR';
     line =                  'ERROR';
+    label =                 'ERROR';
     instruction =           'ERROR';
     instruction_argument =  'ERROR';
+    /** @type {string[]} */
+    instruction_params =    [];
     comments =              'ERROR';
     word =                  0;
     /** @type {EncodedInstruction|null} */
-    dec =                   null;
+    encoded_instruction =   null;
 }
 
 
@@ -347,9 +418,11 @@ function number_format_helper(string) {
     let is_decimal = false;
 
     if (string.startsWith('R')) {
+        is_decimal = true;
         string = string.substring(1);
     }
     if (string.startsWith('WR')) {
+        is_decimal = true;
         string = string.substring(2);
     }
 
