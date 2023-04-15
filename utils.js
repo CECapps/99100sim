@@ -19,6 +19,7 @@ function extract_binary(value, bit_start, bit_count) {
 Reflect.set(window, 'extract_binary', extract_binary);
 window.extract_binary = extract_binary;
 
+
 /**
  * @param {number} value        An unsigned 32-bit integer.
  * @param {number} bit_start    Index from the Least Significant Bit to start insertion of bits, no greater than 31.
@@ -36,6 +37,7 @@ function insert_binary(value, bit_start, bit_count, new_value) {
 Reflect.set(window, 'insert_binary', insert_binary);
 window.insert_binary = insert_binary;
 
+
 /**
  * @param {number} value    An unsigned 32-bit integer.
  * @returns {number}        Resulting unsigned integer after swapping the two 16-bit words.
@@ -49,6 +51,7 @@ function swap_words(value) {
 Reflect.set(window, 'swap_words', swap_words);
 window.swap_words = swap_words;
 
+
 /**
  * @param {number} value    An unsigned 16-bit integer.
  * @returns {number}        Resulting unsigned integer after swapping the two 8-bit bytes.
@@ -61,6 +64,7 @@ function swap_bytes(value) {
 }
 Reflect.set(window, 'swap_bytes', swap_bytes);
 window.swap_bytes = swap_bytes;
+
 
 /**
  * @param {bigint} bigint_value An unsigned 32-bit integer.
@@ -86,6 +90,7 @@ function extract_binary_from_bigint(bigint_value, bit_start, bit_count) {
 Reflect.set(window, 'extract_binary_from_bigint', extract_binary_from_bigint);
 window.extract_binary_from_bigint = extract_binary_from_bigint;
 
+
 /**
  * We're working with a virtual machine that works in 16-bit words that contain
  * two 8-bit bytes.  The architecture is Big Endian, where the most significant
@@ -94,11 +99,11 @@ window.extract_binary_from_bigint = extract_binary_from_bigint;
  *
  * To represent numbers larger than 16 bits, we must use multiple words.
  *
- * @param {number[]} words
  * This function receives an array of 16-bit words as unsigned integers.  The
  * word with the most significant byte is the first word in the array.  Likewise,
  * the word with the least significant byte is the final word in the array.
  *
+ * @param {number[]} words
  * @returns {bigint}
  **/
 function word_list_to_bignum(words) {
@@ -114,3 +119,78 @@ function word_list_to_bignum(words) {
 }
 Reflect.set(window, 'word_list_to_bignum', word_list_to_bignum);
 window.word_list_to_bignum = word_list_to_bignum;
+
+
+/**
+ * @param {number|bigint} value
+ * @returns {number[]}
+ **/
+function number_to_word_list(value) {
+    const word_size = 16;
+    const max_word_value = (1 << word_size) - 1;
+
+    if (typeof value === 'number') {
+      if (value < 0 || value > Number.MAX_SAFE_INTEGER) {
+        throw new Error('Value out of range for conversion to words');
+      }
+      value = BigInt(value);
+    }
+
+    const words = [];
+
+    while (value > 0) {
+      const word_value = Number(value & BigInt(max_word_value));
+      words.unshift(word_value);
+      value >>= BigInt(word_size);
+    }
+
+    return words;
+}
+Reflect.set(window, 'number_to_word_list', number_to_word_list);
+window.number_to_word_list = number_to_word_list;
+
+
+/**
+ * @param {number} value
+ * @param {number} bit_count
+ * @returns {number}
+ **/
+function unsigned_to_signed(value, bit_count = 16) {
+    // Determine the maximum positive value that can be represented with bit_count bits.
+    const max_positive_value = Math.pow(2, bit_count) - 1;
+
+    // If the value is greater than the maximum positive value, it must be negative.
+    if (value > max_positive_value) {
+        // Determine the magnitude of the negative value.
+        const magnitude = value - max_positive_value - 1;
+
+        // Return the negative value.
+        return -magnitude;
+    } else {
+        // The value is positive.
+        return value;
+    }
+}
+Reflect.set(window, 'unsigned_to_signed', unsigned_to_signed);
+window.unsigned_to_signed = unsigned_to_signed;
+
+
+/**
+ * @param {number} value
+ * @param {number} bit_count
+ * @returns {number}
+ **/
+function signed_to_unsigned(value, bit_count = 16) {
+    // Determine the maximum positive value that can be represented with bit_count bits.
+    const max_positive_value = Math.pow(2, bit_count) - 1;
+
+    // If the value is negative, convert it to its positive equivalent.
+    if (value < 0) {
+        value = max_positive_value + value + 1;
+    }
+
+    // Return the unsigned value.
+    return value;
+}
+Reflect.set(window, 'signed_to_unsigned', signed_to_unsigned);
+window.signed_to_unsigned = signed_to_unsigned;
