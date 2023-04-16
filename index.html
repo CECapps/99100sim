@@ -129,6 +129,16 @@ window.addEventListener('DOMContentLoaded', function () {
             #register_table th {
                 min-width: 3.5em;
             }
+            #status_table td {
+                border: 2px solid transparent;
+                color: #37434A;
+                text-align: center;
+                min-width: 3.5em;
+            }
+            #status_table td.on {
+                color: #f0f0f0;
+                border-color: #f0f0f0;
+            }
 
             #codebox_grid_container {
                 width: 100%;
@@ -163,6 +173,64 @@ window.addEventListener('DOMContentLoaded', function () {
         <div id="errors"></div>
         <div id="flexcontainer">
             <div style="flex: auto;">
+                <section>
+                    <table id="machine_status_table">
+                        <tr><th>Running:</th>       <td id="run_el">No</td></tr>
+                        <tr><th>Prev State:</th>    <td id="pstate_el">Crash</td></tr>
+                        <tr><th>Next State:</th>    <td id="nstate_el">Crash</td></tr>
+                        <tr>
+                            <td colspan="2">
+                                <table id="register_table">
+                                    <tr>
+                                        <th>0</th><th>1</th><th>2</th><th>3</th>
+                                        <th>4</th><th>5</th><th>6</th><th>7</th>
+                                        <th>8</th><th>9</th><th>10</th><th>11</th>
+                                        <th>12</th><th>13</th><th>14</th><th>15</th>
+                                    </tr>
+                                    <tr id="regrow">
+                                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                <table id="status_table">
+                                    <tr>
+                                        <td id="status_bit_0">Lgt</td>
+                                        <td id="status_bit_1">Agt</td>
+                                        <td id="status_bit_2">EQ</td>
+                                        <td id="status_bit_3">Carry</td>
+                                        <td id="status_bit_4">Over</td>
+                                        <td id="status_bit_5">Parity</td>
+                                        <td id="status_bit_6">XOP</td>
+                                        <td id="status_bit_7">Priv</td>
+                                        <td id="status_bit_8">Mapfile</td>
+                                        <td id="status_bit_9">MM</td>
+                                        <td id="status_bit_10">OvInt</td>
+                                        <td id="status_bit_11">WCS</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <tr><th>WP:</th>            <td id="wp_el">0x0000</td></tr>
+                        <tr><th>PC:</th>            <td id="pc_el">0x0000</td></tr>
+                        <tr><th>Instruction:</th>   <td id="epci_el">--</td></tr>
+                        <tr><th>FPS / IPS:</th>     <td><span id="fps_el">--</span> / <span id="ips_el">--</span></td></tr>
+                    </table>
+                    <button id="step_state_button">State Step</button>
+                    <button id="inst_state_button">Instruction Step</button>
+                    &bull;
+                    <button id="run_button">Run</button>
+                    <button id="runfast_button">Run (fast)</button>
+                    <button id="stop_button">Stop</button>
+                    <button id="reset_button">Reset</button>
+                </section>
+                <br>
                 <section>
                     <section id="codebox_grid_container">
 <textarea id="codebox" cols="70" spellcheck="false">
@@ -204,44 +272,6 @@ loop:
                         <button id="codebox_process_button">Assemble &amp; Load</button>
                     </section>
                 </section>
-                <br>
-                <br>
-                <table id="machine_status_table">
-                    <tr><th>Running:</th>       <td id="run_el">No</td></tr>
-                    <tr><th>Prev State:</th>    <td id="pstate_el">Crash</td></tr>
-                    <tr><th>Next State:</th>    <td id="nstate_el">Crash</td></tr>
-                    <tr>
-                        <td colspan="2">
-                            <table id="register_table">
-                                <tr>
-                                    <th>0</th><th>1</th><th>2</th><th>3</th>
-                                    <th>4</th><th>5</th><th>6</th><th>7</th>
-                                    <th>8</th><th>9</th><th>10</th><th>11</th>
-                                    <th>12</th><th>13</th><th>14</th><th>15</th>
-                                </tr>
-                                <tr id="regrow">
-                                    <td>--</td><td>--</td><td>--</td><td>--</td>
-                                    <td>--</td><td>--</td><td>--</td><td>--</td>
-                                    <td>--</td><td>--</td><td>--</td><td>--</td>
-                                    <td>--</td><td>--</td><td>--</td><td>--</td>
-                                </tr>
-                            </table>
-                        </td>
-                    </tr>
-                    <tr><th>WP:</th>            <td id="wp_el">0x0000</td></tr>
-                    <tr><th>PC:</th>            <td id="pc_el">0x0000</td></tr>
-                    <tr><th>ST:</th>            <td id="st_el">0b0000000000000000</td></tr>
-                    <tr><th>Now:</th>           <td id="epci_el">--</td></tr>
-                    <tr><th>Next:</th>          <td id="epni_el">--</td></tr>
-                    <tr><th>Inst Count:</th>    <td id="instcount_el">--</td></tr>
-                </table>
-                <button id="step_state_button">State Step</button>
-                <button id="inst_state_button">Instruction Step</button>
-                &bull;
-                <button id="run_button">Run</button>
-                <button id="runfast_button">Run (fast)</button>
-                <button id="stop_button">Stop</button>
-                <button id="reset_button">Reset</button>
             </div>
             <div id="viz" style="flex: auto;"></div>
         </div>

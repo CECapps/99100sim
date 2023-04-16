@@ -1,15 +1,21 @@
 // @ts-check
 "use strict";
 
-//import { ExecutionProcess } from "./classes/ExecutionProcess";
-//import { Simulation } from "./classes/Simulation";
-//import { Asm } from "./classes/Asm";
+/* * /
+import { ExecutionProcess } from "./classes/ExecutionProcess";
+import { Simulation } from "./classes/Simulation";
+import { Asm } from "./classes/Asm";
+/* */
 
 /** @type {Simulation} */
 var sim; // = new Simulation();
 var running = false;
 var fast_mode = true;
-var fast_mode_steps = 1777; // prime, makes fast mode inst count "look" fast
+var fast_mode_steps = 797; // Prime; instructions run per frame.  On my system this gets me ~50 FPS and ~40k IPS.
+
+var frame_count = 0;
+/** @type {number|null} */
+var run_start_time = Date.now();
 var inst_execution_count = 0;
 
 /**
@@ -27,6 +33,7 @@ function gebid_stfu(element_id) {
 function setup_simui() {
     sim = new Simulation();
     Reflect.set(window, 'sim', sim);
+    window.setInterval(fps_update_callback, 1000);
 }
 
 function reset_simui() {
@@ -51,17 +58,29 @@ function update_simui() {
     gebid_stfu('nstate_el').innerText = sim.flow.flow_state;
     gebid_stfu('pstate_el').innerText = sim.flow.prev_flow_state;
 
-    gebid_stfu('wp_el').innerText = '0x' + sim.state.workspace_pointer.toString(16).toUpperCase().padStart(4, '0');
-    gebid_stfu('pc_el').innerText = '0x' + sim.state.getPc().toString(16).toUpperCase().padStart(4, '0');
-    gebid_stfu('st_el').innerText = '0b' + sim.state.status_register.getRegisterString();
+    gebid_stfu('wp_el').innerText = '>' + sim.state.workspace_pointer.toString(16).toUpperCase().padStart(4, '0');
+    gebid_stfu('wp_el').style.color = color_for_word(sim.state.workspace_pointer);
+    gebid_stfu('pc_el').innerText = '>' + sim.state.getPc().toString(16).toUpperCase().padStart(4, '0');
+    gebid_stfu('pc_el').style.color = color_for_word(sim.state.getPc());
 
-    gebid_stfu('instcount_el').innerText = inst_execution_count.toString();
+    //gebid_stfu('instcount_el').innerText = inst_execution_count.toString();
+
+    for (let bit of Array(11).keys()) {
+        const elname = 'status_bit_' + bit;
+        //console.debug(gebid_stfu(elname));
+        if (sim.state.status_register.getBit(bit)) {
+            gebid_stfu(elname).classList.add('on');
+        } else {
+            gebid_stfu(elname).classList.remove('on');
+        }
+    }
 
     const regrow = gebid_stfu('regrow');
     regrow.innerHTML = '';
     for (let regnum = 0; regnum <= 15; regnum++) {
         const regcell = window.document.createElement('td');
-        regcell.textContent = '0x' + sim.state.getRegisterWord(regnum).toString(16).toUpperCase().padStart(4, '0');
+        regcell.style.color = color_for_word(sim.state.getRegisterWord(regnum));
+        regcell.textContent = '>' + sim.state.getRegisterWord(regnum).toString(16).toUpperCase().padStart(4, '0');
         regrow.appendChild(regcell);
     }
 
@@ -71,18 +90,10 @@ function update_simui() {
     if (inst.opcode_info.name != 'NOP') {
         const op_name = inst.opcode_info.name;
         const op_code = inst.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
-        gebid_stfu('epci_el').innerText = `${op_name} 0x${op_code}`;
+        gebid_stfu('epci_el').innerText = `${op_name} >${op_code}`;
+        gebid_stfu('epci_el').style.color = color_for_word(inst.getEffectiveOpcode());
     } else {
         gebid_stfu('epci_el').innerText = '--';
-    }
-
-    const inst2 = ep.getNextInstruction();
-    if (inst2.opcode_info.name != 'NOP') {
-        const op2_name = inst2.opcode_info.name;
-        const op2_code = inst2.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
-        gebid_stfu('epni_el').innerText = `${op2_name} 0x${op2_code}`;
-    } else {
-        gebid_stfu('epni_el').innerText = '--';
     }
 }
 
@@ -107,6 +118,7 @@ function run_frame_callback() {
                 throw e; // lol
             }
         }
+        frame_count++;
         window.requestAnimationFrame(run_frame_callback);
     }
     update_simui();
@@ -142,6 +154,21 @@ function button_onclick_setup() {
 
     gebid_stfu('stop_button').addEventListener('click', stop_button_onclick);
     gebid_stfu('reset_button').addEventListener('click', reset_button_onclick);
+}
+
+function fps_update_callback() {
+    if (!running || run_start_time === null) {
+        gebid_stfu('fps_el').innerText = '--';
+        gebid_stfu('ips_el').innerText = '--';
+        return;
+    }
+
+    const elapsed_ms = Date.now() - run_start_time;
+    const fps = frame_count / (elapsed_ms / 1000);
+    const ips = inst_execution_count / (elapsed_ms / 1000);
+
+    gebid_stfu('fps_el').textContent = fps.toFixed(2).toString();
+    gebid_stfu('ips_el').textContent = ips.toFixed(2).toString();
 }
 
 /** @param {Event} event */
@@ -191,6 +218,10 @@ function run_button_onclick(event) {
         return;
     }
 
+    if (run_start_time === null ) {
+        run_start_time = Date.now();
+    }
+
     running = true;
     run_frame_callback();
 }
@@ -202,6 +233,10 @@ function runfast_button_onclick(event) {
     fast_mode = true;
     if (running) {
         return;
+    }
+
+    if (run_start_time === null ) {
+        run_start_time = Date.now();
     }
 
     running = true;
@@ -219,6 +254,10 @@ function stop_button_onclick(event) {
     running = false;
     update_simui();
     viz_request_redraw();
+
+    run_start_time = null;
+    frame_count = 0;
+    inst_execution_count = 0;
 }
 
 /** @param {Event} event */
@@ -230,4 +269,26 @@ function reset_button_onclick(event) {
     reset_simui();
     update_simui();
     viz_request_redraw();
+
+    run_start_time = null;
+    frame_count = 0;
+    inst_execution_count = 0;
+}
+
+/**
+ * @param {number} word
+ * @returns {string}
+ **/
+function color_for_word(word) {
+    const red_val = extract_binary(word, 11, 5) * 8;
+    const red_string = Math.round(red_val).toString(16).padStart(2, '0');
+
+    const green_val = extract_binary(word, 5, 6) * 4;
+    const green_string = Math.round(green_val).toString(16).padStart(2, '0');
+
+    const blue_val = extract_binary(word, 0, 5) * 8;
+    const blue_string = Math.round(blue_val).toString(16).padStart(2, '0');
+
+    const color_string = `#${red_string}${green_string}${blue_string}`;
+    return color_string;
 }
