@@ -20,6 +20,9 @@ export class Asm {
      **/
     #parsed_lines = [];
 
+    /** @type {Object<string,AsmSymbol>} */
+    #symbol_table = {};
+
 
     /** @param {string} lines */
     setLines(lines) {
@@ -38,6 +41,12 @@ export class Asm {
         for (let line of this.#lines) {
             this.#parsed_lines[i] = this.#parseLine(line, i++);
         }
+
+        this.#buildSymbolTable();
+        console.debug(this.#symbol_table);
+        this.#applySymbolTable();
+        console.debug(this.#parsed_lines);
+
         // With parsed_lines now populated, we can proceed
         /** @TODO PI support, label support */
         for (let line of this.#parsed_lines) {
@@ -247,6 +256,127 @@ export class Asm {
         return result;
     }
 
+    #buildSymbolTable() {
+        const pi_offset_instructions = [ 'BYTE', 'DATA', 'TEXT' ];
+        const pi_assign_instructions = [ 'EQU' ];
+
+        this.#symbol_table = {};
+        for (let line of this.#parsed_lines) {
+            // Symbols are labels, so if there's no label, there can be no symbol.
+            if (!line.label) {
+                continue;
+            }
+
+            const is_pi = line.line_type == 'pi';
+            const is_offset = is_pi && pi_offset_instructions.includes(line.instruction);
+            const is_assign = is_pi && pi_assign_instructions.includes(line.instruction);
+
+            // Labels on non-PI or offset PI lines get turned into the value of
+            // the location counter during later processing.
+            if (!is_pi || is_offset) {
+                const sym = new AsmSymbol();
+                sym.symbol_type = 'offset';
+                sym.symbol_name = line.label;
+                sym.line_number = line.line_number;
+                this.#symbol_table[sym.symbol_name] = sym;
+            }
+
+            // Labels on assign PIs take on the value of the first param, but
+            // that can also be a symbol, so defer resolving for now.
+            if (is_assign) {
+                const sym = new AsmSymbol();
+                sym.symbol_type = 'assign';
+                sym.line_number = line.line_number;
+                sym.symbol_name = line.label;
+                sym.symbol_params = line.instruction_params;
+                this.#symbol_table[sym.symbol_name] = sym;
+            }
+        }
+
+        // Now that we have a complete list of symbols, let's start resolving
+        // them into usable values when we can.
+        /** @type {string[]} */
+        let needed_symbols = [];
+        for (let sym_name in this.#symbol_table) {
+            if (this.#symbol_table[sym_name].symbol_type != 'assign') {
+                continue;
+            }
+            if (this.#symbol_table[sym_name].symbol_params.length) {
+                if (looks_like_number(this.#symbol_table[sym_name].symbol_params[0])) {
+                    this.#symbol_table[sym_name].symbol_value = number_format_helper(this.#symbol_table[sym_name].symbol_params[0]);
+                    this.#symbol_table[sym_name].value_assigned = true;
+                } else {
+                    needed_symbols.push(this.#symbol_table[sym_name].symbol_params[0]);
+                }
+            }
+        }
+
+        // At least one of the assign symbols didn't resolve into a number, but
+        // all others did.  Let's see if we can resolve them.
+        if (needed_symbols.length) {
+            for (let sym_name of needed_symbols) {
+                if (!Object.hasOwn(this.#symbol_table, sym_name)) {
+                    throw new Error('Assign PI refs unknown symbol(1): ' + sym_name);
+                }
+            }
+            for (let sym_name in this.#symbol_table) {
+                if (
+                    this.#symbol_table[sym_name].symbol_type != 'assign'
+                    || this.#symbol_table[sym_name].value_assigned
+                    || !this.#symbol_table[sym_name].symbol_params.length
+                ) {
+                    continue;
+                }
+                const ref = this.#symbol_table[sym_name].symbol_params[0];
+                if (!Object.hasOwn(this.#symbol_table, ref)) {
+                    throw new Error('Assign PI refs unknown symbol(2): ' + ref);
+                }
+                this.#symbol_table[sym_name].symbol_value = this.#symbol_table[ref].symbol_value
+                this.#symbol_table[sym_name].value_assigned = true;
+            }
+        }
+
+    }
+
+    #applySymbolTable() {
+        const indexed_mode_regex = /^\@?([^a-zA-Z0-9]+)(\(([^\)]+)\))?$/;
+
+        for (let line of this.#parsed_lines) {
+            if (line.line_type != 'instruction') {
+                continue;
+            }
+            for (let i in line.instruction_params) {
+                if (looks_like_register(line.instruction_params[i]) || looks_like_number(line.instruction_params[i])) {
+                    continue;
+                }
+                if (Object.hasOwn(this.#symbol_table, line.instruction_params[i])) {
+                    if (!this.#symbol_table[ line.instruction_params[i] ].value_assigned) {
+                        continue;
+                    }
+                    line.instruction_params[i] = this.#symbol_table[ line.instruction_params[i] ].symbol_value.toString();
+                    continue;
+                }
+
+                const indexed_matches = line.instruction_params[i].match(indexed_mode_regex);
+                if (indexed_matches) {
+                    let left = indexed_matches[1];
+                    let right = indexed_matches[3] !== undefined ? indexed_matches[3] : '';
+
+                    if (!looks_like_number(left) && Object.hasOwn(this.#symbol_table, left) && this.#symbol_table[left].value_assigned) {
+                        left = this.#symbol_table[left].symbol_value.toString();
+                    }
+                    if (right.length && !looks_like_register(right) && Object.hasOwn(this.#symbol_table, right) && this.#symbol_table[right].value_assigned) {
+                        right = this.#symbol_table[right].symbol_value.toString();
+                    }
+                    line.instruction_params[i] = '@' + left;
+                    if (right.length) {
+                        line.instruction_params[i] += '(' + right + ')';
+                    }
+                }
+            }
+        }
+    }
+
     /** @param {AsmParseLineResult} line */
     #getInstructionFromLine(line) {
         const inst = Instruction.newFromString(line.instruction);
@@ -261,13 +391,14 @@ export class Asm {
         // These are the ones we put into the opcode
         const opcode_param_list = Object.keys(inst.opcode_info.args);
         // We're dealing with assembly-side things.
-        const split_params = line.instruction_argument.split(',');
+        const split_params = line.instruction_params;
 
         //console.debug(param_list, asm_param_list, opcode_param_list, split_params);
 
         let offset = 0;
         for (let param_name of asm_param_list) {
             const this_param = split_params[offset++];
+            console.debug(param_name, this_param, line);
             if (param_name == 'S' && opcode_param_list.includes('Ts')) {
                 //console.debug(' => S+Ts => ', split_params[offset]);
                 const res = this.#registerStringToAddressingModeData(this_param);
@@ -407,6 +538,16 @@ class AsmParseLineResult {
     encoded_instruction =   null;
 }
 
+class AsmSymbol {
+    line_number = 0;
+    symbol_name = '';
+    symbol_type = 'ERROR';
+    value_assigned = false;
+    symbol_value = 0;
+    /** @type {string[]} */
+    symbol_params = [];
+}
+
 
 /**
  * @param {string} string
@@ -446,4 +587,24 @@ function number_format_helper(string) {
     }
     const num = parseInt(string, is_decimal ? 10 : (is_hex ? 16 : 2));
     return num;
+}
+
+/**
+ * @param {string} string
+ * @returns {boolean}
+ **/
+function looks_like_register(string) {
+    const matches = string.match(/^(WR|R)?(\d{1,2})$/);
+    if (matches) {
+        return parseInt(matches[2]) < 16;
+    }
+    return false;
+}
+
+/**
+ * @param {string} string
+ * @returns {boolean}
+ **/
+function looks_like_number(string) {
+    return !!string.match(/^-?(WR|R|>|0x|0b)?[a-fA-F0-9]+$/);
 }

@@ -165,30 +165,40 @@ window.addEventListener('DOMContentLoaded', function () {
             <div style="flex: auto;">
                 <section>
                     <section id="codebox_grid_container">
-<textarea id="codebox" cols="40" spellcheck="false">
-    LI  R1,>0200  ; Low pixel bounds
-    LI  R2,>11FF  ; High pixel bounds
-    LI  R3,1      ; Color increment
-    LI  R4,2      ; Pixel increment
-    LI  R5,0      ; Initial color
-    MOV R1,R8     ; Next drawing target
-    MOV R5,R9     ; Next color
+<textarea id="codebox" cols="70" spellcheck="false">
+start_pixel     EQU R1
+end_pixel       EQU R2
+color_increment EQU R3
+pixel_increment EQU R4
+initial_color   EQU R5
 
+current_pixel   EQU R8
+current_color   EQU R9
+
+setup:
+    LI      start_pixel,>0200
+    LI      end_pixel,>11FF
+    LI      color_increment,1
+    LI      pixel_increment,2
+    LI      initial_color,0
+init:
+    MOV     start_pixel,current_pixel
+    MOV     initial_color,current_color
 loop:
-    MOV R9,*R8  ; Draw pixel
-    A   R4,R8   ; Bump next pixel
-    JNO 4       ; No overflow => continue
-    MOV R1,R8   ; Reset to min
+    MOV     current_color,*R8               ; Draw pixel
+    A       pixel_increment,current_pixel   ; Bump next pixel
+    JNO     4                               ; No overflow => continue
+    MOV     start_pixel,current_pixel       ; Reset to min
 
-    C   R8,R2   ; Out of bounds?
-    JLE 4       ; No bounds => continue
-    MOV R1,R8   ; Reset to min
+    C       current_pixel,end_pixel         ; Out of bounds?
+    JLE     4                               ; No bounds => continue
+    MOV     start_pixel,current_pixel       ; Reset to min
 
-    A   R3,R9   ; Bump next color.
-    JNO -16     ; No overflow => loop
-    MOV R5,R9   ; Reset color
+    A       color_increment,current_color   ; Bump next color.
+    JNO     -16                             ; No overflow => loop
+    MOV     initial_color,current_color     ; Reset color
 
-    JMP -20     ; => loop
+    JMP     -20                             ; => loop
 </textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>
