@@ -398,7 +398,7 @@ export class Asm {
         let offset = 0;
         for (let param_name of asm_param_list) {
             const this_param = split_params[offset++];
-            console.debug(param_name, this_param, line);
+            //console.debug(param_name, this_param, line);
             if (param_name == 'S' && opcode_param_list.includes('Ts')) {
                 //console.debug(' => S+Ts => ', split_params[offset]);
                 const res = this.#registerStringToAddressingModeData(this_param);

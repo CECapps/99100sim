@@ -10,6 +10,7 @@ import { Asm } from "./classes/Asm";
 /** @type {Simulation} */
 var sim; // = new Simulation();
 var running = false;
+var slow_mode = false;
 var fast_mode = true;
 var fast_mode_steps = 797; // Prime; instructions run per frame.  On my system this gets me ~50 FPS and ~40k IPS.
 
@@ -17,6 +18,14 @@ var frame_count = 0;
 /** @type {number|null} */
 var run_start_time = Date.now();
 var inst_execution_count = 0;
+
+var last_fps_update_ts = 0;
+var last_execution_count = 0;
+var last_frame_count = 0;
+/** @type {number[]} */
+var running_fps_avg = [];
+/** @type {number[]} */
+var running_ips_avg = [];
 
 /**
  * @param {string} element_id
@@ -53,7 +62,7 @@ function reset_simui() {
 }
 
 function update_simui() {
-    gebid_stfu('run_el').innerText = running ? (fast_mode ? 'Yes (fast)' : 'Yes') : 'No';
+    gebid_stfu('run_el').innerText = running ? (fast_mode ? 'Yes (fast)' : (slow_mode ? 'Yes (slow)' :'Yes')) : 'No';
 
     gebid_stfu('nstate_el').innerText = sim.flow.flow_state;
     gebid_stfu('pstate_el').innerText = sim.flow.prev_flow_state;
@@ -102,8 +111,15 @@ function run_frame_callback() {
         const steps = fast_mode ? fast_mode_steps : 1;
         for (let i = 0; i < steps; i++) {
             try {
-                sim.stepInstruction();
-                inst_execution_count++;
+                if (slow_mode) {
+                    const state = sim.step();
+                    if (state == 'B') {
+                        inst_execution_count++;
+                    }
+                } else {
+                    sim.stepInstruction();
+                    inst_execution_count++;
+                }
             } catch (e) {
                 const whoops = window.document.createElement('div');
                 whoops.textContent = (e instanceof Error ? e : '!').toString();
@@ -150,6 +166,7 @@ function button_onclick_setup() {
     gebid_stfu('inst_state_button').addEventListener('click', inst_state_button_onclick);
 
     gebid_stfu('run_button').addEventListener('click', run_button_onclick);
+    gebid_stfu('runslow_button').addEventListener('click', runslow_button_onclick);
     gebid_stfu('runfast_button').addEventListener('click', runfast_button_onclick);
 
     gebid_stfu('stop_button').addEventListener('click', stop_button_onclick);
@@ -162,13 +179,41 @@ function fps_update_callback() {
         gebid_stfu('ips_el').innerText = '--';
         return;
     }
+    // Keeping a running average results in more correct figures during performance drops
+    const running_average_limit = 5;
 
-    const elapsed_ms = Date.now() - run_start_time;
-    const fps = frame_count / (elapsed_ms / 1000);
-    const ips = inst_execution_count / (elapsed_ms / 1000);
+    const frames_since_last_update = frame_count - last_frame_count;
+    const execs_since_last_update = inst_execution_count - last_execution_count;
 
-    gebid_stfu('fps_el').textContent = fps.toFixed(2).toString();
-    gebid_stfu('ips_el').textContent = ips.toFixed(2).toString();
+    last_frame_count = frame_count;
+    last_execution_count = inst_execution_count;
+
+    const now = Date.now();
+    if (last_fps_update_ts == 0) {
+        // Pretending the first update was one second ago gets a more correct figure earlier
+        last_fps_update_ts = now - 1000;
+    }
+    const this_elapsed_ms = now - last_fps_update_ts;
+    last_fps_update_ts = now;
+
+    const this_fps = frames_since_last_update / (this_elapsed_ms / 1000);
+    const this_ips = execs_since_last_update / (this_elapsed_ms / 1000);
+
+    running_fps_avg.push(this_fps);
+    running_ips_avg.push(this_ips);
+
+    if (running_fps_avg.length > running_average_limit) { running_fps_avg.shift(); }
+    if (running_ips_avg.length > running_average_limit) { running_ips_avg.shift(); }
+
+    const avg_fps = running_fps_avg.reduce(function(accumulator, current) { accumulator += current; return accumulator; });
+    const avg_ips = running_ips_avg.reduce(function(accumulator, current) { accumulator += current; return accumulator; });
+
+    // Weighting the average against the current numbers results in more correct figures during performance drops
+    const weighted_fps = ((avg_fps / running_fps_avg.length) + this_fps) / 2;
+    const weighted_ips = ((avg_ips / running_ips_avg.length) + this_ips) / 2;
+
+    gebid_stfu('fps_el').textContent = weighted_fps.toFixed(2).toString();
+    gebid_stfu('ips_el').textContent = weighted_ips.toFixed(2).toString();
 }
 
 /** @param {Event} event */
@@ -213,6 +258,7 @@ function codebox_process_button_onclick(event) {
 function run_button_onclick(event) {
     event.stopPropagation();
     event.preventDefault();
+    slow_mode = false;
     fast_mode = false;
     if (running) {
         return;
@@ -230,7 +276,26 @@ function run_button_onclick(event) {
 function runfast_button_onclick(event) {
     event.stopPropagation();
     event.preventDefault();
+    slow_mode = false;
     fast_mode = true;
+    if (running) {
+        return;
+    }
+
+    if (run_start_time === null ) {
+        run_start_time = Date.now();
+    }
+
+    running = true;
+    run_frame_callback();
+}
+
+/** @param {Event} event */
+function runslow_button_onclick(event) {
+    event.stopPropagation();
+    event.preventDefault();
+    slow_mode = true;
+    fast_mode = false;
     if (running) {
         return;
     }

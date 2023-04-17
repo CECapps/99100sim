@@ -76,42 +76,55 @@ window.addEventListener('DOMContentLoaded', function () {
 
         <style>
             /* https://paletton.com/#uid=53u0I0kgX6j8zeBb67ClS4Srx3b */
+            :root {
+                --main-bg-color: #101A20;
+                --main-bg-color-lighter-1: #1A2227;
+                --main-bg-color-lighter-2: #37434A;
+                --main-bg-color-darker-1: #091319;
+                --main-bg-color-darker-2: #030B10;
+
+                --secondary-color-1: #161323;
+                --secondary-color-2: #172A14;
+
+                --text-color: #f0f0f0;
+            }
+
             html {
-                color: #f0f0f0;
-                background-color: #101a20;
+                color: var(--text-color);
+                background-color: var(--main-bg-color);
                 /* font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif; */
                 font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
                 font-weight: 100;
                 font-size: 0.175in;
             }
             input, textarea {
-                color: #f0f0f0;
-                background-color: #101a20;
+                color: var(--text-color);
+                background-color: var(--main-bg-color);
                 font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
                 font-weight: normal;
                 font-size: 1rem;
                 line-height: 1rem;
             }
             button {
-                color: #f0f0f0;
-                background-color: #1A2227;
+                color: var(--text-color);
+                background-color: var(--main-bg-color-lighter-1);
                 font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
                 font-weight: normal;
                 font-size: 1rem;
                 padding: 2px 1em;
 
-                border: 2px outset #37434A;
+                border: 2px outset var(--main-bg-color-lighter-2);
                 border-radius: 5px;
             }
             button:hover {
-                background-color: #37434A;
+                background-color: var(--main-bg-color-lighter-2);
             }
             button:active {
-                background-color: #030B10;
-                border: 2px inset #101A20;
+                background-color: var(--main-bg-color-darker-2);
+                border: 2px inset var(--main-bg-color);
             }
             button:focus {
-                outline: 2px dotted #37434A;
+                outline: 2px dotted var(--main-bg-color-lighter-2);
             }
 
             #flexcontainer {
@@ -131,13 +144,20 @@ window.addEventListener('DOMContentLoaded', function () {
             }
             #status_table td {
                 border: 2px solid transparent;
-                color: #37434A;
+                color: var(--main-bg-color-lighter-2);
                 text-align: center;
                 min-width: 3.5em;
             }
             #status_table td.on {
-                color: #f0f0f0;
-                border-color: #f0f0f0;
+                color: var(--text-color);
+                border-color: var(--text-color);
+            }
+
+            #register_table td, #status_table td, #wp_el, #pc_el, #epci_el {
+                text-shadow: -1px   -1px    0px  var(--main-bg-color-lighter-2), /* top left */
+                             1px    -1px    0px  var(--main-bg-color-darker-1), /* top right */
+                             -1px   1px     0px  var(--main-bg-color-lighter-1), /* bottom left */
+                             1px    1px     0px  var(--main-bg-color-darker-2); /* bottom right */
             }
 
             #codebox_grid_container {
@@ -165,6 +185,15 @@ window.addEventListener('DOMContentLoaded', function () {
             #errors {
                 color: red;
                 font-weight: bold;
+            }
+
+            .plaid {
+                background-color: var(--main-bg-color-lighter-2);
+                background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, var(--secondary-color-1) 5px, var(--secondary-color-1) 10px),
+                                  repeating-linear-gradient(-45deg, transparent, transparent 5px, var(--secondary-color-2) 5px, var(--secondary-color-2) 10px);
+            }
+            .plaid:hover {
+                background-color: var(--main-bg-color-darker-2);
             }
 
         </style>
@@ -225,8 +254,10 @@ window.addEventListener('DOMContentLoaded', function () {
                     <button id="step_state_button">State Step</button>
                     <button id="inst_state_button">Instruction Step</button>
                     &bull;
-                    <button id="run_button">Run</button>
-                    <button id="runfast_button">Run (fast)</button>
+                    <button id="run_button">Run Standard</button>
+                    <button id="runslow_button">Run Slow</button>
+                    <button id="runfast_button" class="plaid">Run <i>Plaid</i></button>
+                    &bull;
                     <button id="stop_button">Stop</button>
                     <button id="reset_button">Reset</button>
                 </section>

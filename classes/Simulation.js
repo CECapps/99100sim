@@ -53,6 +53,7 @@ export class Simulation {
 
     step() {
         this.flow.run(1);
+        window.dispatchEvent(new CustomEvent('memory_updated'));
         return this.flow.prev_flow_state;
     }
 
