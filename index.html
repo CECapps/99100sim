@@ -285,7 +285,7 @@ init:
     MOV     start_pixel,current_pixel
     MOV     initial_color,current_color
 loop:
-    MOV     current_color,*R8               ; Draw pixel
+    MOV     current_color,*current_pixel    ; Draw pixel
     A       pixel_increment,current_pixel   ; Bump next pixel
     JNO     4                               ; No overflow => continue
     MOV     start_pixel,current_pixel       ; Reset to min

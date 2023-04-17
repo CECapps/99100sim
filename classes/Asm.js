@@ -43,9 +43,7 @@ export class Asm {
         }
 
         this.#buildSymbolTable();
-        console.debug(this.#symbol_table);
         this.#applySymbolTable();
-        console.debug(this.#parsed_lines);
 
         // With parsed_lines now populated, we can proceed
         /** @TODO PI support, label support */
@@ -335,42 +333,59 @@ export class Asm {
                 this.#symbol_table[sym_name].value_assigned = true;
             }
         }
-
+        console.debug(this.#symbol_table);
     }
 
     #applySymbolTable() {
-        const indexed_mode_regex = /^\@?([^a-zA-Z0-9]+)(\(([^\)]+)\))?$/;
-
+        const indirect_regex = /^(\*)?(.+)(\+)?$/;
+        const indexed_regex = /^@?(.+)\((.+)\)$/;
         for (let line of this.#parsed_lines) {
             if (line.line_type != 'instruction') {
                 continue;
             }
             for (let i in line.instruction_params) {
-                if (looks_like_register(line.instruction_params[i]) || looks_like_number(line.instruction_params[i])) {
-                    continue;
-                }
-                if (Object.hasOwn(this.#symbol_table, line.instruction_params[i])) {
-                    if (!this.#symbol_table[ line.instruction_params[i] ].value_assigned) {
+                for (let sym_name in this.#symbol_table) {
+                    if (!this.#symbol_table[sym_name].value_assigned) {
                         continue;
                     }
-                    line.instruction_params[i] = this.#symbol_table[ line.instruction_params[i] ].symbol_value.toString();
-                    continue;
-                }
-
-                const indexed_matches = line.instruction_params[i].match(indexed_mode_regex);
-                if (indexed_matches) {
-                    let left = indexed_matches[1];
-                    let right = indexed_matches[3] !== undefined ? indexed_matches[3] : '';
-
-                    if (!looks_like_number(left) && Object.hasOwn(this.#symbol_table, left) && this.#symbol_table[left].value_assigned) {
-                        left = this.#symbol_table[left].symbol_value.toString();
+                    const symbol_value = this.#symbol_table[sym_name].symbol_value.toString()
+                    // Is the param exactly one of our symbols?
+                    if (line.instruction_params[i] == sym_name) {
+                        line.instruction_params[i] = symbol_value;
+                        //console.log('=> exact match', line.instruction_params[i], line);
+                        continue;
                     }
-                    if (right.length && !looks_like_register(right) && Object.hasOwn(this.#symbol_table, right) && this.#symbol_table[right].value_assigned) {
-                        right = this.#symbol_table[right].symbol_value.toString();
+                    // Is the param inside indirect or indirect autoinc mode syntax?
+                    const indirect_matches = line.instruction_params[i].match(indirect_regex);
+                    if (indirect_matches && indirect_matches[2] == sym_name && (indirect_matches[1] || indirect_matches[3])) {
+                        const star = indirect_matches[1] == '*' ? '*' : '';
+                        const plus = indirect_matches[3] == '+' ? '+' : '';
+                        line.instruction_params[i] = star + symbol_value + plus;
+                        //console.log('=> indirect/autoinc match', line.instruction_params[i], line);
+                        continue;
                     }
-                    line.instruction_params[i] = '@' + left;
-                    if (right.length) {
-                        line.instruction_params[i] += '(' + right + ')';
+
+                    // What about indexed mode?
+                    const indexed_matches = line.instruction_params[i].match(indexed_regex);
+                    if (indexed_matches) {
+                        let addr = indexed_matches[1];
+                        let index = indexed_matches[2];
+                        if (addr == sym_name) {
+                            addr = symbol_value;
+                        }
+                        if (index == sym_name) {
+                            index = symbol_value;
+                        }
+                        line.instruction_params[i] = `@${addr}(${index})`;
+                        //console.log('=> indexed match', line.instruction_params[i], line);
+                        continue;
+                    }
+
+                    // Perhaps we're in symbolic mode?  If the @ was excluded,
+                    // then the initial direct match should have worked.
+                    if (line.instruction_params[i].startsWith('@')) {
+                        line.instruction_params[i] = '@' + symbol_value;
+                        //console.log('=> symbolic match', line.instruction_params[i], line);
                     }
                 }
             }
@@ -594,7 +609,7 @@ function number_format_helper(string) {
  * @returns {boolean}
  **/
 function looks_like_register(string) {
-    const matches = string.match(/^(WR|R)?(\d{1,2})$/);
+    const matches = string.match(/^\*?(WR|R)?(\d{1,2})\+?$/);
     if (matches) {
         return parseInt(matches[2]) < 16;
     }
