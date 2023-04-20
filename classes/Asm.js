@@ -4,7 +4,9 @@
 import { Instruction } from "./Instruction";
 import { InstructionDecode, EncodedInstruction } from "./InstructionDecode";
 
-export class Asm {
+export { Asm, AsmParseLineResult };
+
+class Asm {
 
     static #pi_list = [
         'IDT','BYTE','CKPT','DATA','EQU','TEXT','WPNT','AORG','BES','BSS',
@@ -259,6 +261,7 @@ export class Asm {
         const pi_assign_instructions = [ 'EQU' ];
 
         this.#symbol_table = {};
+        let has_offsets = false;
         for (let line of this.#parsed_lines) {
             // Symbols are labels, so if there's no label, there can be no symbol.
             if (!line.label) {
@@ -272,6 +275,7 @@ export class Asm {
             // Labels on non-PI or offset PI lines get turned into the value of
             // the location counter during later processing.
             if (!is_pi || is_offset) {
+                has_offsets = true;
                 const sym = new AsmSymbol();
                 sym.symbol_type = 'offset';
                 sym.symbol_name = line.label;
@@ -291,7 +295,7 @@ export class Asm {
             }
         }
 
-        // Now that we have a complete list of symbols, let's start resolving
+        // Now that we have a "complete" list of symbols, let's start resolving
         // them into usable values when we can.
         /** @type {string[]} */
         let needed_symbols = [];
@@ -333,6 +337,42 @@ export class Asm {
                 this.#symbol_table[sym_name].value_assigned = true;
             }
         }
+
+        // We should now have resolved all assign-type symbols.  Swap them in!
+        this.#applySymbolTable();
+
+        // At this point, all assign-type symbols have been substituted.  We now
+        // need to think about offset-type symbols.  This is a real problem.
+        // Offsets can be used anywhere, including before the symbol is declared.
+        // Additionally, jump instructions do not take an absolute value of the
+        // desired offset, but a relative offset instead.  The major complicating
+        // factor is that instructions can vary between one and four words, with
+        // some instructions having a word count that varies based on the params.
+        // We can find ourself in a situation where the offset value we need to
+        // put into the params can actually change the word count!
+
+        // We'll start by scanning for all occurrences of offset symbols in params.
+        // The line and param location of each will be taken down.  While doing
+        // this, we'll also create a guesstimated word count for each instruction.
+
+        // With knowledge of where the offset symbols need to be swapped in, and
+        // approximate knowledge of how many words each instruction takes, we
+        // can now substitute in temporary values for the offsets.
+
+        // With temporary values for all offsets in place, we can now go through
+        // the instructions *again* and get a working EncodedInstruction for each.
+        // The EI will give us a "real" word count for each instruction.
+
+        // With a more confident word count, we now get to go through all the
+        // offset symbol replacements, update their values, and regenerate EIs.
+
+        // With final, "real" EIs, we can now give correct values to the offsets.
+
+        // All symbols should now be assigned.  Nuke all the temporary changes
+        // we've made to the params and then substitute the symbols cleanly.
+
+        this.#applySymbolTable();
+
         console.debug(this.#symbol_table);
     }
 
@@ -621,5 +661,5 @@ function looks_like_register(string) {
  * @returns {boolean}
  **/
 function looks_like_number(string) {
-    return !!string.match(/^-?(WR|R|>|0x|0b)?[a-fA-F0-9]+$/);
+    return !!string.match(/^\-?(WR|R|>|0x|0b)?[a-fA-F0-9]+$/);
 }

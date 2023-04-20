@@ -2,6 +2,7 @@
 
 import { FormatInfo } from "./Format";
 import { OpInfo } from "./OpInfo";
+import { AsmParseLineResult } from "./Asm";
 
 /**
  * Instruction: An Op with defined Parameters.
