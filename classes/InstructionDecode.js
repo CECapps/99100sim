@@ -1,6 +1,5 @@
 // @ts-check
 
-import { FormatInfo } from "./Format";
 import { OpInfo } from "./OpInfo";
 import { Instruction } from "./Instruction";
 
@@ -36,6 +35,7 @@ class InstructionDecode {
             enc.immediate_source_word = imd;
         }
 
+        /** @TODO This should be unnecessary, make sure of that and then nuke it. */
         const params = new ParamsList();
         for (let key of Object.keys(inst.opcode_info.format_info.opcode_params)) {
             params.set(key, inst.getParam(key));
@@ -52,7 +52,7 @@ class InstructionDecode {
             inst.setSecondOpcodeWord(ei.second_word.value);
         }
 
-        // This is stored in the opcode itself, but we might not have gotten that form
+        /** @TODO This should be unnecessary, make sure of that and then nuke it. */
         for (let kv of ei.opcode_params) {
             inst.setParam(kv[0], kv[1]);
         }
@@ -136,16 +136,8 @@ class EncodedInstruction {
 
     /** @param {number} opcode */
     constructor(opcode) {
-        const op_name = OpInfo.getOpNameForOpcode(opcode);
-        if (op_name === null) {
-            throw new Error('I mean really now');
-        }
-        const opinfo = OpInfo.newFromString(op_name);
-        if (opinfo === null) {
-            throw new Error('Stop that');
-        }
         this.opcode = opcode;
-        this.opcode_info = opinfo;
+        this.opcode_info = OpInfo.getFromOpcode(opcode);
     }
 
 }

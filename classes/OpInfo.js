@@ -30,11 +30,7 @@ export class OpInfo {
         'MID E'	    : [parseInt('0C00',16),	parseInt('0FFF',16)],
     };
 
-    /**
-     * @param {number} opcode
-     * @returns {string|null}
-     **/
-    static getOpNameForOpcode(opcode) {
+    static #populateFunctionMap() {
         if (!this.#function_map) {
             this.#function_map = [];
             for (let oiclass in this.#ops) {
@@ -44,20 +40,67 @@ export class OpInfo {
                 }
             }
         }
-        let opstring = this.#function_map.at(opcode);
-        return opstring === undefined ? null : opstring;
     }
 
     /**
-     * @param {string} op_name
-     * @returns { OpInfo | null }
+     * @param {string} opname
+     * @returns {boolean}
      **/
-    static newFromString(op_name) {
-        let opclass = this.#ops[op_name.toUpperCase()];
-        if (!opclass) {
-            return null;
+    static opNameIsValid(opname) {
+        return Object.hasOwn(this.#ops, opname);
+    }
+
+    /**
+     * @param {number} opcode
+     * @returns {boolean}
+     **/
+    static opcodeIsValid(opcode) {
+        this.#populateFunctionMap();
+        return Object.hasOwn(this.#function_map, opcode) && (typeof this.#function_map[opcode] === 'string');
+    }
+
+    /**
+     * @param {string} opname
+     * @returns {number}
+     **/
+    static getOpcodeFromOpName(opname) {
+        if (!this.opNameIsValid(opname)) {
+            throw new Error(`Invalid op name: "${opname}"`);
         }
-        return new opclass;
+        return (new this.#ops[opname]).opcode;
+    }
+
+    /**
+     * @param {number} opcode
+     * @returns {string}
+     **/
+    static getOpNameFromOpcode(opcode) {
+        if (!this.opcodeIsValid(opcode)) {
+            throw new Error(`Invalid opcode: "${opcode}"`);
+        }
+        return this.#function_map[opcode];
+    }
+
+    /**
+     * @param {string} opname
+     * @returns {OpInfo}
+     **/
+    static getFromOpName(opname) {
+        if (!this.opNameIsValid(opname)) {
+            throw new Error(`Invalid op name: "${opname}"`);
+        }
+        return new this.#ops[opname];
+    }
+
+    /**
+     * @param {number} opcode
+     * @returns {OpInfo}
+     **/
+    static getFromOpcode(opcode) {
+        if (!this.opcodeIsValid(opcode)) {
+            throw new Error(`Invalid opcode: "${opcode}"`);
+        }
+        return new this.#ops[this.#function_map[opcode]];
     }
 
     /**

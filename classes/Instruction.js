@@ -1,6 +1,5 @@
 // @ts-check
 
-import { FormatInfo } from "./Format";
 import { OpInfo } from "./OpInfo";
 
 /**
@@ -51,11 +50,7 @@ export class Instruction {
      * @returns {Instruction}
      **/
     static newFromString(op_name) {
-        const opcode_info = OpInfo.newFromString(op_name);
-        if (opcode_info === null) {
-            return new Instruction(new OpInfo());
-        }
-        return new Instruction(opcode_info);
+        return new Instruction(OpInfo.getFromOpName(op_name));
     }
 
     /**
@@ -63,15 +58,8 @@ export class Instruction {
      * @returns {Instruction}
      **/
     static newFromOpcode(opcode) {
-        const op_name = OpInfo.getOpNameForOpcode(opcode);
-        if (op_name === null) {
-            return new Instruction(new OpInfo());
-        }
-        const op_info = OpInfo.newFromString(op_name);
-        if (op_info === null) {
-            return new Instruction(new OpInfo());
-        }
-        const inst = new Instruction(op_info);
+        const inst = new Instruction(OpInfo.getFromOpcode(opcode));
+        // The Instruction has been created with a param-less opcode.  Fix that.
         inst.setEffectiveOpcode(opcode);
         return inst;
     }
@@ -205,6 +193,7 @@ export class Instruction {
         return this.#is_finalized;
     }
 
+//#region Second Word
     hasSecondOpcodeWord() {
         return this.opcode_info.has_second_opcode_word;
     }
@@ -217,7 +206,9 @@ export class Instruction {
     getSecondOpcodeWord() {
         return this.#second_word;
     }
+//#endregion
 
+//#region Immediate Value
     hasImmediateValue() {
         return this.opcode_info.has_immediate_operand;
     }
@@ -230,7 +221,9 @@ export class Instruction {
     getImmediateValue() {
         return this.#immediate_operand;
     }
+//#endregion
 
+//#region Immediate Source
     hasImmediateSourceValue() {
         return this.#has_immediate_source_operand;
     }
@@ -244,7 +237,9 @@ export class Instruction {
     getImmediateSourceValue() {
         return this.#immediate_source_operand;
     }
+//#endregion
 
+//#region Immediate Dest
     hasImmediateDestValue() {
         return this.#has_immediate_dest_operand;
     }
@@ -258,6 +253,7 @@ export class Instruction {
     getImmediateDestValue() {
         return this.#immediate_dest_operand;
     }
+//#endregion
 
     /**
      * @TODO check for other legality things
