@@ -2,7 +2,6 @@
 
 import { FormatInfo } from "./Format";
 import { OpInfo } from "./OpInfo";
-import { AsmParseLineResult } from "./Asm";
 
 /**
  * Instruction: An Op with defined Parameters.
@@ -73,7 +72,7 @@ export class Instruction {
             return new Instruction(new OpInfo());
         }
         const inst = new Instruction(op_info);
-        inst.setParamsFromOpcode(opcode);
+        inst.setEffectiveOpcode(opcode);
         return inst;
     }
 
@@ -92,6 +91,29 @@ export class Instruction {
         return this.#base_opcode;
     }
 
+    /** @param {number} opcode */
+    setEffectiveOpcode(opcode) {
+        if (this.#is_finalized) {
+            console.error('setEffectiveOpcode: Instruction is Finalized.  The call is bugged!');
+            return;
+        }
+        if (opcode < this.opcode_info.opcode || opcode > this.opcode_info.opcode_legal_max) {
+            console.error('Op out of range (HOW!?)');
+            return;
+        }
+        this.#working_opcode = opcode;
+        this.#refreshImmediateOperandState();
+    }
+
+    getFullOpcode() {
+        let opcode = this.getEffectiveOpcode();
+        if (this.hasSecondOpcodeWord()) {
+            opcode <<= 16;
+            opcode |= this.getSecondOpcodeWord();
+        }
+        return opcode;
+    }
+
     getParamList() {
         return Object.keys(this.opcode_info.args);
     }
@@ -104,103 +126,66 @@ export class Instruction {
         if (this.#working_opcode == 0) {
             throw new Error('getParam called before known good state: probable bug');
         }
-        if (!this.opcode_info.args[param_name]) {
+        const opcode_params = this.opcode_info.format_info.opcode_params;
+        if (!Object.hasOwn(opcode_params, param_name)) {
             throw new Error(`getParam with invalid param: "${param_name}" probable bug`);
         }
-        const format_info = FormatInfo.getFormat(this.opcode_info.format);
 
-        let running_offset = this.opcode_info.arg_start_bit;
-        /** @type Object<string,number> args */
-        const args = this.opcode_info.args;
-        for (let k in args) {
-            // We have to count up the total bits skipped, which means we have
-            // to start at the beginning of the list.
-            if (k.toLowerCase() !== param_name.toLowerCase()) {
-                running_offset += args[k];
-                continue;
-            }
-
-            // To hell with bitwise manipulation I just want it working so strings it is!
-            let opcode_binstring = this.#working_opcode.toString(2).padStart(16,'0');
-            if (this.hasSecondOpcodeWord()) {
-                // Yup, just tack it on the end, this works.
-                opcode_binstring += this.#second_word.toString(2).padStart(16,'0');
-            }
-            const extracted = opcode_binstring.substring(running_offset, running_offset + args[k]);
-            return parseInt(extracted, 2);
-        }
-        throw new Error('getParam fallthrough');
+        const opcode = this.getFullOpcode();
+        const offset = this.#paramBitOffsetHelper(param_name);
+        const value = extract_binary(opcode, (this.hasSecondOpcodeWord() ? 32 : 16), offset, opcode_params[param_name]);
+        return value;
     }
 
     /**
      * @param {string} param_name
-     * @param {string|number} value
+     * @param {string|number} param_value
      **/
-    setParam(param_name, value) {
+    setParam(param_name, param_value) {
         if (this.#is_finalized) {
             console.error('setParam: Instruction is Finalized.  The call is bugged!');
             return false;
         }
-        //console.debug(' => ', this.opcode_info.args, param_name, Reflect.get(this.opcode_info.args, param_name));
-        if (!this.opcode_info.args[param_name]) {
-            console.error('setParam: unknown param name', param_name);
-            return false;
-        }
-        const format_info = FormatInfo.getFormat(this.opcode_info.format);
-
-        if (value === null || value === undefined) {
-            throw new Error('value must have a value but null or undefined was passed.  where is your typechecker god now!?');
+        const opcode_params = this.opcode_info.format_info.opcode_params;
+        if (!Object.hasOwn(opcode_params, param_name)) {
+            throw new Error(`getParam with invalid param: "${param_name}" probable bug`);
         }
 
-        let running_offset = this.opcode_info.arg_start_bit;
-        for (let k in this.opcode_info.args) {
-            const arg_length = this.opcode_info.args[k];
-            // We have to count up the total bits skipped, which means we have
-            // to start at the beginning of the list.
-            if (k.toLowerCase() !== param_name.toLowerCase()) {
-                running_offset += arg_length;
-                continue;
-            }
+        const opcode = this.getFullOpcode();
+        const offset = this.#paramBitOffsetHelper(param_name);
+        const new_opcode = insert_binary(opcode, (this.hasSecondOpcodeWord() ? 32 : 16), offset, opcode_params[param_name], parseInt(param_value.toString()));
 
-            let opcode_binstring = this.#working_opcode.toString(2).padStart(16,'0');
-            if (this.hasSecondOpcodeWord()) {
-                opcode_binstring += this.#second_word.toString(2).padStart(16,'0');
-            }
-            const before = opcode_binstring.substring(0, running_offset);
-            const middle = opcode_binstring.substring(running_offset, running_offset + arg_length);
-            const after = opcode_binstring.substring(running_offset + arg_length);
+        if (this.hasSecondOpcodeWord()) {
+            // We've been given two 16-bit words in the form of a single 32-bit
+            // unsigned integer.  The most significant word is our opcode.
+            const msw = new_opcode >> 16;
+            this.setEffectiveOpcode(msw);
 
-            let bitmask = parseInt('1'.repeat(arg_length), 2);
-            //console.debug('bitmask', bitmask.toString(2));
-            const after_value = bitmask & parseInt(value.toString());
-            //console.log('param=', k, 'before=', this.getParam(k), 'after=', after_value);
-            //console.debug([middle, parseInt(middle, 2), value, after_value]);
-
-            const new_bitstring = before + after_value.toString(2).padStart(arg_length, '0') + after;
-            this.#working_opcode = parseInt(new_bitstring.substring(0, 16), 2);
-            if (this.hasSecondOpcodeWord()) {
-                this.#second_word = parseInt(new_bitstring.substring(16), 2);
-            }
-            //console.log('old=', opcode_binstring);
-            //console.log('new=', new_bitstring);
-            //console.log('param=', k, 'now=', this.getParam(k), 'expected=', after_value);
-
+            // The least significant word is the second word of our opcode.
+            const lsw_mask = ((2 ** 32) - 1) & ((2 ** 16) - 1);
+            this.setSecondOpcodeWord(new_opcode & lsw_mask);
+        } else {
+            this.setEffectiveOpcode(new_opcode);
         }
         this.#refreshImmediateOperandState();
     }
 
-    /** @param {number} opcode */
-    setParamsFromOpcode(opcode) {
-        if (this.#is_finalized) {
-            console.error('setParamsFromOpcode: Instruction is Finalized.  The call is bugged!');
-            return;
+    /**
+     * @param {string} param
+     * @returns {number}
+     **/
+    #paramBitOffsetHelper(param) {
+        let running_offset = this.opcode_info.format_info.opcode_param_start_bit;
+        const opcode_params = this.opcode_info.format_info.opcode_params;
+        for (let p in opcode_params) {
+            if (param !== p) {
+                running_offset += opcode_params[p];
+                continue;
+            }
+            // Therefore, we've found ourselves and the offset has been found.
+            break;
         }
-        if (opcode < this.opcode_info.opcode || opcode > this.opcode_info.opcode_legal_max) {
-            console.error('Op out of range (HOW!?)');
-            return;
-        }
-        this.#working_opcode = opcode;
-        this.#refreshImmediateOperandState();
+        return running_offset;
     }
 
     #refreshImmediateOperandState() {

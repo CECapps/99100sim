@@ -345,13 +345,13 @@ function reset_button_onclick(event) {
  * @returns {string}
  **/
 function color_for_word(word) {
-    const red_val = extract_binary(word, 11, 5) * 8;
+    const red_val = extract_binary(word, 16, 11, 5) * 8;
     const red_string = Math.round(red_val).toString(16).padStart(2, '0');
 
-    const green_val = extract_binary(word, 5, 6) * 4;
+    const green_val = extract_binary(word, 16, 5, 6) * 4;
     const green_string = Math.round(green_val).toString(16).padStart(2, '0');
 
-    const blue_val = extract_binary(word, 0, 5) * 8;
+    const blue_val = extract_binary(word, 16, 0, 5) * 8;
     const blue_string = Math.round(blue_val).toString(16).padStart(2, '0');
 
     const color_string = `#${red_string}${green_string}${blue_string}`;

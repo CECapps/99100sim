@@ -1,8 +1,5 @@
 // @ts-check
 
-import { Instruction } from "./Instruction";
-import { OpInfo } from "./OpInfo";
-
 export { FormatInfo };
 
 class FormatInfo {
@@ -23,7 +20,7 @@ class FormatInfo {
     /** @returns {string[]} */
     get asm_param_order() { return []; }
 
-    /** @protected Use the static newFrom... method below */
+    /** @protected */
     constructor() {
     }
 
@@ -115,7 +112,9 @@ class FormatInfo {
         14: new class Format14Info extends FormatInfo {
             get format_number() {                   return 14; }
             get opcode_param_start_bit() {          return 16; }
-            get opcode_params() {                   return { 'pos': 10, 'Ts': 2, 'S': 4 }; }
+            // 14, 15, and 16 all have a "position" param, but the others are
+            // 4 bits while this one is 10 bits.  It gets a different name.
+            get opcode_params() {                   return { 'bpos': 10, 'Ts': 2, 'S': 4 }; }
             get asm_param_order() {                 return [ 'S', 'pos' ]; }
         },
         15: new class Format15Info extends FormatInfo {

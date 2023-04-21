@@ -4,35 +4,62 @@
 // The reflection nonsense is to let this file be used by both modules and the browser.
 
 /**
- * @param {number} value        An unsigned 32-bit integer.
- * @param {number} bit_start    Index from the Least Significant Bit to start selection of bits, no greater than 31.
- * @param {number} bit_count    Count of bits to return after bit_start, no greater than 31.
- * @returns {number}            Extracted unsigned integer.
+ * @param {number} value            An unsigned integer.
+ * @param {number} value_bit_count  The size of the given value, in bits (16 or 32)
+ * @param {number} bit_start        Index from the Least Significant Bit to start selection of bits, no greater than 31.
+ * @param {number} bit_count        Count of bits to return after bit_start, no greater than 31.
+ * @returns {number}                Extracted unsigned integer.
  **/
-function extract_binary(value, bit_start, bit_count) {
-    let return_value = 0;
-    const mask = (1 << bit_count) - 1; // Create a mask with bit_count bits set to 1
-    const shifted_value = value >>> bit_start; // Shift value to the right by bit_start bits
-    return_value = shifted_value & mask; // Extract bit_count bits from the shifted value
-    return return_value;
+function extract_binary(value, value_bit_count, bit_start, bit_count) {
+    if (bit_start + bit_count > value_bit_count) {
+        console.error('extract_binary: bit_start + bit_count > value_bit_count', bit_start, bit_count, value_bit_count);
+        throw new Error('extract_binary: desired start and count range exceeds possible value size');
+    }
+    // Clamp the value to the desired bit size.
+    value &= (2 ** value_bit_count) - 1;
+
+    // Shift the value over until our target range occupies the leftmost (LSB) bits.
+    value >>= value_bit_count - (bit_count + bit_start);
+
+    // Mask out everything to the left of the start of the range.
+    value &= (1 << bit_count) - 1;
+
+    // What remains must be the value we want.
+    return value;
 }
 Reflect.set(window, 'extract_binary', extract_binary);
 window.extract_binary = extract_binary;
 
-
 /**
- * @param {number} value        An unsigned 32-bit integer.
- * @param {number} bit_start    Index from the Least Significant Bit to start insertion of bits, no greater than 31.
- * @param {number} bit_count    Count of bits to replace after bit_start, no greater than 31.
- * @param {number} new_value    An unsigned 32-bit integer to insert.
- * @returns {number}            Resulting unsigned integer after insertion.
+ * @param {number} value            An unsigned integer.
+ * @param {number} value_bit_count  The size of the given value, in bits (16 or 32)
+ * @param {number} bit_start        Index from the Least Significant Bit to start insertion of bits, no greater than 31.
+ * @param {number} bit_count        Count of bits to replace after bit_start, no greater than 31.
+ * @param {number} insert_value     An unsigned integer to insert.
+ * @returns {number}                Resulting unsigned integer after insertion.
  **/
-function insert_binary(value, bit_start, bit_count, new_value) {
-    const mask = ((1 << bit_count) - 1) << bit_start; // Create a mask with bit_count bits set to 1, starting at bit_start
-    const shifted_new_value = new_value << bit_start; // Shift new_value to the left by bit_start bits
-    const cleared_bits = value & ~mask; // Clear the bit range specified by mask in value
-    const inserted_bits = shifted_new_value & mask; // Extract the bit range from shifted_new_value that fits in mask
-    return cleared_bits | inserted_bits; // Combine the cleared and inserted bits
+function insert_binary(value, value_bit_count, bit_start, bit_count, insert_value) {
+    if (bit_start + bit_count > value_bit_count) {
+        console.error('insert_binary: bit_start + bit_count > value_bit_count', bit_start, bit_count, value_bit_count);
+        throw new Error('insert_binary: desired start and count range exceeds possible value size');
+    }
+    // Clamp the value to the desired bit size.
+    value &= (2 ** value_bit_count) - 1;
+
+    // Clamp the insert value as well.
+    let nv_mask = (2 ** bit_count) - 1;
+    insert_value &= nv_mask;
+
+    // Shift the mask and insert value over to where they'd live in the real number
+    const left_shift_count = value_bit_count - (bit_start + bit_count);
+    insert_value <<= left_shift_count;
+    nv_mask <<= left_shift_count;
+
+    // Clear out the bits to be replaced, then substitute in the new ones
+    value &= ~nv_mask;
+    value |= insert_value;
+
+    return value;
 }
 Reflect.set(window, 'insert_binary', insert_binary);
 window.insert_binary = insert_binary;

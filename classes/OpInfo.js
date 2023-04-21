@@ -3496,7 +3496,7 @@ export class OpInfo {
             get opcode() {                      return 3082; } // 0C0A
             get opcode_legal_max() {            return 3082; } // 0C0A
             get arg_start_bit() {               return 16; }
-            get args() {                        return {'pos': 10, 'Ts': 2, 'S': 4}; }
+            get args() {                        return {'bpos': 10, 'Ts': 2, 'S': 4}; }
             get platforms() {
                 return { // Platform group C (990/12 features added to 99100 and later generations; 9995 MID)
                     '990/10'  :  false,
@@ -3521,7 +3521,7 @@ export class OpInfo {
             get opcode() {                      return 3081; } // 0C09
             get opcode_legal_max() {            return 3081; } // 0C09
             get arg_start_bit() {               return 16; }
-            get args() {                        return {'pos': 10, 'Ts': 2, 'S': 4}; }
+            get args() {                        return {'bpos': 10, 'Ts': 2, 'S': 4}; }
             get platforms() {
                 return { // Platform group C (990/12 features added to 99100 and later generations; 9995 MID)
                     '990/10'  :  false,
@@ -3571,7 +3571,7 @@ export class OpInfo {
             get opcode() {                      return 3083; } // 0C0B
             get opcode_legal_max() {            return 3083; } // 0C0B
             get arg_start_bit() {               return 16; }
-            get args() {                        return {'pos': 10, 'Ts': 2, 'S': 4}; }
+            get args() {                        return {'bpos': 10, 'Ts': 2, 'S': 4}; }
             get platforms() {
                 return { // Platform group C (990/12 features added to 99100 and later generations; 9995 MID)
                     '990/10'  :  false,

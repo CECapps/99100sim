@@ -12,12 +12,6 @@ class InstructionDecode {
     static getEncodedInstruction(inst) {
         const enc = new EncodedInstruction(inst.getEffectiveOpcode());
 
-        const params = new ParamsList();
-        for (let key of Object.keys(inst.opcode_info.format_info.opcode_params)) {
-            params.set(key, inst.getParam(key));
-        }
-        enc.opcode_params = params;
-
         if (inst.hasSecondOpcodeWord()) {
             const sow = new ImmediateWord(true);
             sow.value = inst.getSecondOpcodeWord();
@@ -41,6 +35,12 @@ class InstructionDecode {
             imd.value = inst.getImmediateDestValue();
             enc.immediate_source_word = imd;
         }
+
+        const params = new ParamsList();
+        for (let key of Object.keys(inst.opcode_info.format_info.opcode_params)) {
+            params.set(key, inst.getParam(key));
+        }
+        enc.opcode_params = params;
 
         return enc;
     }
