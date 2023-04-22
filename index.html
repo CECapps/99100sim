@@ -287,18 +287,18 @@ init:
 loop:
     MOV     current_color,*current_pixel    ; Draw pixel
     A       pixel_increment,current_pixel   ; Bump next pixel
-    JNO     4                               ; No overflow => continue
+    JNO     ok1                             ; No overflow => continue
     MOV     start_pixel,current_pixel       ; Reset to min
-
+ok1:
     C       current_pixel,end_pixel         ; Out of bounds?
-    JLE     4                               ; No bounds => continue
+    JLE     ok2                             ; No bounds => continue
     MOV     start_pixel,current_pixel       ; Reset to min
-
+ok2:
     A       color_increment,current_color   ; Bump next color.
-    JNO     -16                             ; No overflow => loop
+    JNO     loop                            ; No overflow => loop
     MOV     initial_color,current_color     ; Reset color
 
-    JMP     -20                             ; => loop
+    JMP     loop                            ; => loop
 </textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>

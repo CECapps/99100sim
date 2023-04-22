@@ -3,6 +3,7 @@
 
 import { Instruction } from "./Instruction";
 import { InstructionDecode, EncodedInstruction } from "./InstructionDecode";
+import { OpInfo } from "./OpInfo";
 
 export { Asm, AsmParseLineResult };
 
@@ -44,7 +45,8 @@ class Asm {
             this.#parsed_lines[i] = this.#parseLine(line, i++);
         }
 
-        this.#buildSymbolTable();
+        this.#replaceSymbols();
+        //this.#buildSymbolTable();
         this.#applySymbolTable();
 
         // With parsed_lines now populated, we can proceed
@@ -256,179 +258,203 @@ class Asm {
         return result;
     }
 
-    #buildSymbolTable() {
-        const pi_offset_instructions = [ 'BYTE', 'DATA', 'TEXT' ];
+    #replaceSymbols() {
+        const pi_location_instructions = [ 'BYTE', 'DATA', 'TEXT' ];
         const pi_assign_instructions = [ 'EQU' ];
 
-        this.#symbol_table = {};
-        let has_offsets = false;
+        /** @type {Object.<string,AsmSymbol>} */
+        const assign_instructions = {};
+        /** @type {Object.<string,AsmSymbol>} */
+        const location_instructions = {};
+
+        // The location instructions are far more difficult to deal with than
+        // the assign instructions.  Each of them represents a specific byte
+        // offset into the eventual assembled list of words.  To calculate their
+        // actual values, we need to generate the word(s) for each instruction.
+        // But we can't actually do that until we've substituted all the symbols.
+        // But to substitute all the symbols, we need to generate the word(s) for
+        // each instruction.  Additionally, instructions in any Format that
+        // includes Ts or Td can actually spring additional words depending on
+        // the substitutions!  Oh, and the jump instructions of Formats 2 and 17
+        // take a *RELATIVE* location instead of the absolute location, so we
+        // need to calculate those.
+
+        let estimated_word_count = 0;
+        // Number of times we've iterated over parsed_lines: 2
         for (let line of this.#parsed_lines) {
-            // Symbols are labels, so if there's no label, there can be no symbol.
-            if (!line.label) {
-                continue;
-            }
-
-            const is_pi = line.line_type == 'pi';
-            const is_offset = is_pi && pi_offset_instructions.includes(line.instruction);
-            const is_assign = is_pi && pi_assign_instructions.includes(line.instruction);
-
-            // Labels on non-PI or offset PI lines get turned into the value of
-            // the location counter during later processing.
-            if (!is_pi || is_offset) {
-                has_offsets = true;
-                const sym = new AsmSymbol();
-                sym.symbol_type = 'offset';
-                sym.symbol_name = line.label;
-                sym.line_number = line.line_number;
-                this.#symbol_table[sym.symbol_name] = sym;
-            }
-
-            // Labels on assign PIs take on the value of the first param, but
-            // that can also be a symbol, so defer resolving for now.
-            if (is_assign) {
-                const sym = new AsmSymbol();
-                sym.symbol_type = 'assign';
-                sym.line_number = line.line_number;
-                sym.symbol_name = line.label;
-                sym.symbol_params = line.instruction_params;
-                this.#symbol_table[sym.symbol_name] = sym;
-            }
-        }
-
-        // Now that we have a "complete" list of symbols, let's start resolving
-        // them into usable values when we can.
-        /** @type {string[]} */
-        let needed_symbols = [];
-        for (let sym_name in this.#symbol_table) {
-            if (this.#symbol_table[sym_name].symbol_type != 'assign') {
-                continue;
-            }
-            if (this.#symbol_table[sym_name].symbol_params.length) {
-                if (looks_like_number(this.#symbol_table[sym_name].symbol_params[0])) {
-                    this.#symbol_table[sym_name].symbol_value = number_format_helper(this.#symbol_table[sym_name].symbol_params[0]);
-                    this.#symbol_table[sym_name].value_assigned = true;
-                } else {
-                    needed_symbols.push(this.#symbol_table[sym_name].symbol_params[0]);
-                }
-            }
-        }
-
-        // At least one of the assign symbols didn't resolve into a number, but
-        // all others did.  Let's see if we can resolve them.
-        if (needed_symbols.length) {
-            for (let sym_name of needed_symbols) {
-                if (!Object.hasOwn(this.#symbol_table, sym_name)) {
-                    throw new Error('Assign PI refs unknown symbol(1): ' + sym_name);
-                }
-            }
-            for (let sym_name in this.#symbol_table) {
-                if (
-                    this.#symbol_table[sym_name].symbol_type != 'assign'
-                    || this.#symbol_table[sym_name].value_assigned
-                    || !this.#symbol_table[sym_name].symbol_params.length
-                ) {
+            if (line.line_type == 'instruction') {
+                if (!OpInfo.opNameIsValid(line.instruction)) {
+                    // Hmm this should be an error state
                     continue;
                 }
-                const ref = this.#symbol_table[sym_name].symbol_params[0];
-                if (!Object.hasOwn(this.#symbol_table, ref)) {
-                    throw new Error('Assign PI refs unknown symbol(2): ' + ref);
-                }
-                this.#symbol_table[sym_name].symbol_value = this.#symbol_table[ref].symbol_value
-                this.#symbol_table[sym_name].value_assigned = true;
+                estimated_word_count += OpInfo.getFromOpName(line.instruction).minimum_instruction_words;
+                continue;
+            }
+            // Symbols are labels, so don't bother looking at label-less PIs.
+            if (!line.label.length) {
+                continue;
+            }
+
+            const is_assign = line.line_type == 'pi' && line.instruction && pi_assign_instructions.includes(line.instruction);
+            const is_location = line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && pi_location_instructions.includes(line.instruction));
+
+            if (is_assign) {
+                const sym = new AsmSymbol;
+                sym.symbol_name = line.label;
+                sym.symbol_value = number_format_helper(line.instruction_params[0]);
+                sym.symbol_type = 'assign';
+
+                sym.line_number = line.line_number;
+                sym.symbol_params = line.instruction_params;
+                sym.value_assigned = true;
+                assign_instructions[line.label] = sym;
+            } else if(is_location) {
+                const sym = new AsmSymbol;
+                sym.symbol_name = line.label;
+                sym.symbol_value = estimated_word_count;
+                sym.symbol_type = 'location';
+
+                sym.line_number = line.line_number;
+                sym.symbol_params = line.instruction_params;
+                sym.value_assigned = false; // yes really
+                location_instructions[line.label] = sym;
             }
         }
 
-        // We should now have resolved all assign-type symbols.  Swap them in!
-        this.#applySymbolTable();
+        // We now have correct values for our assign instructions, and reasonable
+        // best guesses for our location instructions.  This should be enough to
+        // substitute in values where needed.
+        estimated_word_count = 0;
+        // Number of times we've iterated over parsed_lines: 3
+        for (let line of this.#parsed_lines) {
+            // The word values in this iteration should be more correct.
+            if (line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && pi_location_instructions.includes(line.instruction))) {
+                location_instructions[line.label].symbol_value = estimated_word_count;
+                location_instructions[line.label].value_assigned = true;
+            }
+            if (line.line_type != 'instruction') {
+                continue;
+            }
+            const instr = Instruction.newFromString(line.instruction);
+            const param_order = instr.opcode_info.format_info.asm_param_order;
 
-        // At this point, all assign-type symbols have been substituted.  We now
-        // need to think about offset-type symbols.  This is a real problem.
-        // Offsets can be used anywhere, including before the symbol is declared.
-        // Additionally, jump instructions do not take an absolute value of the
-        // desired offset, but a relative offset instead.  The major complicating
-        // factor is that instructions can vary between one and four words, with
-        // some instructions having a word count that varies based on the params.
-        // We can find ourself in a situation where the offset value we need to
-        // put into the params can actually change the word count!
+            for (let i in line.instruction_params) {
+                for (let symbol_name in assign_instructions) {
+                    line.instruction_params[i] = this.#symbolReplaceHelper(line.instruction_params[i], symbol_name, assign_instructions[symbol_name].symbol_value.toString());
+                }
+                for (let symbol_name in location_instructions) {
+                    let nv = location_instructions[symbol_name].symbol_value;
+                    // Jump instructions get the offset adjust thing.
+                    if (instr.opcode_info.format == 2 || instr.opcode_info.format == 17) {
+                        nv -= estimated_word_count;
+                    }
+                    line.instruction_params[i] = this.#symbolReplaceHelper(line.instruction_params[i], symbol_name, nv.toString());
+                }
+            }
 
-        // We'll start by scanning for all occurrences of offset symbols in params.
-        // The line and param location of each will be taken down.  While doing
-        // this, we'll also create a guesstimated word count for each instruction.
+            for (let i in line.instruction_params) {
+                instr.setParam(param_order[i], line.instruction_params[i]);
+            }
 
-        // With knowledge of where the offset symbols need to be swapped in, and
-        // approximate knowledge of how many words each instruction takes, we
-        // can now substitute in temporary values for the offsets.
+            const ei = InstructionDecode.getEncodedInstruction(instr);
+            estimated_word_count += ei.words.length;
+        }
 
-        // With temporary values for all offsets in place, we can now go through
-        // the instructions *again* and get a working EncodedInstruction for each.
-        // The EI will give us a "real" word count for each instruction.
+        // We should now have correct location instruction values.  We can finally
+        // build the symbol table!
+        this.#symbol_table = {};
+        for (let symbol_name in assign_instructions) {
+            if (assign_instructions[symbol_name].value_assigned) {
+                this.#symbol_table[symbol_name] = assign_instructions[symbol_name];
+            }
+        }
+        for (let symbol_name in location_instructions) {
+            if (location_instructions[symbol_name].value_assigned && !Object.hasOwn(this.#symbol_table, symbol_name)) {
+                this.#symbol_table[symbol_name] = location_instructions[symbol_name];
+            }
+        }
 
-        // With a more confident word count, we now get to go through all the
-        // offset symbol replacements, update their values, and regenerate EIs.
+    }
 
-        // With final, "real" EIs, we can now give correct values to the offsets.
+    /**
+     * @param {string} param_value
+     * @param {string} symbol_name
+     * @param {string} symbol_value
+     **/
+    #symbolReplaceHelper(param_value, symbol_name, symbol_value) {
+        const indirect_regex = /^(\*)?(.+)(\+)?$/;
+        const indexed_regex = /^@?(.+)\((.+)\)$/;
 
-        // All symbols should now be assigned.  Nuke all the temporary changes
-        // we've made to the params and then substitute the symbols cleanly.
+        // Easy mode: the param is the symbol.
+        if (param_value == symbol_name) {
+            return symbol_value;
+        }
 
-        this.#applySymbolTable();
+        // Challenge mode: the param is a register in indirect/autoinc mode.
+        const indirect_matches = param_value.match(indirect_regex);
+        if (indirect_matches && indirect_matches[2] == symbol_name && (indirect_matches[1] || indirect_matches[3])) {
+            const star = indirect_matches[1] == '*' ? '*' : '';
+            const plus = indirect_matches[3] == '+' ? '+' : '';
+            return star + symbol_value + plus;
+        }
 
-        console.debug(this.#symbol_table);
+        // Hard mode: indexed
+        const indexed_matches = param_value.match(indexed_regex);
+        if (indexed_matches) {
+            let addr = indexed_matches[1];
+            let index = indexed_matches[2];
+            if (addr == symbol_name) {
+                addr = symbol_value;
+            }
+            if (index == symbol_name) {
+                index = symbol_value;
+            }
+            return `@${addr}(${index})`;
+        }
+
+        // Perhaps we're in symbolic mode?  If the @ was excluded,
+        // then the initial direct match should have worked.
+        if (param_value.startsWith('@')) {
+            return '@' + symbol_value;
+        }
+
+        // Fallthrough!
+        return param_value;
     }
 
     #applySymbolTable() {
-        const indirect_regex = /^(\*)?(.+)(\+)?$/;
-        const indexed_regex = /^@?(.+)\((.+)\)$/;
+        let word_count = 0;
+        // Number of times we've iterated over parsed_lines: 4
         for (let line of this.#parsed_lines) {
             if (line.line_type != 'instruction') {
                 continue;
             }
+            // Clean up the mess from earlier processing.
+            line.instruction_params = line.instruction_argument.split(',');
+
+            // Yay yet another disposable Instruction!
+            const inst = Instruction.newFromString(line.instruction);
+            const format = inst.opcode_info.format;
             for (let i in line.instruction_params) {
                 for (let sym_name in this.#symbol_table) {
                     if (!this.#symbol_table[sym_name].value_assigned) {
                         continue;
                     }
-                    const symbol_value = this.#symbol_table[sym_name].symbol_value.toString()
-                    // Is the param exactly one of our symbols?
-                    if (line.instruction_params[i] == sym_name) {
-                        line.instruction_params[i] = symbol_value;
-                        //console.log('=> exact match', line.instruction_params[i], line);
-                        continue;
+                    let symbol_value = this.#symbol_table[sym_name].symbol_value;
+                    // Jump instructions get the offset adjust thing.  This SHOULD
+                    // be as simple as subtracting the current word count from
+                    // the word count (== value) of the location symbol and then
+                    // doubling the value because that's how jumps work?
+                    if (this.#symbol_table[sym_name].symbol_type == 'location' && (format == 2 || format == 17)) {
+                        symbol_value = (symbol_value - word_count) * 2;
+                        //console.debug(line, this.#symbol_table[sym_name].symbol_value, symbol_value);
                     }
-                    // Is the param inside indirect or indirect autoinc mode syntax?
-                    const indirect_matches = line.instruction_params[i].match(indirect_regex);
-                    if (indirect_matches && indirect_matches[2] == sym_name && (indirect_matches[1] || indirect_matches[3])) {
-                        const star = indirect_matches[1] == '*' ? '*' : '';
-                        const plus = indirect_matches[3] == '+' ? '+' : '';
-                        line.instruction_params[i] = star + symbol_value + plus;
-                        //console.log('=> indirect/autoinc match', line.instruction_params[i], line);
-                        continue;
-                    }
-
-                    // What about indexed mode?
-                    const indexed_matches = line.instruction_params[i].match(indexed_regex);
-                    if (indexed_matches) {
-                        let addr = indexed_matches[1];
-                        let index = indexed_matches[2];
-                        if (addr == sym_name) {
-                            addr = symbol_value;
-                        }
-                        if (index == sym_name) {
-                            index = symbol_value;
-                        }
-                        line.instruction_params[i] = `@${addr}(${index})`;
-                        //console.log('=> indexed match', line.instruction_params[i], line);
-                        continue;
-                    }
-
-                    // Perhaps we're in symbolic mode?  If the @ was excluded,
-                    // then the initial direct match should have worked.
-                    if (line.instruction_params[i].startsWith('@')) {
-                        line.instruction_params[i] = '@' + symbol_value;
-                        //console.log('=> symbolic match', line.instruction_params[i], line);
-                    }
+                    line.instruction_params[i] = this.#symbolReplaceHelper(line.instruction_params[i], sym_name, symbol_value.toString());
                 }
+                inst.setParam(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
             }
+            const ei = InstructionDecode.getEncodedInstruction(inst);
+            word_count += ei.words.length;
         }
     }
 
@@ -638,7 +664,8 @@ function number_format_helper(string) {
         is_decimal = true;
     }
     if (!is_hex && !is_binary && !is_decimal) {
-        throw new Error('unparsable value');
+        console.debug(string);
+        throw new Error('number_format_helper: unparsable value');
     }
     const num = parseInt(string, is_decimal ? 10 : (is_hex ? 16 : 2));
     return num;

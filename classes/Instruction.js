@@ -134,9 +134,16 @@ export class Instruction {
             console.error('setParam: Instruction is Finalized.  The call is bugged!');
             return false;
         }
+
+        if (param_name == '_immediate_word_') {
+            this.setImmediateValue(parseInt(param_value.toString()));
+            this.#refreshImmediateOperandState();
+            return;
+        }
+
         const opcode_params = this.opcode_info.format_info.opcode_params;
         if (!Object.hasOwn(opcode_params, param_name)) {
-            throw new Error(`getParam with invalid param: "${param_name}" probable bug`);
+            throw new Error(`setParam with invalid param: "${param_name}" probable bug`);
         }
 
         const opcode = this.getFullOpcode();
