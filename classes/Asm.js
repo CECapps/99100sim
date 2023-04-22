@@ -36,6 +36,7 @@ class Asm {
     reset() {
         this.#lines = [];
         this.#parsed_lines = [];
+        this.#symbol_table = {};
     }
 
     process() {
@@ -45,20 +46,14 @@ class Asm {
             this.#parsed_lines[i] = this.#parseLine(line, i++);
         }
 
-        this.#replaceSymbols();
-        //this.#buildSymbolTable();
+        this.#buildSymbolTable();
         this.#applySymbolTable();
 
-        // With parsed_lines now populated, we can proceed
-        /** @TODO PI support, label support */
+        // Our lines have been processed and symbols replaced.  We can finally
+        // build our bytecode.
         for (let line of this.#parsed_lines) {
             if (line.line_type == 'instruction') {
-                const inst = this.#getInstructionFromLine(line);
-                if (inst === null) {
-                    throw new Error('No.  Just no.');
-                }
-                const dec = InstructionDecode.getEncodedInstruction(inst);
-                line.encoded_instruction = dec;
+                line.encoded_instruction = InstructionDecode.getEncodedInstruction(this.#getInstructionFromLine(line));
             }
         }
         return this.#parsed_lines;
@@ -258,7 +253,7 @@ class Asm {
         return result;
     }
 
-    #replaceSymbols() {
+    #buildSymbolTable() {
         const pi_location_instructions = [ 'BYTE', 'DATA', 'TEXT' ];
         const pi_assign_instructions = [ 'EQU' ];
 
@@ -284,8 +279,7 @@ class Asm {
         for (let line of this.#parsed_lines) {
             if (line.line_type == 'instruction') {
                 if (!OpInfo.opNameIsValid(line.instruction)) {
-                    // Hmm this should be an error state
-                    continue;
+                    throw new Error(`Invalid instruction "${line.instruction}" on line ${line.line_number}`);
                 }
                 estimated_word_count += OpInfo.getFromOpName(line.instruction).minimum_instruction_words;
                 continue;
@@ -335,8 +329,7 @@ class Asm {
             if (line.line_type != 'instruction') {
                 continue;
             }
-            const instr = Instruction.newFromString(line.instruction);
-            const param_order = instr.opcode_info.format_info.asm_param_order;
+            const format = OpInfo.getFromOpName(line.instruction).format;
 
             for (let i in line.instruction_params) {
                 for (let symbol_name in assign_instructions) {
@@ -345,19 +338,18 @@ class Asm {
                 for (let symbol_name in location_instructions) {
                     let nv = location_instructions[symbol_name].symbol_value;
                     // Jump instructions get the offset adjust thing.
-                    if (instr.opcode_info.format == 2 || instr.opcode_info.format == 17) {
-                        nv -= estimated_word_count;
+                    if (format == 2 || format == 17) {
+                        // We count words but jumps take bytes
+                        nv = (nv - estimated_word_count) * 2;
                     }
                     line.instruction_params[i] = this.#symbolReplaceHelper(line.instruction_params[i], symbol_name, nv.toString());
                 }
             }
-
-            for (let i in line.instruction_params) {
-                instr.setParam(param_order[i], line.instruction_params[i]);
-            }
-
-            const ei = InstructionDecode.getEncodedInstruction(instr);
+            const ei = InstructionDecode.getEncodedInstruction(this.#getInstructionFromLine(line));
             estimated_word_count += ei.words.length;
+
+            // All of this was a draft, so let's reset the params to process later.
+            line.instruction_params = line.instruction_argument.split(',');
         }
 
         // We should now have correct location instruction values.  We can finally
@@ -382,6 +374,12 @@ class Asm {
      * @param {string} symbol_value
      **/
     #symbolReplaceHelper(param_value, symbol_name, symbol_value) {
+        // We can assume that symbols will never look like numbers, so if this
+        // is a number, don't even try any of the replacement techniques.
+        if (looks_like_number(param_value)) {
+            return param_value;
+        }
+
         const indirect_regex = /^(\*)?(.+)(\+)?$/;
         const indexed_regex = /^@?(.+)\((.+)\)$/;
 
@@ -412,8 +410,8 @@ class Asm {
             return `@${addr}(${index})`;
         }
 
-        // Perhaps we're in symbolic mode?  If the @ was excluded,
-        // then the initial direct match should have worked.
+        // Perhaps we're in symbolic mode?  If the @ was excluded and there's no
+        // following parens, the initial param==symbol check should catch it.
         if (param_value.startsWith('@')) {
             return '@' + symbol_value;
         }
@@ -464,9 +462,8 @@ class Asm {
 
         if (!inst.isLegal()) {
             console.error('illegal op??', line, inst);
-            return null;
+            throw new Error('Illegal instruction (1) while parsing line ' + line.line_number);
         }
-        const param_list = inst.getParamList();
         // These are the ones we see in the assembly
         const asm_param_list = inst.opcode_info.format_info.asm_param_order;
         // These are the ones we put into the opcode
@@ -512,7 +509,7 @@ class Asm {
 
         if (!inst.isLegal()) {
             console.error('illegal op (2)', line, inst);
-            return null;
+            throw new Error('Illegal instruction (2) while parsing line ' + line.line_number);
         }
         return inst;
     }
@@ -638,6 +635,12 @@ function number_format_helper(string) {
     let is_hex = false;
     let is_binary = false;
     let is_decimal = false;
+    let is_negative = false;
+
+    if (string.startsWith('-')) {
+        is_negative = true;
+        string = string.substring(1);
+    }
 
     if (string.startsWith('R')) {
         is_decimal = true;
@@ -656,18 +659,25 @@ function number_format_helper(string) {
         is_hex = true;
         string = string.substring(2);
     }
+
     if (string.startsWith('0b')) {
         is_binary = true;
         string = string.substring(2);
     }
-    if (!is_hex && !is_binary && string.match(/^-?\d+$/)) {
+
+    if (!is_hex && !is_binary && string.match(/^\d+$/)) {
         is_decimal = true;
     }
+
     if (!is_hex && !is_binary && !is_decimal) {
         console.debug(string);
         throw new Error('number_format_helper: unparsable value');
     }
-    const num = parseInt(string, is_decimal ? 10 : (is_hex ? 16 : 2));
+
+    let num = parseInt(string, is_decimal ? 10 : (is_hex ? 16 : (is_binary ? 2 : 10)));
+    if (is_negative) {
+        num *= -1;
+    }
     return num;
 }
 
