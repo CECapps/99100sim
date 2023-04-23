@@ -10,13 +10,46 @@ export { Asm, AsmParseLineResult };
 class Asm {
 
     static #pi_list = [
-        'IDT','BYTE','CKPT','DATA','EQU','TEXT','WPNT','AORG','BES','BSS',
-        'DEND','DORG','DSEG','EVEN','PEND','PSEG','DFOP','DXOP','END','NOP',
-        'RT','XVEC'
+        'AORG', // Absolute Origin: Set Location Counter to value of argument
+        'DORG', // Dummy Origin: Parse this section and add symbols but do not emit bytecode.
+        'BSS',  // Block Starting with Symbol: Add argument to Location Counter.  Label is assigned previous (pre-add) Location Counter value.
+        'BES',  // Block Ending with Symbol: Add argument to Location Counter.  Label is assigned new (post-add) Location Counter value.
+        'EVEN', // Word Boundary:  Sets Location Counter to the following word boundary if odd.
+        'END',  // Program End: Declare the end of the program and define the label in the argument as the entry point
+
+        'IDT',  // Program Identifier: Assign printable program name, not placed in program.
+
+        'BYTE', 'DATA', 'TEXT', // Initialize byte(s)/word(s)/ASCII text string
+        'EQU',  // Define Assembly-time Constant: Assign the argument to the label.  May reference previously defined symbols.
+
+        'CKPT', // Checkpoint Register: Define the default register to use for Format 12 checkpoint operations
+        'DFOP', // Define Operation: Define an instruction alias
+        'DXOP', // Define XOP: Define an instruction alias that points to a given XOP call
+
+        'NOP',  // Becomes "JMP $+2"
+        'RT'    // Becomes "B *R11"
     ];
+    // These PIs can define symbols through the location counter and change the location counter when doing so.
+    #pi_location_change_list = [ 'AORG', 'DORG', 'BSS', 'BES', 'EVEN', 'END' ];
+    // These PIs can define symbols that reference the current value of the location counter
+    #pi_location_list = [ 'BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP' ];
+    // These PIs define symbols through their operands.
+    #pi_assign_list = [ 'EQU', 'DFOP', 'DXOP' ];
+    // These PIs declare data that will be included in the bytecode output.
+    #pi_emitters_list = [ 'BYTE', 'DATA', 'TEXT', 'BSS', 'BES' ];
+    // These PIs manipulate the contents of other lines.
+    #pi_replace_list = [ 'CKPT', 'DFOP', 'DXOP' ];
+    // These PIs are instantly replaced with another instruction.
+    #pi_macro_list = [ 'NOP', 'RT' ];
 
     /** @type string[] */
     #lines = [];
+
+    /** @type {Object.<string,string>} */
+    #dfops = {};
+    /** @type {Object.<string,number>} */
+    #dxops = {};
+    #current_ckpt_default = 10;
 
     /**
      * @type {AsmParseLineResult[]}
@@ -43,11 +76,17 @@ class Asm {
         this.#parsed_lines = [];
         let i = 0;
         for (let line of this.#lines) {
-            this.#parsed_lines[i] = this.#parseLine(line, i++);
+            const line_processed = this.#parseLine(line, i);
+            this.#preprocessLineSymbols(line_processed);
+            const line_pid = this.#preprocessLinePIs(line_processed);
+            this.#parsed_lines[i++] = line_pid;
         }
+        console.debug(this.#symbol_table);
 
         this.#buildSymbolTable();
         this.#applySymbolTable();
+
+        console.debug(this.#symbol_table);
 
         // Our lines have been processed and symbols replaced.  We can finally
         // build our bytecode.
@@ -119,11 +158,11 @@ class Asm {
                 }
 
                 if (param_name == 'S' && Object.hasOwn(instr.opcode_info.format_info.opcode_params, 'Ts')) {
-                    f_params.push(this.#addressingModeHelper(line, instr.getParam('Ts'), instr.getParam('S')));
+                    f_params.push(this.#registerAddressingModeToStringHelper(line, instr.getParam('Ts'), instr.getParam('S')));
                     continue;
                 }
                 if (param_name == 'D' && Object.hasOwn(instr.opcode_info.format_info.opcode_params, 'Td')) {
-                    f_params.push(this.#addressingModeHelper(line, instr.getParam('Td'), instr.getParam('D')));
+                    f_params.push(this.#registerAddressingModeToStringHelper(line, instr.getParam('Td'), instr.getParam('D')));
                     continue;
                 }
                 if (param_name == 'disp' && param_value > 127) {
@@ -151,11 +190,12 @@ class Asm {
      * else becomes a label/identifier, and then the rest of the line is treated
      * as an instruction.
      *
-     * Instructions come in the form of a 1-4 character long capitalized string.
+     * Instructions come in the form of a 1-6 character long capitalized string.
      * Most instructions have operands that immediately follow after whitespace.
      * Parameters are divided by commas.  No whitespace is permitted within.
-     * Any whitespace signals the end of the operand.  Anything following is
-     * treated as comment.
+     * Any whitespace signals the end of the operand.  Anything following the
+     * operands is treated as comment.  In general, instructions that take
+     * optional operands only permit comments if an operand is given.
      *
      * Some instructions are processing instructions, like DATA, EQU, and TEXT.
      * Instructions and parameters are processed to replace labels with their
@@ -211,8 +251,9 @@ class Asm {
 
         line = line.trim();
 
-        // All instructions are one to four all-capital letters.
-        const instruction_regex = /^([A-Z]{1,4})(\s|$)/;
+        // All instructions are one to four all-capital letters, but there are
+        // a few PIs that extend up to six letters.
+        const instruction_regex = /^([A-Z]{1,6})(\s|$)/;
         const instruction_matches = line.match(instruction_regex);
         if (result.line_type == 'pending' && instruction_matches) {
             result.instruction = instruction_matches[1];
@@ -253,10 +294,176 @@ class Asm {
         return result;
     }
 
-    #buildSymbolTable() {
-        const pi_location_instructions = [ 'BYTE', 'DATA', 'TEXT' ];
-        const pi_assign_instructions = [ 'EQU' ];
+    /**
+     * @param {AsmParseLineResult} line
+     **/
+    #preprocessLineSymbols(line) {
+        if (line.line_type != 'pi' && line.line_type != 'label') {
+            return;
+        }
+        const sym = new AsmSymbol;
+        sym.symbol_params = line.instruction_params;
+        sym.line_number = line.line_number;
 
+        // Pure labels become location symbols that we have to resolve later.
+        if (line.line_type == 'label') {
+            sym.symbol_name = line.label;
+            sym.symbol_type = 'location';
+            sym.symbol_value = 0;
+            sym.value_assigned = false;
+
+            if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
+                throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
+            }
+            this.#symbol_table[sym.symbol_name] = sym;
+            return;
+        }
+
+        // EQU creates a symbol and assigns it the value of the single operand
+        if (line.instruction == 'EQU') {
+            sym.symbol_type = 'assign';
+            sym.symbol_name = line.label;
+            sym.value_assigned = false;
+
+            if (looks_like_number(line.instruction_params[0])) {
+                sym.symbol_value = number_format_helper(line.instruction_params[0]);
+            }
+
+            if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
+                throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
+            }
+            this.#symbol_table[sym.symbol_name] = sym;
+            return;
+        }
+
+        // DFOP creates a string value symbol that is valid only in the context
+        // of replacing an instruction.  This makes things ugly because the rest
+        // of the code assumes that the symbol value is numeric.  Meh.
+        if (line.instruction == 'DFOP') {
+            sym.symbol_type = 'assign';
+            sym.symbol_name = line.instruction_params[0];
+            sym.symbol_value = 0;
+            sym.value_assigned = false; // A lie to be corrected later.
+
+            if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
+                throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
+            }
+            this.#symbol_table[sym.symbol_name] = sym;
+
+            this.#dfops[sym.symbol_name] = line.instruction_params[1];
+            return;
+        }
+
+        // Like DFOP, DXOP works only in the context of replacing an instruction.
+        // Unlike DFOP, DXOP gets the luxury of actually assigning a number.
+        if (line.instruction == 'DXOP') {
+            sym.symbol_type = 'assign';
+            sym.symbol_name = line.instruction_params[0];
+            sym.value_assigned = false;
+
+            if (looks_like_number(line.instruction_params[0])) {
+                sym.symbol_value = number_format_helper(line.instruction_params[1]);
+                sym.value_assigned = true;
+            }
+
+            if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
+                throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
+            }
+            this.#symbol_table[sym.symbol_name] = sym;
+
+            this.#dxops[sym.symbol_name] = sym.symbol_value;
+            return;
+        }
+
+        if (!this.#pi_location_change_list.includes(line.instruction) && !this.#pi_location_list.includes(line.instruction)) {
+            return;
+        }
+        // If we got here, our PI creates a symbol using the label, assigning the
+        // value of the location counter.  We're too early in the process to
+        // actually have a location counter, so these don't get assigned a value.
+        if (!line.label) {
+            return;
+        }
+        sym.symbol_name = line.label;
+        sym.symbol_type = 'location';
+        sym.symbol_value = 0;
+        sym.value_assigned = false;
+
+        if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
+            throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
+        }
+        this.#symbol_table[sym.symbol_name] = sym;
+    }
+
+    /**
+     * @param {AsmParseLineResult} line
+     * @returns {AsmParseLineResult}
+     **/
+    #preprocessLinePIs(line) {
+        if (line.line_type != 'instruction' && line.line_type != 'pi') {
+            return line;
+        }
+
+        // DFOPs get replaced with their real operation
+        if (Object.hasOwn(this.#dfops, line.instruction)) {
+            line.line_type = 'instruction';
+            line.instruction = this.#dfops[line.instruction];
+        }
+
+        // RT becomes B *R11
+        if (line.instruction == 'RT') {
+            line.line_type = 'instruction';
+            line.instruction = 'B';
+            line.instruction_argument = '*R11';
+            line.instruction_params = [ '*R11' ];
+            // No further processing is possible or needed.
+            return line;
+        }
+
+        // NOP becomes JMP 2
+        if (line.instruction == 'NOP') {
+            line.line_type = 'instruction';
+            line.instruction = 'JMP';
+            line.instruction_argument = '2';
+            line.instruction_params = [ '2' ];
+            // No further processing is possible or needed.
+            return line;
+        }
+
+        // CKPT defines the current, running checkpoint value for Format 12,
+        // which we process below.
+        if (line.instruction == 'CKPT') {
+            this.#current_ckpt_default = number_format_helper(line.instruction_params[0]);
+            // No further processing is possible or needed.
+            return line;
+        }
+
+        // DXOPs get replaced with the appropriate XOP call by prepending the
+        // XOP number to the params.  The remaining param is Ts+S.
+        if (Object.hasOwn(this.#dxops, line.instruction)) {
+            line.line_type = 'instruction';
+            line.instruction = 'XOP';
+            line.instruction_params.unshift(this.#dxops[line.instruction].toString());
+            line.instruction_argument = line.instruction_params.join(',');
+            // No further processing is possible or needed.
+            return line;
+        }
+
+        // Format 12 instructions are interruptable and store their state in a
+        // specified register called the checkpoint register.  A default can be
+        // be specified via the CKPT PI (done above).  Sub it in if needed.
+        if (line.line_type == 'instruction' && OpInfo.opNameIsValid(line.instruction)) {
+            const opcode_info = OpInfo.getFromOpName(line.instruction);
+            if (opcode_info.format == 12 && !looks_like_register(line.instruction_params[2])) {
+                line.instruction_params[2] = 'R' + this.#current_ckpt_default.toString();
+                line.instruction_argument = line.instruction_params.join(',');
+            }
+        }
+
+        return line;
+    }
+
+    #buildSymbolTable() {
         /** @type {Object.<string,AsmSymbol>} */
         const assign_instructions = {};
         /** @type {Object.<string,AsmSymbol>} */
@@ -289,8 +496,8 @@ class Asm {
                 continue;
             }
 
-            const is_assign = line.line_type == 'pi' && line.instruction && pi_assign_instructions.includes(line.instruction);
-            const is_location = line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && pi_location_instructions.includes(line.instruction));
+            const is_assign = line.line_type == 'pi' && line.instruction && this.#pi_assign_list.includes(line.instruction);
+            const is_location = line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && this.#pi_location_list.includes(line.instruction));
 
             if (is_assign) {
                 const sym = new AsmSymbol;
@@ -322,7 +529,7 @@ class Asm {
         // Number of times we've iterated over parsed_lines: 3
         for (let line of this.#parsed_lines) {
             // The word values in this iteration should be more correct.
-            if (line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && pi_location_instructions.includes(line.instruction))) {
+            if (line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && this.#pi_location_list.includes(line.instruction))) {
                 location_instructions[line.label].symbol_value = estimated_word_count;
                 location_instructions[line.label].value_assigned = true;
             }
@@ -479,7 +686,7 @@ class Asm {
             //console.debug(param_name, this_param, line);
             if (param_name == 'S' && opcode_param_list.includes('Ts')) {
                 //console.debug(' => S+Ts => ', split_params[offset]);
-                const res = this.#registerStringToAddressingModeData(this_param);
+                const res = this.#registerStringToAddressingModeHelper(this_param);
                 //console.debug(split_params[offset - 1], ' = Ts,S = ', res);
                 inst.setParam('Ts', res[0]);
                 inst.setParam('S', res[1]);
@@ -490,7 +697,7 @@ class Asm {
             }
             if (param_name == 'D' && opcode_param_list.includes('Td')) {
                 //console.debug(' => D+Td ', split_params[offset]);
-                const res = this.#registerStringToAddressingModeData(this_param);
+                const res = this.#registerStringToAddressingModeHelper(this_param);
                 //console.debug(split_params[offset - 1], ' = Td,D,immed = ', res);
                 inst.setParam('Td', res[0]);
                 inst.setParam('D', res[1]);
@@ -519,7 +726,7 @@ class Asm {
      * @param {number} type
      * @param {number} value
      **/
-    #addressingModeHelper(line, type, value) {
+    #registerAddressingModeToStringHelper(line, type, value) {
         let string = '';
         if (type == 0) {
             // S is the number of the workspace register containing the value
@@ -547,7 +754,7 @@ class Asm {
      * @param {string} register_string
      * @returns {number[]}
      **/
-    #registerStringToAddressingModeData(register_string) {
+    #registerStringToAddressingModeHelper(register_string) {
         let mode = 0;
         let register = 0;
         let immediate_word = 0;

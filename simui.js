@@ -147,9 +147,8 @@ function assemble_codebox() {
     }
     const asm = new Asm();
     asm.setLines(ta.value);
-    console.debug(asm.process());
+    asm.process();
     const results = asm.toWords();
-    console.debug('asm.towords:', results);
     gebid_stfu('assembled').innerText = asm.toAsm().join("\n");
 
     if (results && results instanceof Array) {
