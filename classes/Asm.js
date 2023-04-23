@@ -76,17 +76,39 @@ class Asm {
         this.#parsed_lines = [];
         let i = 0;
         for (let line of this.#lines) {
+            // Break each line into individual components.
             const line_processed = this.#parseLine(line, i);
-            this.#preprocessLineSymbols(line_processed);
-            const line_pid = this.#preprocessLinePIs(line_processed);
+            // Extract symbols from the line
+            this.#preProcessLineSymbols(line_processed);
+            // PIs that change the line itself need to be run now
+            const line_pid = this.#preProcessLinePIs(line_processed);
             this.#parsed_lines[i++] = line_pid;
         }
-        console.debug(this.#symbol_table);
+
+        // Estimate the location counter values and give location symbols values
+        // that are good enough estimates to continue.
+        this.#preProcessLocationCounterSymbols();
+        // Symbols can be self-referential, so resolve those references.
+        this.#preProcessUndefinedSymbols();
+        // All symbols should be defined by this point, so go ahead and sub in
+        // their values inside each param.
+        this.#preProcessParamSymbols();
+
+        // Subbing in symbol values can change the word count for a whole bunch
+        // of different instructions.  The values assigned should be good enough
+        // to create an accurate location counter and thus more accurate locations.
+        this.#processLocationCounterSymbols();
+        // With location symbols resolved, it's time to go back through all
+        // of the symbols and rebuild self-referential references.
+        this.#processUndefinedSymbols();
+        // With all symbols resolved we can perform the final param substitution.
+        this.#processParamSymbols();
+
+        // With all symbols substituted, we can now build our bytecode.
+        this.#processLinesToBytecode();
 
         this.#buildSymbolTable();
         this.#applySymbolTable();
-
-        console.debug(this.#symbol_table);
 
         // Our lines have been processed and symbols replaced.  We can finally
         // build our bytecode.
@@ -297,7 +319,7 @@ class Asm {
     /**
      * @param {AsmParseLineResult} line
      **/
-    #preprocessLineSymbols(line) {
+    #preProcessLineSymbols(line) {
         if (line.line_type != 'pi' && line.line_type != 'label') {
             return;
         }
@@ -399,7 +421,7 @@ class Asm {
      * @param {AsmParseLineResult} line
      * @returns {AsmParseLineResult}
      **/
-    #preprocessLinePIs(line) {
+    #preProcessLinePIs(line) {
         if (line.line_type != 'instruction' && line.line_type != 'pi') {
             return line;
         }
@@ -462,6 +484,14 @@ class Asm {
 
         return line;
     }
+
+    #preProcessLocationCounterSymbols() {}
+    #preProcessUndefinedSymbols() {}
+    #preProcessParamSymbols() {}
+    #processLocationCounterSymbols() {}
+    #processUndefinedSymbols() {}
+    #processParamSymbols() {}
+    #processLinesToBytecode() {}
 
     #buildSymbolTable() {
         /** @type {Object.<string,AsmSymbol>} */
