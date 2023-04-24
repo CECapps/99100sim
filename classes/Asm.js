@@ -17,6 +17,13 @@ class Asm {
         'EVEN', // Word Boundary:  Sets Location Counter to the following word boundary if odd.
         'END',  // Program End: Declare the end of the program and define the label in the argument as the entry point
 
+        'PSEG', // Program Segment: A declared area of stuff considered the program.  Relocatable, but that's not implemented.
+        'PEND', // End Program Segment
+        'DSEG', // Data Segment: A declared area of stuff that contains only data, no code.  Relocatable, but that's not implemented.
+        'DEND', // End Data Segment
+        'CSEG', // Common Segment: A declared area of stuff that contains data to be shared between multiple programs.  Relocatable etc
+        'CEND', // Common Segment End
+
         'IDT',  // Program Identifier: Assign printable program name, not placed in program.
 
         'BYTE', 'DATA', 'TEXT', // Initialize byte(s)/word(s)/ASCII text string
@@ -31,8 +38,10 @@ class Asm {
     ];
     // These PIs can define symbols through the location counter and change the location counter when doing so.
     #pi_location_change_list = [ 'AORG', 'DORG', 'BSS', 'BES', 'EVEN', 'END' ];
+    // These PIs declare segments of code or data
+    #pi_segment_list = [ 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND' ];
     // These PIs can define symbols that reference the current value of the location counter
-    #pi_location_list = [ 'BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP' ];
+    #pi_location_list = [ 'BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND' ];
     // These PIs define symbols through their operands.
     #pi_assign_list = [ 'EQU', 'DFOP', 'DXOP' ];
     // These PIs declare data that will be included in the bytecode output.
@@ -90,8 +99,12 @@ class Asm {
         this.#preProcessLocationCounterSymbols();
         // Symbols can be self-referential, so resolve those references.
         this.#preProcessUndefinedSymbols();
+        // We're about to do a parameter symbol replacement.  To make things
+        // a bit easier, scan through all of the params and flag those that
+        // contain symbols or otherwise aren't just numbers or registers.
+        this.#scanParams();
         // All symbols should be defined by this point, so go ahead and sub in
-        // their values inside each param.
+        // their values inside each candidate param.
         this.#preProcessParamSymbols();
 
         // Subbing in symbol values can change the word count for a whole bunch
@@ -162,7 +175,7 @@ class Asm {
 
             //console.debug(line);
             if (line.encoded_instruction === null) {
-                throw new Error('Can not reconstuct asm line without an EncodedInstruction');
+                throw new Error('Can not reconstruct asm line without an EncodedInstruction');
             }
             const instr = InstructionDecode.getInstructionFromEncoded(line.encoded_instruction);
 
@@ -231,7 +244,7 @@ class Asm {
         const result = new AsmParseLineResult();
 
         result.line = line;
-        result.line_number = line_number
+        result.line_number = line_number;
         result.line_type = 'pending';
         result.label = '';
         result.instruction = '';
@@ -487,6 +500,7 @@ class Asm {
 
     #preProcessLocationCounterSymbols() {}
     #preProcessUndefinedSymbols() {}
+    #scanParams() {}
     #preProcessParamSymbols() {}
     #processLocationCounterSymbols() {}
     #processUndefinedSymbols() {}
@@ -794,7 +808,7 @@ class Asm {
             register_string = register_string.substring(1);
             //console.debug('* => mode 1, regstring=', register_string);
             if (register_string.endsWith('+')) {
-                mode = 3
+                mode = 3;
                 register_string = register_string.substring(0, register_string.length - 1);
                 //console.debug('+ => mode 3, regstring=', register_string);
             }
@@ -814,7 +828,7 @@ class Asm {
                 }
             }
             console.debug('mode 2 regstring=', register_string);
-            const value_regex = /^\@(0x|0b|>)?([0-9A-F]+)/;
+            const value_regex = /^@(0x|0b|>)?([0-9A-F]+)/;
             const value_test = register_string.match(value_regex);
             if (value_test) {
                 immediate_word = number_format_helper(value_test[2]);
@@ -935,5 +949,5 @@ function looks_like_register(string) {
  * @returns {boolean}
  **/
 function looks_like_number(string) {
-    return !!string.match(/^\-?(WR|R|>|0x|0b)?[a-fA-F0-9]+$/);
+    return !!string.match(/^-?(WR|R|>|0x|0b)?[a-fA-F0-9]+$/);
 }
