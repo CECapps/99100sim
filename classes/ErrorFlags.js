@@ -87,7 +87,7 @@ export class ErrorFlags {
         if (flag_id == 13) {
             return true;
         }
-        if (flag_id = 14) {
+        if (flag_id == 14) {
             return true;
         }
         return false;
@@ -129,4 +129,4 @@ export class ErrorFlags {
         this.#flags[flag_id] = false;
     }
 
-};
+}

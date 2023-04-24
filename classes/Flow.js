@@ -254,7 +254,7 @@ export class Flow {
         return false;
     }
 
-// #region State A+A2
+    // #region State A+A2
 
     /**
      * State A: Begin Execution
@@ -295,10 +295,11 @@ export class Flow {
 
         // XOP, BLWP, and X are allowed to ignore the NMI until completion.
         if (!this.simstate.interrupt_list.hasRaisedNMI()) {
-            const exclude = (this.#checkInstructionIs('XOP')
-                             || this.#checkInstructionIs('BLWP')
-                             || this.#checkInstructionIs('X')
-                            );
+            const exclude = (
+                this.#checkInstructionIs('XOP')
+                || this.#checkInstructionIs('BLWP')
+                || this.#checkInstructionIs('X')
+            );
             if (exclude) {
                 this.enterState('B');
             }
@@ -371,9 +372,9 @@ export class Flow {
      **/
     #_A_NYI_doLockInActiveInterruptRequest() {}
 
-// #endregion State A+A2
+    // #endregion State A+A2
 
-// #region State B
+    // #region State B
 
     /**
      * State B: Complete Execution
@@ -420,9 +421,9 @@ export class Flow {
         return this.enterState('D');
     }
 
-// #endregion State B
+    // #endregion State B
 
-// #region State C+C2
+    // #region State C+C2
 
     /**
      * State C: No Interrupts?  Fetch next instruction.
@@ -486,9 +487,9 @@ export class Flow {
      **/
     #_C2_NYI_isMIDOrWasAppSignalHighDuringInstructionFetch() { return false; }
 
-// #endregion State C+C2
+    // #endregion State C+C2
 
-// #region State D
+    // #region State D
 
     /**
      * State D: Opcode Error Check, Part 1 (see C2)
@@ -503,7 +504,7 @@ export class Flow {
      */
     stateD() {
         const is_overflow = this.simstate.status_register.getBit(4);
-        const do_raise_af = this.simstate.status_register.getBit(10)
+        const do_raise_af = this.simstate.status_register.getBit(10);
         if (is_overflow && do_raise_af) {
             this.simstate.error_flags.setFlag(4); // "EIST4"
             /** @TODO is this where the interrupt is actually raised? */
@@ -522,9 +523,9 @@ export class Flow {
     }
 
 
-// #endregion State D
+    // #endregion State D
 
-// #region State E
+    // #region State E
 
     /**
      * State E.
@@ -606,9 +607,9 @@ export class Flow {
      **/
     #_E_NYI_isLevel0InterruptExternal() { return false; }
 
-// #endregion State E
+    // #endregion State E
 
-// #region State F+F2
+    // #region State F+F2
 
     /**
      * State F: Prepare to hand off this instruction to the Attached Processor
@@ -657,7 +658,6 @@ export class Flow {
      **/
     stateF2() {
         throw new Error('Entered unreachable state F2.  nice bug!');
-        return this.enterState('D');
         /*
         if (!this.#_F2_NYI_isAppOrHoldActive()) {
             this.#_F2_NYI_doSwitchBackFromInterrupt2WP();
@@ -680,9 +680,9 @@ export class Flow {
     #_F2_NYI_doFetchNextInstructionAndAdvancePC() { return false; }
     */
 
-// #endregion State F+F2
+    // #endregion State F+F2
 
-// #region State G
+    // #region State G
 
     /**
      * State G.
@@ -750,18 +750,18 @@ export class Flow {
     **/
     #_G_NYI_doExitMacrostore() { return false; }
 
-   /*
-   // These are unreachable.
-   #_G_NYI_doEnterMacrostore() { return false; }
-   #_G_NYI_isOpcodeRecognizedByMacrostore() { return false; }
-   #_G_NYI_doReturnFromMacrostoreUsingRTWP0x0382() {}
-   #_G_NYI_doEmulateOpcode() { return false; }
-   #_G_NYI_doesEmulatedOpcodeCheckForInterrupts() { return false; }
-   #_G_NYI_doReturnFromMacrostoreUsingRTWP0x0380() { return false; }
-   #_G_NYI_doReturnFromMacrostoreUsingRTWP0x0384() { return false; }
-   */
+    /*
+    // These are unreachable.
+    #_G_NYI_doEnterMacrostore() { return false; }
+    #_G_NYI_isOpcodeRecognizedByMacrostore() { return false; }
+    #_G_NYI_doReturnFromMacrostoreUsingRTWP0x0382() {}
+    #_G_NYI_doEmulateOpcode() { return false; }
+    #_G_NYI_doesEmulatedOpcodeCheckForInterrupts() { return false; }
+    #_G_NYI_doReturnFromMacrostoreUsingRTWP0x0380() { return false; }
+    #_G_NYI_doReturnFromMacrostoreUsingRTWP0x0384() { return false; }
+    */
 
-// #endregion State G
+    // #endregion State G
 
 
     /**

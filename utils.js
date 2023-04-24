@@ -157,18 +157,18 @@ function number_to_word_list(value) {
     const max_word_value = (1 << word_size) - 1;
 
     if (typeof value === 'number') {
-      if (value < 0 || value > Number.MAX_SAFE_INTEGER) {
-        throw new Error('Value out of range for conversion to words');
-      }
-      value = BigInt(value);
+        if (value < 0 || value > Number.MAX_SAFE_INTEGER) {
+            throw new Error('Value out of range for conversion to words');
+        }
+        value = BigInt(value);
     }
 
     const words = [];
 
     while (value > 0) {
-      const word_value = Number(value & BigInt(max_word_value));
-      words.unshift(word_value);
-      value >>= BigInt(word_size);
+        const word_value = Number(value & BigInt(max_word_value));
+        words.unshift(word_value);
+        value >>= BigInt(word_size);
     }
 
     return words;

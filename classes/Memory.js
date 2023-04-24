@@ -59,9 +59,9 @@ export class Memory {
         if (value != clamped_value) {
             if (value !== undefined) {
                 console.error(`setWord out of range value 0x${value.toString(16).toUpperCase()}, value clamped to 0x${clamped_value.toString(16).toUpperCase()}`, value, clamped_value);
-                throw new Error(`setWord out of range value.  Uncaught overflow?`)
+                throw new Error(`setWord out of range value.  Uncaught overflow?`);
             } else {
-                throw new Error(`setWord got undefined value somehow.  There be bugs!`)
+                throw new Error(`setWord got undefined value somehow.  There be bugs!`);
             }
         }
 
@@ -69,13 +69,13 @@ export class Memory {
         if (offset != clamped_offset) {
             if (offset !== undefined) {
                 console.error(`setWord out of range OFFSET 0x${value.toString(16).toUpperCase()}, clamped to 0x${clamped_offset.toString(16).toUpperCase()}`, offset, clamped_offset);
-                throw new Error(`setWord out of range OFFSET.  Uncaught overflow?`)
+                throw new Error(`setWord out of range OFFSET.  Uncaught overflow?`);
             } else {
-                throw new Error(`setWord got undefined OFFSET somehow.  There be bugs!`)
+                throw new Error(`setWord got undefined OFFSET somehow.  There be bugs!`);
             }
         }
 
         this.#buffer.setUint16(clamped_offset, clamped_value, /* force BE */ false);
         //window.dispatchEvent(new CustomEvent('memory_updated'));
     }
-};
+}

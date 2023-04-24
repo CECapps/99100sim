@@ -200,7 +200,7 @@ export class Instruction {
         return this.#is_finalized;
     }
 
-//#region Second Word
+    //#region Second Word
     hasSecondOpcodeWord() {
         return this.opcode_info.has_second_opcode_word;
     }
@@ -213,9 +213,9 @@ export class Instruction {
     getSecondOpcodeWord() {
         return this.#second_word;
     }
-//#endregion
+    //#endregion
 
-//#region Immediate Value
+    //#region Immediate Value
     hasImmediateValue() {
         return this.opcode_info.has_immediate_operand;
     }
@@ -228,9 +228,9 @@ export class Instruction {
     getImmediateValue() {
         return this.#immediate_operand;
     }
-//#endregion
+    //#endregion
 
-//#region Immediate Source
+    //#region Immediate Source
     hasImmediateSourceValue() {
         return this.#has_immediate_source_operand;
     }
@@ -244,9 +244,9 @@ export class Instruction {
     getImmediateSourceValue() {
         return this.#immediate_source_operand;
     }
-//#endregion
+    //#endregion
 
-//#region Immediate Dest
+    //#region Immediate Dest
     hasImmediateDestValue() {
         return this.#has_immediate_dest_operand;
     }
@@ -260,7 +260,7 @@ export class Instruction {
     getImmediateDestValue() {
         return this.#immediate_dest_operand;
     }
-//#endregion
+    //#endregion
 
     /**
      * @TODO check for other legality things
@@ -269,7 +269,7 @@ export class Instruction {
     isLegal() {
         // an empty Op object will have opcode=0 and op=NOP
         const op_name_is_empty = this.opcode_info.name == '';
-        const op_name_is_NOP = this.opcode_info.name == 'NOP'
+        const op_name_is_NOP = this.opcode_info.name == 'NOP';
         const op_code_is_zero = this.opcode_info.opcode == 0;
         const is_illegal = op_name_is_empty || op_name_is_NOP || op_code_is_zero;
         return !is_illegal;

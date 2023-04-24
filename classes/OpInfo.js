@@ -1535,7 +1535,7 @@ export class OpInfo {
 
         'JH': class extends OpInfo {
             get op() {                          return "JH"; }
-            get shortdesc() {                   return "Jump if Logicical Greater"; }
+            get shortdesc() {                   return "Jump if Logical Greater"; }
             get opcode() {                      return 6912; } // 1B00
             get opcode_legal_max() {            return 7167; } // 1BFF
             get arg_start_bit() {               return 8; }

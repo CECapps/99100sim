@@ -2,7 +2,7 @@
 "use strict";
 
 // comment this to run, thanks type checker!
-//import { Simulation } from "./classes/Simulation";
+import { Simulation } from "./classes/Simulation";
 
 var viz_needs_redraw = false;
 function viz_redraw_init() {
@@ -110,13 +110,13 @@ function update_viz(vizel) {
  * @param {number} total_rows
  * @param {number} pixel_size
  **/
- function create_memory_visualizer(memory, start_word_count_inclusive, end_word_count_inclusive, words_per_row, total_rows, pixel_size) {
+function create_memory_visualizer(memory, start_word_count_inclusive, end_word_count_inclusive, words_per_row, total_rows, pixel_size) {
     const WORDS_PER_VISUAL_ROW = words_per_row;
     const TOTAL_VISUAL_ROWS = total_rows;
     const BLOCK_SIZE = pixel_size;
 
     const canvas = document.createElement('canvas');
-    canvas.width = WORDS_PER_VISUAL_ROW * BLOCK_SIZE;;
+    canvas.width = WORDS_PER_VISUAL_ROW * BLOCK_SIZE;
     canvas.height = TOTAL_VISUAL_ROWS * BLOCK_SIZE;
 
     const ctx = canvas.getContext('2d');

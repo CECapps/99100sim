@@ -53,7 +53,7 @@ export class ExecutionUnit {
     fetchOperands() { return false; }
     validateParams() { return false; }
     doParamsNeedPrivilege() { return false; }
-    execute() { throw new Error('ExecutionUnit execute fallthrough'); return false; }
+    execute() { throw new Error('ExecutionUnit execute fallthrough'); }
     writeResults() { return false; }
 
     /**
@@ -68,7 +68,7 @@ export class ExecutionUnit {
         const is_indirect_mode = mode == 1 || mode == 3;
         const is_symbolic_mode = mode == 2 && register_or_index == 0;
         const is_indexed_mode = mode == 2 && register_or_index > 0;
-        const is_direct_mode = !is_symbolic_mode && !is_indexed_mode && !is_indirect_mode
+        const is_direct_mode = !is_symbolic_mode && !is_indexed_mode && !is_indirect_mode;
 
         if (!is_symbolic_mode) {
             register_value = this.simstate.getRegisterWord(register_or_index);
@@ -120,9 +120,7 @@ export class ExecutionUnit {
         const is_indirect_mode = mode == 1 || mode == 3;
         const is_symbolic_mode = mode == 2 && register_or_index == 0;
         const is_indexed_mode = mode == 2 && register_or_index > 0;
-        const is_direct_mode = !is_symbolic_mode && !is_indexed_mode && !is_indirect_mode
-
-        let target_memory_word = 0;
+        const is_direct_mode = !is_symbolic_mode && !is_indexed_mode && !is_indirect_mode;
 
         if (is_direct_mode) {
             //console.debug('ramas: is_direct_mode, R', register_or_index, '=', new_value);
@@ -214,9 +212,8 @@ export class ExecutionUnit {
     /**
      * @param {number} left_value
      * @param {number} right_value
-     * @param {number} bits
      **/
-    updateEq(left_value, right_value, bits = 16) {
+    updateEq(left_value, right_value) {
         this.simstate.status_register.resetBit(StatusRegister.EQUAL);
         if (left_value == right_value) {
             /** @FIXME is == the right thing here? */
@@ -270,7 +267,7 @@ class Format1Unit extends ExecutionUnit {
         return true;
     }
 
-    doTheThing() { throw new Error('You are supposed to implement this.') }
+    doTheThing() { throw new Error('You are supposed to implement this.'); }
 
     execute() {
         this.doTheThing();
@@ -337,7 +334,7 @@ class Units {
                 const td = this.inst.getParam('Td');
                 const d = this.inst.getParam('D');
                 //console.debug([td, d]);
-                this.target_value = this.resolveAddressingModeAndGet(td, d)
+                this.target_value = this.resolveAddressingModeAndGet(td, d);
                 this.updateEq(this.source_value, this.target_value);
                 this.updateGt(this.source_value, this.target_value);
             }
@@ -370,7 +367,7 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
                 return false;
             }
         },
@@ -383,7 +380,7 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.AGT)
+                this.simstate.status_register.resetBit(StatusRegister.AGT);
                 return false;
             }
         },
@@ -398,8 +395,8 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.LGT)
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                this.simstate.status_register.resetBit(StatusRegister.LGT);
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
                 return false;
             }
         },
@@ -414,8 +411,8 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.LGT)
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                this.simstate.status_register.resetBit(StatusRegister.LGT);
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
                 return false;
             }
         },
@@ -430,8 +427,8 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.LGT)
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                this.simstate.status_register.resetBit(StatusRegister.LGT);
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
                 return false;
             }
         },
@@ -446,8 +443,8 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.LGT)
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                this.simstate.status_register.resetBit(StatusRegister.LGT);
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
                 return false;
             }
         },
@@ -462,8 +459,8 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.AGT)
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                this.simstate.status_register.resetBit(StatusRegister.AGT);
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
                 return false;
             }
         },
@@ -483,7 +480,7 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.CARRY)
+                this.simstate.status_register.resetBit(StatusRegister.CARRY);
                 return false;
             }
         },
@@ -496,7 +493,7 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL)
+                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
                 return false;
             }
         },
@@ -509,7 +506,7 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.OVERFLOW)
+                this.simstate.status_register.resetBit(StatusRegister.OVERFLOW);
                 return false;
             }
         },
@@ -522,7 +519,7 @@ class Units {
             }
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.CARRY)
+                this.simstate.status_register.resetBit(StatusRegister.CARRY);
                 return false;
             }
         },
@@ -685,14 +682,14 @@ class Units {
                 return true;
             }
         },
-    }
+    };
 
     /**
      * @param {string|false} op_name
      * @returns AnonymousExecutionUnit
      **/
     static getClassForOpName(op_name) {
-        const processed_name = op_name.toString().toUpperCase()
+        const processed_name = op_name.toString().toUpperCase();
         if ( !(processed_name in this.#units)) {
             return false;
         }
