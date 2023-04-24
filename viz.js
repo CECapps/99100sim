@@ -2,7 +2,7 @@
 "use strict";
 
 // comment this to run, thanks type checker!
-import { Simulation } from "./classes/Simulation";
+//import { Simulation } from "./classes/Simulation";
 
 var viz_needs_redraw = false;
 function viz_redraw_init() {
