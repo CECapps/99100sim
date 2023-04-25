@@ -333,7 +333,12 @@ class Asm {
      * @param {AsmParseLineResult} line
      **/
     #preProcessLineSymbols(line) {
-        if (line.line_type != 'pi' && line.line_type != 'label') {
+        if (
+            // Expect instruction lines that have a label, or...
+            (line.line_type == 'instruction' && !line.label)
+            // ... lines that are PIs or known labels.
+            || (line.line_type != 'pi' && line.line_type != 'label')
+        ) {
             return;
         }
         const sym = new AsmSymbol;
@@ -410,13 +415,18 @@ class Asm {
             return;
         }
 
-        if (!this.#pi_location_change_list.includes(line.instruction) && !this.#pi_location_list.includes(line.instruction)) {
+        // Skip irrelevant PIs.
+        if (line.line_type == 'pi'
+            && !this.#pi_location_change_list.includes(line.instruction)
+            && !this.#pi_location_list.includes(line.instruction)
+        ) {
             return;
         }
-        // If we got here, our PI creates a symbol using the label, assigning the
+        // If we got here, our line creates a symbol using the label, assigning the
         // value of the location counter.  We're too early in the process to
         // actually have a location counter, so these don't get assigned a value.
         if (!line.label) {
+            // This should actually be caught by the initial return check at the top.
             return;
         }
         sym.symbol_name = line.label;
@@ -498,9 +508,63 @@ class Asm {
         return line;
     }
 
+
+    #scanParams() {
+        // Rather than continuously crawl through all of the lines every single
+        // time we need to do param symbol replacement, let's just do it once
+        // and keep track of where symbol replacements are needed.  This code
+        // assumes that the symbol table has been completed, but it does not
+        // rely on any symbol actually being defined.
+        // While we're here, we'll also check that params are within the possible
+        // limits or otherwise contain reasonable values.
+
+        /** @type {Array<number[]>} */
+        const possible_symbols = [];
+
+        for (let line of this.#parsed_lines) {
+            // Can't do substitutions if there's nothing to substitute.
+            if (!line.instruction_params.length) {
+                continue;
+            }
+
+            const opcode_info = line.instruction && OpInfo.opNameIsValid(line.instruction) ? OpInfo.getFromOpName(line.instruction) : null;
+
+            let index = 0;
+            for (let param_value of line.instruction_params) {
+                index++;
+                // First up, let's dismiss obvious numbers.
+                if (looks_like_number(param_value, false)) {
+                    console.debug('looks like number: ', line.line_number, index - 1, param_value);
+                    continue;
+                }
+                // Second, obvious registers in addressing modes 0, 1, and 3.
+                if (looks_like_register(param_value)) {
+                    console.debug('looks like register: ', line.line_number, index - 1, param_value);
+                    continue;
+                }
+                // Third, concrete values in obviously indexed mode.
+                const indexed_matches = param_value.match(/^@?(.+)\((.+)\)$/);
+                if (indexed_matches && looks_like_number(indexed_matches[1], false) && looks_like_register(indexed_matches[2])) {
+                    console.debug('looks like indexed mode: ', line.line_number, index - 1, indexed_matches);
+                    continue;
+                }
+                // Fourth, concrete values in obviously symbolic mode.
+                if (param_value.startsWith('@') && looks_like_number(param_value.substring(1), false)) {
+                    console.debug('looks like symbolic: ', line.line_number, index - 1, param_value);
+                    continue;
+                }
+                // It's not a number and it's not a register.  Let's tag it as
+                // being a possible symbol.
+                possible_symbols.push([ line.line_number, index - 1 ]);
+            }
+        }
+
+        console.debug(possible_symbols);
+
+    }
+
     #preProcessLocationCounterSymbols() {}
     #preProcessUndefinedSymbols() {}
-    #scanParams() {}
     #preProcessParamSymbols() {}
     #processLocationCounterSymbols() {}
     #processUndefinedSymbols() {}
@@ -946,8 +1010,13 @@ function looks_like_register(string) {
 
 /**
  * @param {string} string
+ * @param {boolean} could_be_register
  * @returns {boolean}
  **/
-function looks_like_number(string) {
-    return !!string.match(/^-?(WR|R|>|0x|0b)?[a-fA-F0-9]+$/);
+function looks_like_number(string, could_be_register = true) {
+    if (could_be_register && looks_like_register(string)) {
+        return true;
+    }
+    const number_regex = /^-?(0b[01]+|(>|0x)[0-9a-fA-F]+|\d+)$/;
+    return !!string.match(number_regex);
 }
