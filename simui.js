@@ -3,7 +3,7 @@
 
 /*global extract_binary,viz_request_redraw,Asm,Simulation */
 
-/* */
+/* * /
 import { ExecutionProcess } from "./classes/ExecutionProcess";
 import { Simulation } from "./classes/Simulation";
 import { Asm } from "./classes/Asm";
