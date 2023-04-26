@@ -268,5 +268,16 @@ module.exports = {
             "error"
         ]
 
+        /**
+        @TODO evaluate these:
+            https://eslint.org/docs/latest/rules/no-else-return
+            https://eslint.org/docs/latest/rules/no-lonely-if
+            https://eslint.org/docs/latest/rules/key-spacing
+            https://eslint.org/docs/latest/rules/no-extra-parens
+            https://eslint.org/docs/latest/rules/no-multi-spaces
+            https://eslint.org/docs/latest/rules/space-before-function-paren
+            https://eslint.org/docs/latest/rules/space-in-parens
+        */
+
     }
 };
