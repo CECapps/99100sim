@@ -184,7 +184,7 @@ window.number_to_word_list = number_to_word_list;
  **/
 function unsigned_to_signed(value, bit_count = 16) {
     // Determine the maximum positive value that can be represented with bit_count bits.
-    const max_positive_value = Math.pow(2, bit_count) - 1;
+    const max_positive_value = (2 ** bit_count) - 1;
 
     // If the value is greater than the maximum positive value, it must be negative.
     if (value > max_positive_value) {
@@ -209,7 +209,7 @@ window.unsigned_to_signed = unsigned_to_signed;
  **/
 function signed_to_unsigned(value, bit_count = 16) {
     // Determine the maximum positive value that can be represented with bit_count bits.
-    const max_positive_value = Math.pow(2, bit_count) - 1;
+    const max_positive_value = (2 ** bit_count) - 1;
 
     // If the value is negative, convert it to its positive equivalent.
     if (value < 0) {

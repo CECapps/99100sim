@@ -582,7 +582,7 @@ class Units {
             nv = 0;
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
-                let s = this.inst.getParam('S');
+                const s = this.inst.getParam('S');
                 this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
@@ -599,7 +599,7 @@ class Units {
             }
             writeResults() {
                 const ts = this.inst.getParam('Ts');
-                let s = this.inst.getParam('S');
+                const s = this.inst.getParam('S');
                 this.resolveAddressingModeAndSet(ts, s, this.nv);
                 return true;
             }
@@ -608,7 +608,7 @@ class Units {
             nv = 0;
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
-                let s = this.inst.getParam('S');
+                const s = this.inst.getParam('S');
                 this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
@@ -625,7 +625,7 @@ class Units {
             }
             writeResults() {
                 const ts = this.inst.getParam('Ts');
-                let s = this.inst.getParam('S');
+                const s = this.inst.getParam('S');
                 this.resolveAddressingModeAndSet(ts, s, this.nv);
                 return true;
             }
@@ -634,7 +634,7 @@ class Units {
             nv = 0;
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
-                let s = this.inst.getParam('S');
+                const s = this.inst.getParam('S');
                 this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
@@ -651,7 +651,7 @@ class Units {
             }
             writeResults() {
                 const ts = this.inst.getParam('Ts');
-                let s = this.inst.getParam('S');
+                const s = this.inst.getParam('S');
                 this.resolveAddressingModeAndSet(ts, s, this.nv);
                 return true;
             }
@@ -660,7 +660,7 @@ class Units {
             nv = 0;
             fetchOperands() {
                 const ts = this.inst.getParam('Ts');
-                let s = this.inst.getParam('S');
+                const s = this.inst.getParam('S');
                 this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
@@ -677,7 +677,7 @@ class Units {
             }
             writeResults() {
                 const ts = this.inst.getParam('Ts');
-                let s = this.inst.getParam('S');
+                const s = this.inst.getParam('S');
                 this.resolveAddressingModeAndSet(ts, s, this.nv);
                 return true;
             }

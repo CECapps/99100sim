@@ -85,7 +85,7 @@ export class Flow {
         //console.debug(next_function);
         let counter = state_change_limit;
         while (next_function !== null && counter-- > 0) {
-            let chained_state = next_function.call(this);
+            const chained_state = next_function.call(this);
             next_function = chained_state;
         }
     }
@@ -115,7 +115,7 @@ export class Flow {
         if (state_value === null) {
             return null;
         }
-        const prev_state = this.flow_state;
+        //const prev_state = this.flow_state;
         let next_state = this.#getStateFunction(state_value);
         if (next_state === null) {
             state_value = 'Crash';

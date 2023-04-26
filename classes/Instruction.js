@@ -1,5 +1,7 @@
 // @ts-check
 
+/*global insert_binary,extract_binary */
+
 import { OpInfo } from "./OpInfo";
 
 /**
@@ -136,7 +138,7 @@ export class Instruction {
         }
 
         if (param_name == '_immediate_word_') {
-            this.setImmediateValue(parseInt(param_value.toString()));
+            this.setImmediateValue(parseInt(param_value.toString(), 10));
             this.#refreshImmediateOperandState();
             return;
         }
@@ -148,7 +150,7 @@ export class Instruction {
 
         const opcode = this.getFullOpcode();
         const offset = this.#paramBitOffsetHelper(param_name);
-        const new_opcode = insert_binary(opcode, (this.hasSecondOpcodeWord() ? 32 : 16), offset, opcode_params[param_name], parseInt(param_value.toString()));
+        const new_opcode = insert_binary(opcode, (this.hasSecondOpcodeWord() ? 32 : 16), offset, opcode_params[param_name], parseInt(param_value.toString(), 10));
 
         if (this.hasSecondOpcodeWord()) {
             // We've been given two 16-bit words in the form of a single 32-bit
@@ -172,7 +174,7 @@ export class Instruction {
     #paramBitOffsetHelper(param) {
         let running_offset = this.opcode_info.format_info.opcode_param_start_bit;
         const opcode_params = this.opcode_info.format_info.opcode_params;
-        for (let p in opcode_params) {
+        for (const p in opcode_params) {
             if (param !== p) {
                 running_offset += opcode_params[p];
                 continue;

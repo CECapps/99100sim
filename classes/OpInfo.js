@@ -33,8 +33,8 @@ export class OpInfo {
     static #populateFunctionMap() {
         if (!this.#function_map) {
             this.#function_map = [];
-            for (let oiclass in this.#ops) {
-                let opinfo = new this.#ops[oiclass];
+            for (const oiclass in this.#ops) {
+                const opinfo = new this.#ops[oiclass];
                 for (let i = opinfo.opcode; i <= opinfo.opcode_legal_max; i++) {
                     OpInfo.#function_map[i] = opinfo.name;
                 }
@@ -107,7 +107,7 @@ export class OpInfo {
      * @param {number} opcode
      **/
     static opcodeCouldBeMID(opcode) {
-        for (let mid_name in this.#mids) {
+        for (const mid_name in this.#mids) {
             if (opcode >= this.#mids[mid_name][0] && opcode <= this.#mids[mid_name][1]) {
                 return true;
             }

@@ -37,7 +37,7 @@ class InstructionDecode {
 
         /** @TODO This should be unnecessary, make sure of that and then nuke it. */
         const params = new ParamsList();
-        for (let key of Object.keys(inst.opcode_info.format_info.opcode_params)) {
+        for (const key of Object.keys(inst.opcode_info.format_info.opcode_params)) {
             params.set(key, inst.getParam(key));
         }
         enc.opcode_params = params;
@@ -53,7 +53,7 @@ class InstructionDecode {
         }
 
         /** @TODO This should be unnecessary, make sure of that and then nuke it. */
-        for (let kv of ei.opcode_params) {
+        for (const kv of ei.opcode_params) {
             inst.setParam(kv[0], kv[1]);
         }
 
@@ -118,7 +118,7 @@ class EncodedInstruction {
     opcode_params = new ParamsList();
 
     get words() {
-        let res = [ this.opcode ];
+        const res = [ this.opcode ];
         if (this.second_word.is_needed && this.second_word.has_value) {
             res.push(this.second_word.value);
         }

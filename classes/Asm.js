@@ -84,7 +84,7 @@ class Asm {
     process() {
         this.#parsed_lines = [];
         let i = 0;
-        for (let line of this.#lines) {
+        for (const line of this.#lines) {
             // Break each line into individual components.
             const line_processed = this.#parseLine(line, i);
             // Extract symbols from the line
@@ -120,7 +120,7 @@ class Asm {
         // With all symbols substituted, we can now build our bytecode.
         this.#processLinesToBytecode();
 
-        //const old_symbol_table = this.#symbol_table;
+        // const old_symbol_table = this.#symbol_table;
 
         this.#buildSymbolTable();
 
@@ -143,7 +143,7 @@ class Asm {
 
         // Our lines have been processed and symbols replaced.  We can finally
         // build our bytecode.
-        for (let line of this.#parsed_lines) {
+        for (const line of this.#parsed_lines) {
             if (line.line_type == 'instruction') {
                 line.encoded_instruction = InstructionDecode.getEncodedInstruction(this.#getInstructionFromLine(line));
             }
@@ -154,12 +154,12 @@ class Asm {
     toWords() {
         /** @type number[] */
         const words = [];
-        for (let line of this.#parsed_lines) {
+        for (const line of this.#parsed_lines) {
             const is_instruction = line.line_type == 'instruction';
             const is_pi_data = ((line.line_type == 'pi') && (line.instruction == 'data'));
             if (is_instruction || is_pi_data) {
                 if (line.encoded_instruction !== null) {
-                    for (let word of line.encoded_instruction.words) {
+                    for (const word of line.encoded_instruction.words) {
                         words.push(word);
                     }
                 } else {
@@ -173,18 +173,18 @@ class Asm {
     toAsm() {
         /** @type string[] */
         const asm = [];
-        for (let line of this.#parsed_lines) {
+        for (const line of this.#parsed_lines) {
             const is_pi_data = ((line.line_type == 'pi') && (line.instruction == 'data'));
             if (is_pi_data) {
                 const f_word = line.word.toString(16).toUpperCase().padStart(4, '0');
-                const f_comments = line.comments.length ? ' ; ' + line.comments : '';
-                const f_string = '.data   0x' + f_word;
+                const f_comments = line.comments.length ? ` ; ${line.comments}` : '';
+                const f_string = `.data   0x${f_word}`;
                 asm.push(f_string.padEnd(18, ' ') + f_comments);
             }
 
             const is_instruction = line.line_type == 'instruction';
             if (line.line_type == 'comment' && line.comments.length > 0) {
-                asm.push('; ' + line.comments);
+                asm.push(`; ${line.comments}`);
                 continue;
             }
             if (!is_instruction) {
@@ -199,9 +199,9 @@ class Asm {
 
             const f_instr = instr.opcode_info.name.padEnd(8, ' ');
             const f_params = [];
-            for (let param_name of instr.opcode_info.format_info.asm_param_order) {
+            for (const param_name of instr.opcode_info.format_info.asm_param_order) {
                 if (param_name == '_immediate_word_') {
-                    f_params.push('0x' + instr.getImmediateValue().toString(16).toUpperCase());
+                    f_params.push(`0x${instr.getImmediateValue().toString(16).toUpperCase()}`);
                     continue;
                 }
 
@@ -225,8 +225,8 @@ class Asm {
                 const is_register_number = [ 'reg' ].includes(param_name);
                 f_params.push((is_register_number ? 'R' : '') + param_value);
             }
-            const f_comments = line.comments.length ? ' ; ' + line.comments : '';
-            asm.push('    ' + f_instr + f_params.join(',').padEnd(10, ' ') + f_comments);
+            const f_comments = line.comments.length ? ` ; ${line.comments}` : '';
+            asm.push(`    ${f_instr}${f_params.join(',').padEnd(10, ' ')}${f_comments}`);
         }
         return asm;
     }
@@ -519,7 +519,7 @@ class Asm {
         if (line.line_type == 'instruction' && OpInfo.opNameIsValid(line.instruction)) {
             const opcode_info = OpInfo.getFromOpName(line.instruction);
             if (opcode_info.format == 12 && !looks_like_register(line.instruction_params[2])) {
-                line.instruction_params[2] = 'R' + this.#current_ckpt_default.toString();
+                line.instruction_params[2] = `R${this.#current_ckpt_default.toString()}`;
                 line.instruction_argument = line.instruction_params.join(',');
             }
         }
@@ -529,8 +529,8 @@ class Asm {
 
     #preProcessLocationCounterSymbols() {
         // Let's pre-locate all of the location symbols for rewrite
-        let symbols_by_line = [];
-        for (let symbol_name in this.#symbol_table) {
+        const symbols_by_line = [];
+        for (const symbol_name in this.#symbol_table) {
             if (this.#symbol_table[symbol_name].symbol_type != 'location') {
                 continue;
             }
@@ -539,7 +539,7 @@ class Asm {
 
         // The location counter operates in bytes, not words.
         let location_counter = 0;
-        for (let line of this.#parsed_lines) {
+        for (const line of this.#parsed_lines) {
             if (line.line_type == 'comment') {
                 continue;
             }
@@ -634,13 +634,13 @@ class Asm {
         /** @type {Array<number[]>} */
         const possible_symbols = [];
 
-        for (let line of this.#parsed_lines) {
+        for (const line of this.#parsed_lines) {
             // Can't do substitutions if there's nothing to substitute.
             if (!line.instruction_params.length) {
                 continue;
             }
             let index = 0;
-            for (let param_value of line.instruction_params) {
+            for (const param_value of line.instruction_params) {
                 index++;
                 // First up, let's dismiss obvious numbers.
                 if (looks_like_number(param_value)) {
@@ -705,7 +705,7 @@ class Asm {
 
         let estimated_word_count = 0;
         // Number of times we've iterated over parsed_lines: 2
-        for (let line of this.#parsed_lines) {
+        for (const line of this.#parsed_lines) {
             if (line.line_type == 'instruction') {
                 if (!OpInfo.opNameIsValid(line.instruction)) {
                     throw new Error(`Invalid instruction "${line.instruction}" on line ${line.line_number}`);
@@ -749,7 +749,7 @@ class Asm {
         // substitute in values where needed.
         estimated_word_count = 0;
         // Number of times we've iterated over parsed_lines: 3
-        for (let line of this.#parsed_lines) {
+        for (const line of this.#parsed_lines) {
             // The word values in this iteration should be more correct.
             if (line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && this.#pi_location_list.includes(line.instruction))) {
                 location_instructions[line.label].symbol_value = estimated_word_count;
@@ -760,11 +760,11 @@ class Asm {
             }
             const format = OpInfo.getFromOpName(line.instruction).format;
 
-            for (let i in line.instruction_params) {
-                for (let symbol_name in assign_instructions) {
+            for (const i in line.instruction_params) {
+                for (const symbol_name in assign_instructions) {
                     line.instruction_params[i] = this.#symbolReplaceHelper(line.instruction_params[i], symbol_name, assign_instructions[symbol_name].symbol_value.toString());
                 }
-                for (let symbol_name in location_instructions) {
+                for (const symbol_name in location_instructions) {
                     let nv = location_instructions[symbol_name].symbol_value;
                     // Jump instructions get the offset adjust thing.
                     if (format == 2 || format == 17) {
@@ -784,12 +784,12 @@ class Asm {
         // We should now have correct location instruction values.  We can finally
         // build the symbol table!
         this.#symbol_table = {};
-        for (let symbol_name in assign_instructions) {
+        for (const symbol_name in assign_instructions) {
             if (assign_instructions[symbol_name].value_assigned) {
                 this.#symbol_table[symbol_name] = assign_instructions[symbol_name];
             }
         }
-        for (let symbol_name in location_instructions) {
+        for (const symbol_name in location_instructions) {
             if (location_instructions[symbol_name].value_assigned && !Object.hasOwn(this.#symbol_table, symbol_name)) {
                 this.#symbol_table[symbol_name] = location_instructions[symbol_name];
             }
@@ -844,7 +844,7 @@ class Asm {
         // Perhaps we're in symbolic mode?  If the @ was excluded and there's no
         // following parens, the initial param==symbol check should catch it.
         if (param_value.startsWith('@')) {
-            return '@' + symbol_value;
+            return `@${symbol_value}`;
         }
 
         // Fallthrough!
@@ -854,7 +854,7 @@ class Asm {
     #applySymbolTable() {
         let word_count = 0;
         // Number of times we've iterated over parsed_lines: 4
-        for (let line of this.#parsed_lines) {
+        for (const line of this.#parsed_lines) {
             if (line.line_type != 'instruction') {
                 continue;
             }
@@ -864,8 +864,8 @@ class Asm {
             // Yay yet another disposable Instruction!
             const inst = Instruction.newFromString(line.instruction);
             const format = inst.opcode_info.format;
-            for (let i in line.instruction_params) {
-                for (let sym_name in this.#symbol_table) {
+            for (const i in line.instruction_params) {
+                for (const sym_name in this.#symbol_table) {
                     if (!this.#symbol_table[sym_name].value_assigned) {
                         continue;
                     }
@@ -893,7 +893,7 @@ class Asm {
 
         if (!inst.isLegal()) {
             console.error('illegal op??', line, inst);
-            throw new Error('Illegal instruction (1) while parsing line ' + line.line_number);
+            throw new Error(`Illegal instruction (1) while parsing line ${line.line_number}`);
         }
         // These are the ones we see in the assembly
         const asm_param_list = inst.opcode_info.format_info.asm_param_order;
@@ -905,7 +905,7 @@ class Asm {
         //console.debug(param_list, asm_param_list, opcode_param_list, split_params);
 
         let offset = 0;
-        for (let param_name of asm_param_list) {
+        for (const param_name of asm_param_list) {
             const this_param = split_params[offset++];
             //console.debug(param_name, this_param, line);
             if (param_name == 'S' && opcode_param_list.includes('Ts')) {
@@ -940,7 +940,7 @@ class Asm {
 
         if (!inst.isLegal()) {
             console.error('illegal op (2)', line, inst);
-            throw new Error('Illegal instruction (2) while parsing line ' + line.line_number);
+            throw new Error(`Illegal instruction (2) while parsing line ${line.line_number}`);
         }
         return inst;
     }
@@ -1001,7 +1001,7 @@ class Asm {
                 const register_match = register_string.match(reg_extract_regex);
                 if (register_match) {
                     console.debug('(Rx) => mode 2, Indexed');
-                    register = parseInt(register_match[2]);
+                    register = parseInt(register_match[2], 10);
                     register_string = register_string.replace(reg_extract_regex, '');
                 } else {
                     throw new Error('Parse error finding indexed register');
@@ -1022,7 +1022,7 @@ class Asm {
             }
             const regstring_format_test = register_string.match(/^(WR|R)?(\d{1,2})$/);
             if (regstring_format_test) {
-                register = parseInt(regstring_format_test[2]);
+                register = parseInt(regstring_format_test[2], 10);
             } else {
                 throw new Error('Parse error extracting register value from mode=0,1,3 arg string');
             }
@@ -1119,7 +1119,7 @@ function number_format_helper(string) {
 function looks_like_register(string) {
     const matches = string.match(/^\*?(WR|R)?(\d{1,2})\+?$/);
     if (matches) {
-        return parseInt(matches[2]) < 16;
+        return parseInt(matches[2], 10) < 16;
     }
     return false;
 }

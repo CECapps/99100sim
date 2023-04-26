@@ -1,6 +1,8 @@
 // @ts-check
 "use strict";
 
+/*global extract_binary,viz_request_redraw,Asm,Simulation */
+
 /* * /
 import { ExecutionProcess } from "./classes/ExecutionProcess";
 import { Simulation } from "./classes/Simulation";
@@ -74,8 +76,8 @@ function update_simui() {
 
     //gebid_stfu('instcount_el').innerText = inst_execution_count.toString();
 
-    for (let bit of Array(11).keys()) {
-        const elname = 'status_bit_' + bit;
+    for (const bit of Array(11).keys()) {
+        const elname = `status_bit_${bit}`;
         //console.debug(gebid_stfu(elname));
         if (sim.state.status_register.getBit(bit)) {
             gebid_stfu(elname).classList.add('on');
@@ -94,7 +96,7 @@ function update_simui() {
     }
 
     /** @type {ExecutionProcess} */
-    let ep = sim.flow.ep;
+    const ep = sim.flow.ep;
     const inst = ep.getCurrentInstruction();
     if (inst.opcode_info.name != 'NOP') {
         const op_name = inst.opcode_info.name;
@@ -152,8 +154,8 @@ function assemble_codebox() {
     gebid_stfu('assembled').innerText = asm.toAsm().join("\n");
 
     if (results && results instanceof Array) {
-        for (let i in results) {
-            sim.state.setWord(0x0100 + (parseInt(i) * 2), results[i]);
+        for (const i in results) {
+            sim.state.setWord(0x0100 + (parseInt(i, 10) * 2), results[i]);
         }
     }
 }
