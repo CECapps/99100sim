@@ -37,13 +37,13 @@ class Asm {
         'RT'    // Becomes "B *R11"
     ];
     // These PIs can define symbols through the location counter and change the location counter when doing so.
-    #pi_location_change_list = [ 'AORG', 'DORG', 'BSS', 'BES', 'EVEN', 'END' ];
+    #pi_location_change_list = [ 'AORG', 'DORG', 'BSS', 'BES', 'EVEN' ];
     // These PIs declare segments of code or data
     #pi_segment_list = [ 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND' ];
     // These PIs can define symbols that reference the current value of the location counter
     #pi_location_list = [ 'BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND' ];
     // These PIs define symbols through their operands.
-    #pi_assign_list = [ 'EQU', 'DFOP', 'DXOP' ];
+    #pi_assign_list = [ 'EQU', 'DFOP', 'DXOP', 'END' ];
     // These PIs declare data that will be included in the bytecode output.
     #pi_emitters_list = [ 'BYTE', 'DATA', 'TEXT', 'BSS', 'BES' ];
     // These PIs manipulate the contents of other lines.
@@ -120,7 +120,25 @@ class Asm {
         // With all symbols substituted, we can now build our bytecode.
         this.#processLinesToBytecode();
 
+        //const old_symbol_table = this.#symbol_table;
+
         this.#buildSymbolTable();
+
+        /*
+        const old_key_compare = Object.keys(old_symbol_table).sort().join(',');
+        const new_key_compare = Object.keys(this.#symbol_table).sort().join(',');
+        if (old_key_compare == new_key_compare) {
+            for (let symbol_name in old_symbol_table) {
+                const old_symbol = old_symbol_table[symbol_name];
+                if (old_symbol.symbol_type != 'location') {
+                    continue;
+                }
+                const new_symbol = this.#symbol_table[symbol_name];
+                console.debug(symbol_name, old_symbol.symbol_value, new_symbol.symbol_value * 2, old_symbol.symbol_value == new_symbol.symbol_value * 2);
+            }
+        }
+        */
+
         this.#applySymbolTable();
 
         // Our lines have been processed and symbols replaced.  We can finally
@@ -367,6 +385,7 @@ class Asm {
 
             if (looks_like_number(line.instruction_params[0])) {
                 sym.symbol_value = number_format_helper(line.instruction_params[0]);
+                sym.value_assigned = true;
             }
 
             if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
@@ -508,6 +527,100 @@ class Asm {
         return line;
     }
 
+    #preProcessLocationCounterSymbols() {
+        // Let's pre-locate all of the location symbols for rewrite
+        let symbols_by_line = [];
+        for (let symbol_name in this.#symbol_table) {
+            if (this.#symbol_table[symbol_name].symbol_type != 'location') {
+                continue;
+            }
+            symbols_by_line[this.#symbol_table[symbol_name].line_number] = symbol_name;
+        }
+
+        // The location counter operates in bytes, not words.
+        let location_counter = 0;
+        for (let line of this.#parsed_lines) {
+            if (line.line_type == 'comment') {
+                continue;
+            }
+
+            // Do we have a candidate symbol?  Now is the time to assign a location to it.
+            if (symbols_by_line[line.line_number]) {
+                this.#symbol_table[symbols_by_line[line.line_number]].symbol_value = location_counter;
+                this.#symbol_table[symbols_by_line[line.line_number]].value_assigned = true;
+            }
+
+            // Three general classes of things can adjust the location counter:
+            // a) Instructions
+            // b) Emitter PIs, like BYTE, DATA, TEXT, BSS, and BES.
+            // c) Location Change PIs, like AORG, DORG, BSS, BES, and EVEN.
+
+            // All of these require an instruction field, so
+            if (!line.instruction) {
+                continue;
+            }
+
+            let adjustment = 0;
+            let reassign_symbol = false;
+            let reassign_counter = false;
+
+            if (line.line_type == 'instruction' && OpInfo.opNameIsValid(line.instruction)) {
+                const opcode_info = OpInfo.getFromOpName(line.instruction);
+                // This is a lie, but it's a good enough lie for preprocessing.
+                adjustment = opcode_info.minimum_instruction_words * 2;
+            }
+
+            /** @FIXME BSS, BES, AORG and DORG can all be symbols instead of numbers.  Will doing scanParams first help? */
+            if (line.line_type == 'pi') {
+                switch (line.instruction) {
+                    case 'BYTE': // The params are each single bytes.
+                        adjustment = line.instruction_params.length;
+                        break;
+                    case 'WORD': // The params are each one word, so two bytes.
+                        adjustment = line.instruction_params.length * 2;
+                        break;
+                    case 'TEXT': // The single param is a string of (7-bit (lol)) ASCII bytes, in quotes.
+                        adjustment = line.instruction_argument.length - 2;
+                        break;
+                    case 'BSS': // The single param is a relative adjustment to the counter.
+                        adjustment = number_format_helper(line.instruction_params[0]);
+                        break;
+                    case 'BES': // The single param is a relative adjustment, but that adjustment is given to the label!
+                        adjustment = number_format_helper(line.instruction_params[0]);
+                        reassign_symbol = true;
+                        break;
+                    case 'EVEN': // Move the location counter forward to the next word boundary (even byte), if needed.
+                        if (location_counter % 2 !== 0) {
+                            adjustment = 1;
+                            reassign_symbol = true;
+                        }
+                        break;
+                    case 'AORG': // The single param is assigned to the location counter and the label.
+                    case 'DORG':
+                        adjustment = number_format_helper(line.instruction_params[0]);
+                        reassign_symbol = true;
+                        reassign_counter = true;
+                        break;
+                    default: // Does nothing, goes nowhere.
+                        break;
+                }
+            }
+
+            if (reassign_counter) {
+                location_counter = adjustment;
+            } else {
+                location_counter += adjustment;
+            }
+            if (reassign_symbol && symbols_by_line[line.line_number]) {
+                this.#symbol_table[symbols_by_line[line.line_number]].symbol_value = location_counter;
+                this.#symbol_table[symbols_by_line[line.line_number]].value_assigned = true;
+            }
+
+        }
+
+        console.debug('preProcessLocationCounterSymbols:', this.#symbol_table);
+
+    }
 
     #scanParams() {
         // Rather than continuously crawl through all of the lines every single
@@ -531,36 +644,40 @@ class Asm {
                 index++;
                 // First up, let's dismiss obvious numbers.
                 if (looks_like_number(param_value)) {
-                    console.debug('looks like number: ', line.line_number, index - 1, param_value);
+                    //console.debug('looks like number: ', line.line_number, index - 1, param_value);
                     continue;
                 }
                 // Second, obvious registers in addressing modes 0, 1, and 3.
                 if (looks_like_register(param_value)) {
-                    console.debug('looks like register: ', line.line_number, index - 1, param_value);
+                    //console.debug('looks like register: ', line.line_number, index - 1, param_value);
                     continue;
                 }
                 // Third, concrete values in obviously indexed mode.
                 const indexed_matches = param_value.match(/^@?(.+)\((.+)\)$/);
                 if (indexed_matches && looks_like_number(indexed_matches[1]) && looks_like_register(indexed_matches[2])) {
-                    console.debug('looks like indexed mode: ', line.line_number, index - 1, indexed_matches);
+                    //console.debug('looks like indexed mode: ', line.line_number, index - 1, indexed_matches);
                     continue;
                 }
                 // Fourth, concrete values in obviously symbolic mode.
                 if (param_value.startsWith('@') && looks_like_number(param_value.substring(1))) {
-                    console.debug('looks like symbolic: ', line.line_number, index - 1, param_value);
+                    //console.debug('looks like symbolic: ', line.line_number, index - 1, param_value);
                     continue;
                 }
-                // It's not a number and it's not a register.  Let's tag it as
-                // being a possible symbol.
+                // Fifth, some instructions allow quoted ASCII strings.  The spec uses single quotes only.
+                const string_matches = param_value.match(/^(["'])(.+?)\1$/);
+                if (string_matches) {
+                    //console.debug('looks like ASCII string: ', line.line_number, index - 1, string_matches);
+                    continue;
+                }
+                // It's not any of our expected formats, so let's tag it as being a possible symbol.
                 possible_symbols.push([ line.line_number, index - 1 ]);
             }
         }
 
-        console.debug(possible_symbols);
+        console.debug('scanParams:', possible_symbols);
 
     }
 
-    #preProcessLocationCounterSymbols() {}
     #preProcessUndefinedSymbols() {}
     #preProcessParamSymbols() {}
     #processLocationCounterSymbols() {}
@@ -677,6 +794,8 @@ class Asm {
                 this.#symbol_table[symbol_name] = location_instructions[symbol_name];
             }
         }
+
+        console.debug('buildSymbolTable:', this.#symbol_table);
 
     }
 
