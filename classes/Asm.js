@@ -526,14 +526,11 @@ class Asm {
             if (!line.instruction_params.length) {
                 continue;
             }
-
-            const opcode_info = line.instruction && OpInfo.opNameIsValid(line.instruction) ? OpInfo.getFromOpName(line.instruction) : null;
-
             let index = 0;
             for (let param_value of line.instruction_params) {
                 index++;
                 // First up, let's dismiss obvious numbers.
-                if (looks_like_number(param_value, false)) {
+                if (looks_like_number(param_value)) {
                     console.debug('looks like number: ', line.line_number, index - 1, param_value);
                     continue;
                 }
@@ -544,12 +541,12 @@ class Asm {
                 }
                 // Third, concrete values in obviously indexed mode.
                 const indexed_matches = param_value.match(/^@?(.+)\((.+)\)$/);
-                if (indexed_matches && looks_like_number(indexed_matches[1], false) && looks_like_register(indexed_matches[2])) {
+                if (indexed_matches && looks_like_number(indexed_matches[1]) && looks_like_register(indexed_matches[2])) {
                     console.debug('looks like indexed mode: ', line.line_number, index - 1, indexed_matches);
                     continue;
                 }
                 // Fourth, concrete values in obviously symbolic mode.
-                if (param_value.startsWith('@') && looks_like_number(param_value.substring(1), false)) {
+                if (param_value.startsWith('@') && looks_like_number(param_value.substring(1))) {
                     console.debug('looks like symbolic: ', line.line_number, index - 1, param_value);
                     continue;
                 }
@@ -1010,13 +1007,8 @@ function looks_like_register(string) {
 
 /**
  * @param {string} string
- * @param {boolean} could_be_register
  * @returns {boolean}
  **/
-function looks_like_number(string, could_be_register = true) {
-    if (could_be_register && looks_like_register(string)) {
-        return true;
-    }
-    const number_regex = /^-?(0b[01]+|(>|0x)[0-9a-fA-F]+|\d+)$/;
-    return !!string.match(number_regex);
+function looks_like_number(string) {
+    return !!string.match(/^-?(0b[01]+|(>|0x)[0-9a-fA-F]+|\d+)$/);
 }
