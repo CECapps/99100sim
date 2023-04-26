@@ -51,6 +51,7 @@ export class Flow {
     get #running_interrupt() {
         return this.#actual_running_interrupt;
     }
+
     /** @value {boolean} value */
     set #running_interrupt(value) {
         value = !!value;
@@ -60,6 +61,7 @@ export class Flow {
         }
         this.#actual_running_interrupt = value;
     }
+
     #actual_running_interrupt = false;
 
     #reset_vector_pc = 0;

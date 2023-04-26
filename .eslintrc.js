@@ -155,5 +155,118 @@ module.exports = {
             "error"
         ],
 
+        "array-bracket-newline": [
+            "error",
+            "consistent"
+        ],
+        "array-bracket-spacing": [
+            "error",
+            "never",
+            { "arraysInArrays": true, "objectsInArrays": true }
+        ],
+        "array-element-newline": [
+            "error",
+            "consistent"
+        ],
+        "arrow-parens": [
+            "error"
+        ],
+        "arrow-spacing": [
+            "error"
+        ],
+        "block-spacing": [
+            "error"
+        ],
+        "brace-style": [
+            "error",
+            "1tbs",
+            { "allowSingleLine": true }
+        ],
+        "comma-spacing": [
+            "error",
+            { "before": false, "after": true }
+        ],
+        "dot-location": [
+            "error",
+            "property"
+        ],
+        "eol-last": [
+            "error"
+        ],
+        "func-call-spacing": [
+            "error"
+        ],
+        "function-call-argument-newline": [
+            "error",
+            "consistent"
+        ],
+        "function-paren-newline": [
+            "error",
+            "consistent"
+        ],
+        "implicit-arrow-linebreak": [
+            "error",
+            "beside"
+        ],
+        "keyword-spacing": [
+            "error",
+            { "before": true, "after": true }
+        ],
+        "lines-between-class-members": [
+            "error",
+            "always",
+            { "exceptAfterSingleLine": true }
+        ],
+        "max-len": [
+            "error",
+            {
+                "code": 120,
+                "ignoreComments": true,
+                "ignoreUrls": true,
+                "ignoreStrings": true,
+                "ignoreTemplateLiterals": true,
+                "ignoreRegExpLiterals": true
+            }
+        ],
+        "multiline-ternary": [
+            "error",
+            "always-multiline"
+        ],
+        "no-multiple-empty-lines": [
+            "error"
+        ],
+        "no-tabs": [
+            "error"
+        ],
+        "no-whitespace-before-property": [
+            "error"
+        ],
+        "object-curly-newline": [
+            "error",
+            { "consistent": true }
+        ],
+        "object-curly-spacing": [
+            "error",
+            "always",
+            { "arraysInObjects": true, "objectsInObjects": true }
+        ],
+        "operator-linebreak": [
+            "error",
+            "before"
+        ],
+        "space-infix-ops": [
+            "error"
+        ],
+        "space-unary-ops": [
+            "error"
+        ],
+        "wrap-iife": [
+            "error",
+            "inside"
+        ],
+        "wrap-regex": [
+            "error"
+        ]
+
     }
 };

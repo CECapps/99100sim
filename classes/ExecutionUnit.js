@@ -273,6 +273,7 @@ class Format1Unit extends ExecutionUnit {
         this.doTheThing();
         return true;
     }
+
     writeResults() {
         const td = this.inst.getParam('Td');
         const d = this.inst.getParam('D');
@@ -356,6 +357,7 @@ class Units {
                 console.warn('NOP execute()');
                 return true;
             }
+
             writeResults() { return false; }
         },
         'JEQ': class extends Format2Unit {
@@ -365,6 +367,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.EQUAL);
@@ -378,6 +381,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.AGT);
@@ -393,6 +397,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.LGT);
@@ -409,6 +414,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.LGT);
@@ -425,6 +431,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.LGT);
@@ -441,6 +448,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.LGT);
@@ -457,6 +465,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.AGT);
@@ -478,6 +487,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.CARRY);
@@ -491,6 +501,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.EQUAL);
@@ -504,6 +515,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.OVERFLOW);
@@ -517,6 +529,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 /** @FIXME This op does not actually clear the flag.  This is a hack. */
                 this.simstate.status_register.resetBit(StatusRegister.CARRY);
@@ -531,10 +544,12 @@ class Units {
                 this.#next_word = this.inst.getImmediateValue();
                 return true;
             }
+
             execute() {
                 //console.debug('LI execute()');
                 return true;
             }
+
             writeResults() {
                 this.simstate.setRegisterWord(this.#register_num, this.#next_word);
                 return true;
@@ -555,10 +570,12 @@ class Units {
                 }
                 return true;
             }
+
             execute() {
                 //console.debug('MOV execute()');
                 return true;
             }
+
             writeResults() {
                 const td = this.inst.getParam('Td');
                 const d = this.inst.getParam('D');
@@ -586,6 +603,7 @@ class Units {
                 this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
+
             execute() {
                 //console.debug('INCT execute()');
                 this.nv += 1;
@@ -597,6 +615,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 const ts = this.inst.getParam('Ts');
                 const s = this.inst.getParam('S');
@@ -612,6 +631,7 @@ class Units {
                 this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
+
             execute() {
                 //console.debug('INCT execute()');
                 this.nv += 2;
@@ -623,6 +643,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 const ts = this.inst.getParam('Ts');
                 const s = this.inst.getParam('S');
@@ -638,6 +659,7 @@ class Units {
                 this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
+
             execute() {
                 //console.debug('DECT execute()');
                 this.nv -= 1;
@@ -649,6 +671,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 const ts = this.inst.getParam('Ts');
                 const s = this.inst.getParam('S');
@@ -664,6 +687,7 @@ class Units {
                 this.nv = this.resolveAddressingModeAndGet(ts, s);
                 return true;
             }
+
             execute() {
                 //console.debug('DECT execute()');
                 this.nv -= 2;
@@ -675,6 +699,7 @@ class Units {
                 }
                 return true;
             }
+
             writeResults() {
                 const ts = this.inst.getParam('Ts');
                 const s = this.inst.getParam('S');

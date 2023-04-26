@@ -2,7 +2,7 @@
 "use strict";
 
 // comment this to run, thanks type checker!
-//import { Simulation } from "./classes/Simulation";
+import { Simulation } from "./classes/Simulation";
 
 var viz_needs_redraw = false;
 function viz_redraw_init() {
@@ -52,8 +52,11 @@ function update_viz(vizel) {
     vizel.appendChild(
         create_memory_visualizer(
             sim.state.getMemoryDataView(),
-            start_word_count_inclusive, end_word_count_inclusive,
-            words_per_row, total_rows, pixel_size
+            start_word_count_inclusive,
+            end_word_count_inclusive,
+            words_per_row,
+            total_rows,
+            pixel_size
         )
     );
 }
@@ -110,7 +113,14 @@ function update_viz(vizel) {
  * @param {number} total_rows
  * @param {number} pixel_size
  **/
-function create_memory_visualizer(memory, start_word_count_inclusive, end_word_count_inclusive, words_per_row, total_rows, pixel_size) {
+function create_memory_visualizer(
+    memory,
+    start_word_count_inclusive,
+    end_word_count_inclusive,
+    words_per_row,
+    total_rows,
+    pixel_size
+) {
     const WORDS_PER_VISUAL_ROW = words_per_row;
     const TOTAL_VISUAL_ROWS = total_rows;
     const BLOCK_SIZE = pixel_size;
@@ -141,7 +151,7 @@ function create_memory_visualizer(memory, start_word_count_inclusive, end_word_c
             for (let k = 0; k < BLOCK_SIZE; k++) {
                 const pixelX = blockX + k;
                 const pixelY = blockY + j;
-                const pixel_offset = (pixelY * canvas.width + pixelX) * 4;
+                const pixel_offset = ((pixelY * canvas.width) + pixelX) * 4;
                 image_data.data[pixel_offset] = red;
                 image_data.data[pixel_offset + 1] = green;
                 image_data.data[pixel_offset + 2] = blue;

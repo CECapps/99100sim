@@ -26,7 +26,9 @@ class Asm {
 
         'IDT',  // Program Identifier: Assign printable program name, not placed in program.
 
-        'BYTE', 'DATA', 'TEXT', // Initialize byte(s)/word(s)/ASCII text string
+        'BYTE', // Initialize byte(s)/word(s)/ASCII text string
+        'DATA',
+        'TEXT',
         'EQU',  // Define Assembly-time Constant: Assign the argument to the label.  May reference previously defined symbols.
 
         'CKPT', // Checkpoint Register: Define the default register to use for Format 12 checkpoint operations
@@ -36,20 +38,21 @@ class Asm {
         'NOP',  // Becomes "JMP $+2"
         'RT'    // Becomes "B *R11"
     ];
+
     // These PIs can define symbols through the location counter and change the location counter when doing so.
-    #pi_location_change_list = [ 'AORG', 'DORG', 'BSS', 'BES', 'EVEN' ];
+    #pi_location_change_list = ['AORG', 'DORG', 'BSS', 'BES', 'EVEN'];
     // These PIs declare segments of code or data
-    #pi_segment_list = [ 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND' ];
+    #pi_segment_list = ['PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
     // These PIs can define symbols that reference the current value of the location counter
-    #pi_location_list = [ 'BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND' ];
+    #pi_location_list = ['BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
     // These PIs define symbols through their operands.
-    #pi_assign_list = [ 'EQU', 'DFOP', 'DXOP', 'END' ];
+    #pi_assign_list = ['EQU', 'DFOP', 'DXOP', 'END'];
     // These PIs declare data that will be included in the bytecode output.
-    #pi_emitters_list = [ 'BYTE', 'DATA', 'TEXT', 'BSS', 'BES' ];
+    #pi_emitters_list = ['BYTE', 'DATA', 'TEXT', 'BSS', 'BES'];
     // These PIs manipulate the contents of other lines.
-    #pi_replace_list = [ 'CKPT', 'DFOP', 'DXOP' ];
+    #pi_replace_list = ['CKPT', 'DFOP', 'DXOP'];
     // These PIs are instantly replaced with another instruction.
-    #pi_macro_list = [ 'NOP', 'RT' ];
+    #pi_macro_list = ['NOP', 'RT'];
 
     /** @type string[] */
     #lines = [];
@@ -222,7 +225,7 @@ class Asm {
                     f_params.push(param_value - 256);
                     continue;
                 }
-                const is_register_number = [ 'reg' ].includes(param_name);
+                const is_register_number = ['reg'].includes(param_name);
                 f_params.push((is_register_number ? 'R' : '') + param_value);
             }
             const f_comments = line.comments.length ? ` ; ${line.comments}` : '';
@@ -479,7 +482,7 @@ class Asm {
             line.line_type = 'instruction';
             line.instruction = 'B';
             line.instruction_argument = '*R11';
-            line.instruction_params = [ '*R11' ];
+            line.instruction_params = ['*R11'];
             // No further processing is possible or needed.
             return line;
         }
@@ -489,7 +492,7 @@ class Asm {
             line.line_type = 'instruction';
             line.instruction = 'JMP';
             line.instruction_argument = '2';
-            line.instruction_params = [ '2' ];
+            line.instruction_params = ['2'];
             // No further processing is possible or needed.
             return line;
         }
@@ -654,7 +657,11 @@ class Asm {
                 }
                 // Third, concrete values in obviously indexed mode.
                 const indexed_matches = param_value.match(/^@?(.+)\((.+)\)$/);
-                if (indexed_matches && looks_like_number(indexed_matches[1]) && looks_like_register(indexed_matches[2])) {
+                if (
+                    indexed_matches
+                    && looks_like_number(indexed_matches[1])
+                    && looks_like_register(indexed_matches[2])
+                ) {
                     //console.debug('looks like indexed mode: ', line.line_number, index - 1, indexed_matches);
                     continue;
                 }
@@ -670,7 +677,7 @@ class Asm {
                     continue;
                 }
                 // It's not any of our expected formats, so let's tag it as being a possible symbol.
-                possible_symbols.push([ line.line_number, index - 1 ]);
+                possible_symbols.push([line.line_number, index - 1]);
             }
         }
 
@@ -731,7 +738,7 @@ class Asm {
                 sym.symbol_params = line.instruction_params;
                 sym.value_assigned = true;
                 assign_instructions[line.label] = sym;
-            } else if(is_location) {
+            } else if (is_location) {
                 const sym = new AsmSymbol;
                 sym.symbol_name = line.label;
                 sym.symbol_value = estimated_word_count;
@@ -762,7 +769,11 @@ class Asm {
 
             for (const i in line.instruction_params) {
                 for (const symbol_name in assign_instructions) {
-                    line.instruction_params[i] = this.#symbolReplaceHelper(line.instruction_params[i], symbol_name, assign_instructions[symbol_name].symbol_value.toString());
+                    line.instruction_params[i] = this.#symbolReplaceHelper(
+                        line.instruction_params[i],
+                        symbol_name,
+                        assign_instructions[symbol_name].symbol_value.toString()
+                    );
                 }
                 for (const symbol_name in location_instructions) {
                     let nv = location_instructions[symbol_name].symbol_value;
@@ -771,7 +782,11 @@ class Asm {
                         // We count words but jumps take bytes
                         nv = (nv - estimated_word_count) * 2;
                     }
-                    line.instruction_params[i] = this.#symbolReplaceHelper(line.instruction_params[i], symbol_name, nv.toString());
+                    line.instruction_params[i] = this.#symbolReplaceHelper(
+                        line.instruction_params[i],
+                        symbol_name,
+                        nv.toString()
+                    );
                 }
             }
             const ei = InstructionDecode.getEncodedInstruction(this.#getInstructionFromLine(line));
@@ -878,7 +893,11 @@ class Asm {
                         symbol_value = (symbol_value - word_count) * 2;
                         //console.debug(line, this.#symbol_table[sym_name].symbol_value, symbol_value);
                     }
-                    line.instruction_params[i] = this.#symbolReplaceHelper(line.instruction_params[i], sym_name, symbol_value.toString());
+                    line.instruction_params[i] = this.#symbolReplaceHelper(
+                        line.instruction_params[i],
+                        sym_name,
+                        symbol_value.toString()
+                    );
                 }
                 inst.setParam(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
             }

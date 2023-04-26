@@ -86,6 +86,7 @@ class ImmediateWord {
     get value() {
         return this.#value;
     }
+
     /** @param {number} new_value */
     set value(new_value) {
         this.#value = new_value;
@@ -118,7 +119,7 @@ class EncodedInstruction {
     opcode_params = new ParamsList();
 
     get words() {
-        const res = [ this.opcode ];
+        const res = [this.opcode];
         if (this.second_word.is_needed && this.second_word.has_value) {
             res.push(this.second_word.value);
         }

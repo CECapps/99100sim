@@ -9,7 +9,8 @@ function tab_fixer_onload() {
         throw new Error();
     }
     // Turn tabs into 4-char indents.
-    codebox.addEventListener('keydown',
+    codebox.addEventListener(
+        'keydown',
         /** @param {KeyboardEvent} event */
         function (event) {
             if (event.key != "Tab") {

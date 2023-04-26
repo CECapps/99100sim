@@ -92,7 +92,7 @@ export class StatusRegister {
         /** @TODO I'm not actually sure if need this list ... yet ... if ever... */
         /** @type Object<string,number> */
         const names_to_consts = {
-            // Lgt	Agt	Eq	Car	Ov	Par	XOP	Priv	Mf	MM	Oint WCS	IntMask
+            // Lgt Agt Eq Car Ov Par XOP Priv Mf MM Oint WCS IntMask
             'lgt':  this.LGT,
             'agt':  this.AGT,
             'eq':   this.EQUAL,

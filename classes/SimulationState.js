@@ -65,13 +65,16 @@ export class SimulationState {
     getPc() {
         return this.#pc;
     }
+
     /** @param {number} value */
     setPc(value) {
         this.#pc = value;
     }
+
     advancePc() {
         this.#pc += 2;
     }
+
     reducePc() {
         this.#pc -= 2;
     }

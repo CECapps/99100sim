@@ -80,10 +80,12 @@ export class InterruptList {
         console.debug('Raising NMI!');
         this.#nmi = true;
     }
+
     clearNMI() {
         console.debug('Clearing NMI');
         this.#nmi = false;
     }
+
     hasRaisedNMI() {
         return this.#nmi;
     }

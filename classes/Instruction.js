@@ -150,7 +150,13 @@ export class Instruction {
 
         const opcode = this.getFullOpcode();
         const offset = this.#paramBitOffsetHelper(param_name);
-        const new_opcode = insert_binary(opcode, (this.hasSecondOpcodeWord() ? 32 : 16), offset, opcode_params[param_name], parseInt(param_value.toString(), 10));
+        const new_opcode = insert_binary(
+            opcode,
+            (this.hasSecondOpcodeWord() ? 32 : 16),
+            offset,
+            opcode_params[param_name],
+            parseInt(param_value.toString(), 10)
+        );
 
         if (this.hasSecondOpcodeWord()) {
             // We've been given two 16-bit words in the form of a single 32-bit
