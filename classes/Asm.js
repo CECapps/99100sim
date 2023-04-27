@@ -194,7 +194,6 @@ class Asm {
                 continue;
             }
 
-            //console.debug(line);
             if (line.encoded_instruction === null) {
                 throw new Error('Can not reconstruct asm line without an EncodedInstruction');
             }
@@ -316,8 +315,20 @@ class Asm {
             result.line_type = Asm.#pi_list.includes(result.instruction) ? 'pi' : 'instruction';
             line = line.substring(result.instruction.length).trim();
 
-            // The next chunk, if present, must be parameters.  Glom up everything
-            // until we find whitespace.
+            // Extract the likely params
+            /** @FIXME We know which instructions don't have params.  Add exceptions. */
+            const ppres = this.#parseParams(line, line_number);
+            result.parsed_params = ppres.params;
+            line = ppres.remainder;
+
+            // Old code relies on instruction_params being a normal array, so let's fake it.
+            result.instruction_params = [];
+            for (const parsed_param of ppres.params) {
+                result.instruction_params.push(parsed_param.param_string);
+            }
+            result.instruction_argument = result.instruction_params.join(',');
+
+            /*
             const params_regex = /^([^\s]+)/;
             const params_matches = line.match(params_regex);
             if (params_matches) {
@@ -325,7 +336,7 @@ class Asm {
                 line = line.substring(result.instruction_argument.length);
                 result.instruction_params = result.instruction_argument.split(',');
             }
-
+            */
             // Whatever remains must be a comment.
             result.comments += line.trim();
         }
@@ -346,8 +357,142 @@ class Asm {
             result.line_type = 'fallthrough';
         }
 
-        //console.debug(result);
         return result;
+    }
+
+    /**
+     * @param {string} param_string
+     * @param {number} line_number
+     * @returns {AsmParamParseResult}
+     **/
+    #parseParams(param_string, line_number) {
+        // Parsing params is harder than it looks at first glance.  A param can
+        // be a string, a normal base 10 number, a prefixed hex or binary number,
+        // or a symbol.  The spec also allows for math operations, but that's a
+        // real pain in the ass right now and I'm gonna ignore it. (@TODO)
+        // Params are separated by a comma.  Params may not contain whitespace
+        // or commas unless they're a string.  Empty params are valid.
+
+        let remainder = '';
+
+        /** @type {AsmParam[]} */
+        const parsed_params = [];
+
+        // This line noise captures single quoted strings that may contain
+        // escaped single quotes, and then the same thing for double quotes.
+        const quoted_string_regex = /^('((?:[^'\\]|\\.)+?)'|"((?:[^"\\]|\\.)+?)")/;
+
+        const glom_until_comma_regex = /^([^\s,]+),?/;
+        const indexed_mode_regex = /^@?(.+)\((.+)\)$/;
+
+        while (param_string.length > 0) {
+            const new_param = new AsmParam;
+            new_param.line_number = line_number;
+            new_param.param_index = parsed_params.length;
+
+            // We need to split this param from any that follow.  This can
+            // normally be done by just grabbing everything up to the next comma
+            // or until the end of the string, but string arguments make that hard.
+            const quoted_match = param_string.match(quoted_string_regex);
+            if (quoted_match) {
+                new_param.param_string = quoted_match[1];
+                new_param.param_type = 'string';
+                new_param.value_assigned = true;
+                parsed_params.push(new_param);
+
+                // Trim off what we just grabbed, including the comma.
+                param_string = param_string.substring(quoted_match[1].length);
+                if (param_string.startsWith(',')) {
+                    param_string = param_string.substring(1);
+                }
+
+                continue;
+            }
+
+            let extracted_param = '';
+            // We won't be dealing with a quoted string so we can safely glom up
+            // everything until the next comma.
+            const glommed_matches = param_string.match(glom_until_comma_regex);
+            if (glommed_matches) {
+                extracted_param = glommed_matches[1];
+
+                // Trim off what we just grabbed, including the comma.
+                param_string = param_string.substring(extracted_param.length);
+                if (param_string.startsWith(',')) {
+                    param_string = param_string.substring(1);
+                }
+            } else {
+                // There wasn't anything left to glom up.  The most likely
+                // situation is that we found whitespace. If so, that marks the
+                // end of the parameters.  Let's make sure that's true.
+                if (param_string.length == 0 || param_string.match(/^\s+/)) {
+                    remainder = param_string;
+                    break;
+                }
+                // This should be unreachable.
+                console.debug(parsed_params, param_string);
+                throw new Error('Parse error: can not make heads or tails of param');
+            }
+
+            // If we got this far, we have a parameter in extracted_param.
+
+            // Let's eliminate the obvious.
+            if (looks_like_number(extracted_param)) {
+                new_param.param_type = 'number';
+                new_param.param_string = extracted_param;
+                new_param.param_numeric = number_format_helper(extracted_param);
+                new_param.value_assigned = true;
+                parsed_params.push(new_param);
+                continue;
+            }
+
+            // This looks for register-like strings in modes 0, 1, and 3.
+            if (looks_like_register(extracted_param)) {
+                new_param.param_type = 'register';
+                new_param.param_string = extracted_param;
+                new_param.value_assigned = true;
+                parsed_params.push(new_param);
+                continue;
+            }
+
+            // How about symbolic mode with a plain old regular number?
+            if (extracted_param.startsWith('@') && looks_like_number(extracted_param.substring(1))) {
+                new_param.param_type = 'symbolic';
+                new_param.param_string = extracted_param;
+                new_param.param_numeric = number_format_helper(extracted_param.substring(1));
+                new_param.value_assigned = true;
+                parsed_params.push(new_param);
+                continue;
+            }
+
+            // One final check: Is it indexed mode with regular numbers?
+            const indexed_matches = extracted_param.match(indexed_mode_regex);
+            if (
+                indexed_matches
+                && looks_like_number(indexed_matches[1])
+                && looks_like_register(indexed_matches[2])
+            ) {
+                // Yes, we aren't recording the extracted bits.  That happens later.
+                new_param.param_type = 'indexed';
+                new_param.param_string = extracted_param;
+                new_param.value_assigned = true;
+                parsed_params.push(new_param);
+                continue;
+            }
+
+            // It's not a number, it's not a register in 0, 1, or 3, and it's
+            // also not an easily parsed symbolic mode or indexed mode string.
+            // It's very likely that something inside here needs symbol swapping.
+            new_param.param_type = 'unknown';
+            new_param.param_string = extracted_param;
+            new_param.value_assigned = false;
+            parsed_params.push(new_param);
+        }
+
+        const res = new AsmParamParseResult;
+        res.params = parsed_params;
+        res.remainder = remainder;
+        return res;
     }
 
     /**
@@ -526,7 +671,6 @@ class Asm {
                 line.instruction_argument = line.instruction_params.join(',');
             }
         }
-
         return line;
     }
 
@@ -647,12 +791,10 @@ class Asm {
                 index++;
                 // First up, let's dismiss obvious numbers.
                 if (looks_like_number(param_value)) {
-                    //console.debug('looks like number: ', line.line_number, index - 1, param_value);
                     continue;
                 }
                 // Second, obvious registers in addressing modes 0, 1, and 3.
                 if (looks_like_register(param_value)) {
-                    //console.debug('looks like register: ', line.line_number, index - 1, param_value);
                     continue;
                 }
                 // Third, concrete values in obviously indexed mode.
@@ -662,18 +804,15 @@ class Asm {
                     && looks_like_number(indexed_matches[1])
                     && looks_like_register(indexed_matches[2])
                 ) {
-                    //console.debug('looks like indexed mode: ', line.line_number, index - 1, indexed_matches);
                     continue;
                 }
                 // Fourth, concrete values in obviously symbolic mode.
                 if (param_value.startsWith('@') && looks_like_number(param_value.substring(1))) {
-                    //console.debug('looks like symbolic: ', line.line_number, index - 1, param_value);
                     continue;
                 }
                 // Fifth, some instructions allow quoted ASCII strings.  The spec uses single quotes only.
                 const string_matches = param_value.match(/^(["'])(.+?)\1$/);
                 if (string_matches) {
-                    //console.debug('looks like ASCII string: ', line.line_number, index - 1, string_matches);
                     continue;
                 }
                 // It's not any of our expected formats, so let's tag it as being a possible symbol.
@@ -758,10 +897,12 @@ class Asm {
         // Number of times we've iterated over parsed_lines: 3
         for (const line of this.#parsed_lines) {
             // The word values in this iteration should be more correct.
-            if (line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && this.#pi_location_list.includes(line.instruction))) {
+            const is_pi_location = line.line_type == 'pi' && line.label && this.#pi_location_list.includes(line.instruction);
+            if (line.line_type == 'label' || is_pi_location) {
                 location_instructions[line.label].symbol_value = estimated_word_count;
                 location_instructions[line.label].value_assigned = true;
             }
+
             if (line.line_type != 'instruction') {
                 continue;
             }
@@ -772,7 +913,7 @@ class Asm {
                     line.instruction_params[i] = this.#symbolReplaceHelper(
                         line.instruction_params[i],
                         symbol_name,
-                        assign_instructions[symbol_name].symbol_value.toString()
+                        assign_instructions[symbol_name].symbol_params[0] // lol hack
                     );
                 }
                 for (const symbol_name in location_instructions) {
@@ -793,7 +934,7 @@ class Asm {
             estimated_word_count += ei.words.length;
 
             // All of this was a draft, so let's reset the params to process later.
-            line.instruction_params = line.instruction_argument.split(',');
+            //line.instruction_params = line.instruction_argument.split(',');
         }
 
         // We should now have correct location instruction values.  We can finally
@@ -820,19 +961,18 @@ class Asm {
      * @param {string} symbol_value
      **/
     #symbolReplaceHelper(param_value, symbol_name, symbol_value) {
-        // We can assume that symbols will never look like numbers, so if this
-        // is a number, don't even try any of the replacement techniques.
-        if (looks_like_number(param_value)) {
-            return param_value;
-        }
-
-        const indirect_regex = /^(\*)?(.+)(\+)?$/;
-        const indexed_regex = /^@?(.+)\((.+)\)$/;
-
         // Easy mode: the param is the symbol.
         if (param_value == symbol_name) {
             return symbol_value;
         }
+
+        // If it's just a number, that's fine.  It's a number.
+        if (looks_like_number(param_value)) {
+            return number_format_helper(param_value).toString();
+        }
+
+        const indirect_regex = /^(\*)?(.+)(\+)?$/;
+        const indexed_regex = /^@?(.+)\((.+)\)$/;
 
         // Challenge mode: the param is a register in indirect/autoinc mode.
         const indirect_matches = param_value.match(indirect_regex);
@@ -891,7 +1031,6 @@ class Asm {
                     // doubling the value because that's how jumps work?
                     if (this.#symbol_table[sym_name].symbol_type == 'location' && (format == 2 || format == 17)) {
                         symbol_value = (symbol_value - word_count) * 2;
-                        //console.debug(line, this.#symbol_table[sym_name].symbol_value, symbol_value);
                     }
                     line.instruction_params[i] = this.#symbolReplaceHelper(
                         line.instruction_params[i],
@@ -921,16 +1060,11 @@ class Asm {
         // We're dealing with assembly-side things.
         const split_params = line.instruction_params;
 
-        //console.debug(param_list, asm_param_list, opcode_param_list, split_params);
-
         let offset = 0;
         for (const param_name of asm_param_list) {
             const this_param = split_params[offset++];
-            //console.debug(param_name, this_param, line);
             if (param_name == 'S' && opcode_param_list.includes('Ts')) {
-                //console.debug(' => S+Ts => ', split_params[offset]);
                 const res = this.#registerStringToAddressingModeHelper(this_param);
-                //console.debug(split_params[offset - 1], ' = Ts,S = ', res);
                 inst.setParam('Ts', res[0]);
                 inst.setParam('S', res[1]);
                 if (res[0] == 2 && res[1] == 0 && inst.opcode_info.has_possible_immediate_source) {
@@ -939,9 +1073,7 @@ class Asm {
                 continue;
             }
             if (param_name == 'D' && opcode_param_list.includes('Td')) {
-                //console.debug(' => D+Td ', split_params[offset]);
                 const res = this.#registerStringToAddressingModeHelper(this_param);
-                //console.debug(split_params[offset - 1], ' = Td,D,immed = ', res);
                 inst.setParam('Td', res[0]);
                 inst.setParam('D', res[1]);
                 if (res[0] == 2 && res[1] == 0 && inst.opcode_info.has_possible_immediate_dest) {
@@ -1005,11 +1137,9 @@ class Asm {
         if (register_string.startsWith('*')) {
             mode = 1;
             register_string = register_string.substring(1);
-            //console.debug('* => mode 1, regstring=', register_string);
             if (register_string.endsWith('+')) {
                 mode = 3;
                 register_string = register_string.substring(0, register_string.length - 1);
-                //console.debug('+ => mode 3, regstring=', register_string);
             }
         }
         if (register_string.startsWith('@')) {
@@ -1060,6 +1190,8 @@ class AsmParseLineResult {
     instruction_argument =  'ERROR';
     /** @type {string[]} */
     instruction_params =    [];
+    /** @type {AsmParam[]} */
+    parsed_params =         [];
     comments =              'ERROR';
     word =                  0;
     /** @type {EncodedInstruction|null} */
@@ -1074,6 +1206,21 @@ class AsmSymbol {
     symbol_value = 0;
     /** @type {string[]} */
     symbol_params = [];
+}
+
+class AsmParamParseResult {
+    /** @type {AsmParam[]} */
+    params = [];
+    remainder = '';
+}
+
+class AsmParam {
+    line_number = 0;
+    param_type = 'ERROR';
+    param_index = 0;
+    param_string = '';
+    param_numeric = 0;
+    value_assigned = false;
 }
 
 
