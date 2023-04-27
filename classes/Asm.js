@@ -154,6 +154,12 @@ class Asm {
         return this.#parsed_lines;
     }
 
+    /**
+     * First generation parsing.  Works but insufficient, thinks only of the
+     * program section and ignores actual data.
+     *
+     * Transform our parsed lines into bytecode.
+     **/
     toWords() {
         /** @type number[] */
         const words = [];
@@ -173,6 +179,13 @@ class Asm {
         return words;
     }
 
+    /**
+     * First generation parsing.  Works but insufficient, thinks only of the
+     * program section and ignores actual data.
+     *
+     * Transform our parsed lines back into assembly, with all symbols subbed.
+     * This also returns the original comments.
+     **/
     toAsm() {
         /** @type string[] */
         const asm = [];
@@ -234,6 +247,8 @@ class Asm {
     }
 
     /**
+     * First generation line parsing.  Correct but plays fast and loose with the spec.
+     *
      * TI assembler syntax sucks, but there's only so much I can do to make it
      * suck less without making it harder to use other people's unmodified code.
      *
@@ -361,18 +376,23 @@ class Asm {
     }
 
     /**
+     * Third generation line parsing.  Seems correct.
+     *
+     * Given the asm string of parameters for a given line, parse it for params
+     * and return them and any remaining content (== a comment).
+     *
+     * Parsing params is harder than it looks at first glance.  A param can
+     * be a string, a normal base 10 number, a prefixed hex or binary number,
+     * or a symbol.  The spec also allows for math operations, but that's a
+     * real pain in the ass right now and I'm gonna ignore it. (@TODO)
+     * Params are separated by a comma.  Params may not contain whitespace
+     * or commas ... unless they're in a string.  Empty params are valid.
+     *
      * @param {string} param_string
      * @param {number} line_number
      * @returns {AsmParamParseResult}
      **/
     #parseParams(param_string, line_number) {
-        // Parsing params is harder than it looks at first glance.  A param can
-        // be a string, a normal base 10 number, a prefixed hex or binary number,
-        // or a symbol.  The spec also allows for math operations, but that's a
-        // real pain in the ass right now and I'm gonna ignore it. (@TODO)
-        // Params are separated by a comma.  Params may not contain whitespace
-        // or commas unless they're a string.  Empty params are valid.
-
         let remainder = '';
 
         /** @type {AsmParam[]} */
@@ -496,6 +516,11 @@ class Asm {
     }
 
     /**
+     * Third generation symbol parsing.  Correct but very brittle.
+     *
+     * Given a line, scan it for things that might be symbols.  If the symbol
+     * is also defined right here, assign it a value.
+     *
      * @param {AsmParseLineResult} line
      **/
     #preProcessLineSymbols(line) {
@@ -608,6 +633,19 @@ class Asm {
     }
 
     /**
+     * Third generation line parsing.  Correct, except for the Format 12 replacement.
+     *
+     * Some PIs are effectively macros that should have immediate effect.
+     * RT and NOP get replaced entirely.
+     * Instructions that are DFOPs get transformed into the real thing.
+     * Instructions that are DXOPs get replaced by their XOP call.
+     * Format 12 instructions without a valid CKPT value get replaced immediately
+     * as well, and then only with the then-current default CKPT value.  It is
+     * up to the caller to make sure that #current_ckpt_default is kept up to
+     * date and in sync with calls to this function.
+     *
+     * @FIXME instruction_argument being instruction_params joins is BOGUS
+     *
      * @param {AsmParseLineResult} line
      * @returns {AsmParseLineResult}
      **/
@@ -674,6 +712,19 @@ class Asm {
         return line;
     }
 
+    /**
+     * Third generation symbol preprocessing.  Incomplete.
+     *
+     * While value symbols can be assigned immediately, location symbols get their
+     * value from the location counter.  Build a location counter and then fill
+     * in *LIKELY* byte offset values.
+     *
+     * This directly updates the symbol table.
+     *
+     * @FIXME BSS, BES, AORG and DORG can all be symbols instead of numbers, so
+     * the looks_like_number checks within could fail spectacularly.  Is there
+     * a sane way to fix this without doing nasty recursive bullshit?
+     **/
     #preProcessLocationCounterSymbols() {
         // Let's pre-locate all of the location symbols for rewrite
         const symbols_by_line = [];
@@ -717,7 +768,6 @@ class Asm {
                 adjustment = opcode_info.minimum_instruction_words * 2;
             }
 
-            /** @FIXME BSS, BES, AORG and DORG can all be symbols instead of numbers.  Will doing scanParams first help? */
             if (line.line_type == 'pi') {
                 switch (line.instruction) {
                     case 'BYTE': // The params are each single bytes.
@@ -769,15 +819,20 @@ class Asm {
 
     }
 
+    /**
+     * Third generation symbol processing.  Correct.
+     *
+     * Scans through the parsed lines and seeks out parameters that must be symbols.
+     * There is a huge logical overlap between this and #symbolReplaceHelper.
+     * Unfortunately I can't think of a simple way to reuse the logic, so they
+     * will remain separate for now.
+     *
+     * This code does not rely on the symbol table.
+     *
+     * @FIXME lol it doesn't actually store the data anywhere.
+     * @TODO Actually, break the core of this out.  I think this might belong in parseParams.
+     **/
     #scanParams() {
-        // Rather than continuously crawl through all of the lines every single
-        // time we need to do param symbol replacement, let's just do it once
-        // and keep track of where symbol replacements are needed.  This code
-        // assumes that the symbol table has been completed, but it does not
-        // rely on any symbol actually being defined.
-        // While we're here, we'll also check that params are within the possible
-        // limits or otherwise contain reasonable values.
-
         /** @type {Array<number[]>} */
         const possible_symbols = [];
 
@@ -831,6 +886,12 @@ class Asm {
     #processParamSymbols() {}
     #processLinesToBytecode() {}
 
+    /**
+     * Second generation symbol table stuff.  Correct for common cases only.  To be retired.
+     *
+     * Reviews all lines and then does an immediate substitution before considering
+     * the symbols to be valid.  This technique is flawed.
+     **/
     #buildSymbolTable() {
         /** @type {Object.<string,AsmSymbol>} */
         const assign_instructions = {};
@@ -956,6 +1017,11 @@ class Asm {
     }
 
     /**
+     * Second generation symbol stuff.  Seems correct.
+     *
+     * Look for a symbol name in a parameter value, and replace it with a given
+     * symbol value.  This is only hard due to addressing mode 2.
+     *
      * @param {string} param_value
      * @param {string} symbol_name
      * @param {string} symbol_value
@@ -966,15 +1032,28 @@ class Asm {
             return symbol_value;
         }
 
-        // If it's just a number, that's fine.  It's a number.
+        // Easy mode: it's just a number, so it can't be a symbol.
         if (looks_like_number(param_value)) {
             return number_format_helper(param_value).toString();
+        }
+
+        // Easy mode: symbolic addressing mode.
+        if (param_value.startsWith('@') && param_value.substring(1) == symbol_name) {
+            return `@${symbol_value}`;
+        }
+
+        // Easy mode: it's just a register, so it can't be a symbol.  This check
+        // does addressing modes 0, 1, and 3, but is only true if the register
+        // reference itself is a normal register reference, which will not be
+        // a symbol.
+        if (looks_like_register(param_value)) {
+            return param_value;
         }
 
         const indirect_regex = /^(\*)?(.+)(\+)?$/;
         const indexed_regex = /^@?(.+)\((.+)\)$/;
 
-        // Challenge mode: the param is a register in indirect/autoinc mode.
+        // Challenge mode: the param is a register.  Check for modes 0, 1, and 3.
         const indirect_matches = param_value.match(indirect_regex);
         if (indirect_matches && indirect_matches[2] == symbol_name && (indirect_matches[1] || indirect_matches[3])) {
             const star = indirect_matches[1] == '*' ? '*' : '';
@@ -982,7 +1061,7 @@ class Asm {
             return star + symbol_value + plus;
         }
 
-        // Hard mode: indexed
+        // Hard mode: indexed.  Look in both the immediate value and the register reference.
         const indexed_matches = param_value.match(indexed_regex);
         if (indexed_matches) {
             let addr = indexed_matches[1];
@@ -996,16 +1075,15 @@ class Asm {
             return `@${addr}(${index})`;
         }
 
-        // Perhaps we're in symbolic mode?  If the @ was excluded and there's no
-        // following parens, the initial param==symbol check should catch it.
-        if (param_value.startsWith('@')) {
-            return `@${symbol_value}`;
-        }
-
         // Fallthrough!
         return param_value;
     }
 
+    /**
+     * Second generation symbol stuff.  To be retired.
+     *
+     * Given a filled and correct #symbol_table, crawl through all params and replace.
+     **/
     #applySymbolTable() {
         let word_count = 0;
         // Number of times we've iterated over parsed_lines: 4
@@ -1045,7 +1123,13 @@ class Asm {
         }
     }
 
-    /** @param {AsmParseLineResult} line */
+    /**
+     * First generation parsing stuff.  Seems correct, to be kept.
+     *
+     * Given an AsmParseLineResult, create and return an Instruction with populated Params.
+     *
+     * @param {AsmParseLineResult} line
+     **/
     #getInstructionFromLine(line) {
         const inst = Instruction.newFromString(line.instruction);
 
@@ -1097,6 +1181,10 @@ class Asm {
     }
 
     /**
+     * Second generation parsing stuff.  Seems mostly correct, except for type 2...
+     *
+     * Given an AsmParseLineResult and addressing mode information, return a working register string.
+     *
      * @param {AsmParseLineResult} line
      * @param {number} type
      * @param {number} value
@@ -1115,6 +1203,7 @@ class Asm {
         } else if (type == 2) {
             // We must be in symbolic or indexed memory mode.  In both cases,
             // a word will follow with our actual value.
+            /** @FIXME this is bogus */
             string = `@0x${line.word.toString(16).toUpperCase().padStart(4, '0')}`;
             if (value > 0) {
                 // S is not zero, so we're in indexed mode.  The first word
@@ -1126,6 +1215,10 @@ class Asm {
     }
 
     /**
+     * Second generation parsing stuff.  Seems mostly correct.
+     *
+     * Given a register string, decode and return addressing mode information.
+     *
      * @param {string} register_string
      * @returns {number[]}
      **/
@@ -1225,6 +1318,9 @@ class AsmParam {
 
 
 /**
+ * Given an asm-approved numeric string, returns the actual numeric value.
+ * This code accepts addressing mode 0 register syntax and will return just the number.
+ *
  * @param {string} string
  * @returns {number}
  **/
@@ -1242,22 +1338,16 @@ function number_format_helper(string) {
     if (string.startsWith('R')) {
         is_decimal = true;
         string = string.substring(1);
-    }
-    if (string.startsWith('WR')) {
+    } else if (string.startsWith('WR')) {
         is_decimal = true;
         string = string.substring(2);
-    }
-
-    if (string.startsWith('>')) {
+    } else if (string.startsWith('>')) {
         is_hex = true;
         string = string.substring(1);
-    }
-    if (string.startsWith('0x')) {
+    } else if (string.startsWith('0x')) {
         is_hex = true;
         string = string.substring(2);
-    }
-
-    if (string.startsWith('0b')) {
+    } else if (string.startsWith('0b')) {
         is_binary = true;
         string = string.substring(2);
     }
@@ -1279,6 +1369,9 @@ function number_format_helper(string) {
 }
 
 /**
+ * Given something that might be a register string, determine if it could be one.
+ * Accepts addressing modes 0, 1, and 3.
+ *
  * @param {string} string
  * @returns {boolean}
  **/
@@ -1291,6 +1384,10 @@ function looks_like_register(string) {
 }
 
 /**
+ * Given something that might be numeric, determine if it could be a number.
+ * Assumes asm-approved numeric syntax, similar to that of number_format_helper.
+ * Does *NOT* accept addressing mode 0 register syntax as a valid number.
+ *
  * @param {string} string
  * @returns {boolean}
  **/
