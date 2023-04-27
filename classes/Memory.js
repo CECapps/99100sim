@@ -1,5 +1,7 @@
 // @ts-check
 
+/*global number_to_hex */
+
 /**
  * Memory: Byte and Word access simulation in Big Endian format.
  *
@@ -21,7 +23,6 @@ export class Memory {
     /** @param {number} offset */
     getByte(offset) {
         const val = this.#buffer.getUint8(offset);
-        //console.debug(`getByte ${offset.toString(16).padStart(4,"0")} = ${val.toString(16).padStart(2,"0")}`);
         return val;
     }
 
@@ -31,7 +32,6 @@ export class Memory {
             offset--;
         }
         const val = this.#buffer.getUint16(offset, /* force BE */ false);
-        //console.debug(`getWord ${offset.toString(16).padStart(4,"0")} = ${val.toString(16).padStart(4,"0")}`);
         return val;
     }
 
@@ -40,7 +40,6 @@ export class Memory {
      * @param {number} value
      **/
     setByte(offset, value) {
-        //console.debug(`setByte ${offset.toString(16).padStart(4,"0")} is now ${value.toString(16).padStart(2,"0")}`);
         this.#buffer.setUint8(offset, value);
         //window.dispatchEvent(new CustomEvent('memory_updated'));
     }
@@ -50,7 +49,6 @@ export class Memory {
      * @param {number} value
      **/
     setWord(offset, value) {
-        //console.debug(`setWord ${offset.toString(16).padStart(4,"0")} is now ${value.toString(16).padStart(4,"0")}`);
         if (offset % 2 == 1) {
             offset--;
         }
@@ -58,7 +56,7 @@ export class Memory {
         const clamped_value = value > 0xFFFF ? value - 0xFFFF : (value < 0 ? value + 0xFFFF : value);
         if (value != clamped_value) {
             if (value !== undefined) {
-                console.error(`setWord out of range value 0x${value.toString(16).toUpperCase()}, value clamped to 0x${clamped_value.toString(16).toUpperCase()}`, value, clamped_value);
+                console.error(`setWord out of range value >${number_to_hex(value)}, value clamped to 0x${number_to_hex(clamped_value)}`, value, clamped_value);
                 throw new Error(`setWord out of range value.  Uncaught overflow?`);
             } else {
                 throw new Error(`setWord got undefined value somehow.  There be bugs!`);
@@ -68,7 +66,7 @@ export class Memory {
         const clamped_offset = offset > 0xFFFF ? offset - 0xFFFF : (offset < 0 ? offset + 0xFFFF : offset);
         if (offset != clamped_offset) {
             if (offset !== undefined) {
-                console.error(`setWord out of range OFFSET 0x${value.toString(16).toUpperCase()}, clamped to 0x${clamped_offset.toString(16).toUpperCase()}`, offset, clamped_offset);
+                console.error(`setWord out of range OFFSET 0x${number_to_hex(value)}, clamped to 0x${number_to_hex(clamped_offset)}`, offset, clamped_offset);
                 throw new Error(`setWord out of range OFFSET.  Uncaught overflow?`);
             } else {
                 throw new Error(`setWord got undefined OFFSET somehow.  There be bugs!`);

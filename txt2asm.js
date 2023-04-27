@@ -1,7 +1,6 @@
 // @ts-check
 "use strict";
 
-
 const Tab_Width = 4;
 function tab_fixer_onload() {
     const codebox = document.getElementById('codebox');

@@ -4,7 +4,7 @@ import { Instruction } from "./Instruction";
 import { SimulationState } from "./SimulationState";
 import { StatusRegister } from "./StatusRegister";
 
-import "../utils";
+/*global number_to_hex */
 
 /**
  * ExecutionUnit: An interface between ExecutionProcess and Instructions
@@ -34,7 +34,7 @@ export class ExecutionUnit {
         if (!class_for_instruction) {
             /** @FIXME This should not happen because validateOpcode will include this check, RIGHT!? */
             console.debug('failed finding op=', inst.opcode_info.name, inst);
-            const opstr = inst.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
+            const opstr = number_to_hex(inst.getEffectiveOpcode());
             throw new Error(`Found no Execution impl "${inst.opcode_info.name}" opcode=${opstr}.  @FIXME this should become ILLOP`);
         }
         return new class_for_instruction(inst, simstate);

@@ -144,7 +144,6 @@ function create_memory_visualizer(
 
         const row = Math.floor(i / WORDS_PER_VISUAL_ROW);
         const col = i % WORDS_PER_VISUAL_ROW;
-        //console.log("Word %s at %d x %d", (i * 2).toString(16).toUpperCase().padStart(4,"0"), row, col);
         const blockX = col * BLOCK_SIZE;
         const blockY = row * BLOCK_SIZE;
 

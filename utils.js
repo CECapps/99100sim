@@ -1,6 +1,6 @@
 // @ts-check
 
-// A bunch of ChatGPT-generated helper functions.
+// A bunch of (mostly) ChatGPT-generated helper functions.
 // The reflection nonsense is to let this file be used by both modules and the browser.
 
 /**
@@ -221,3 +221,15 @@ function signed_to_unsigned(value, bit_count = 16) {
 }
 Reflect.set(window, 'signed_to_unsigned', signed_to_unsigned);
 window.signed_to_unsigned = signed_to_unsigned;
+
+
+/**
+ * @param {number} num
+ * @param {number} padding
+ * @return {string}
+ **/
+function number_to_hex(num, padding = 4) {
+    return num.toString(16).toUpperCase().padStart(padding, '0');
+}
+Reflect.set(window, 'number_to_hex', number_to_hex);
+window.number_to_hex = number_to_hex;

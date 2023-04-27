@@ -1,7 +1,7 @@
 // @ts-check
 "use strict";
 
-/*global extract_binary,viz_request_redraw,Asm,Simulation */
+/*global extract_binary, viz_request_redraw, Asm, Simulation, number_to_hex */
 
 /* * /
 import { ExecutionProcess } from "./classes/ExecutionProcess";
@@ -64,14 +64,14 @@ function reset_simui() {
 }
 
 function update_simui() {
-    gebid_stfu('run_el').innerText = running ? (fast_mode ? 'Yes (fast)' : (slow_mode ? 'Yes (slow)' :'Yes')) : 'No';
+    gebid_stfu('run_el').innerText = running ? (fast_mode ? 'Yes (fast)' : (slow_mode ? 'Yes (slow)' : 'Yes')) : 'No';
 
     gebid_stfu('nstate_el').innerText = sim.flow.flow_state;
     gebid_stfu('pstate_el').innerText = sim.flow.prev_flow_state;
 
-    gebid_stfu('wp_el').innerText = '>' + sim.state.workspace_pointer.toString(16).toUpperCase().padStart(4, '0');
+    gebid_stfu('wp_el').innerText = `>${number_to_hex(sim.state.workspace_pointer)}`;
     gebid_stfu('wp_el').style.color = color_for_word(sim.state.workspace_pointer);
-    gebid_stfu('pc_el').innerText = '>' + sim.state.getPc().toString(16).toUpperCase().padStart(4, '0');
+    gebid_stfu('pc_el').innerText = `>${number_to_hex(sim.state.getPc())}`;
     gebid_stfu('pc_el').style.color = color_for_word(sim.state.getPc());
 
     //gebid_stfu('instcount_el').innerText = inst_execution_count.toString();
@@ -91,7 +91,7 @@ function update_simui() {
     for (let regnum = 0; regnum <= 15; regnum++) {
         const regcell = window.document.createElement('td');
         regcell.style.color = color_for_word(sim.state.getRegisterWord(regnum));
-        regcell.textContent = '>' + sim.state.getRegisterWord(regnum).toString(16).toUpperCase().padStart(4, '0');
+        regcell.textContent = `>${number_to_hex(sim.state.getRegisterWord(regnum))}`;
         regrow.appendChild(regcell);
     }
 
@@ -100,7 +100,7 @@ function update_simui() {
     const inst = ep.getCurrentInstruction();
     if (inst.opcode_info.name != 'NOP') {
         const op_name = inst.opcode_info.name;
-        const op_code = inst.getEffectiveOpcode().toString(16).toUpperCase().padStart(4, '0');
+        const op_code = number_to_hex(inst.getEffectiveOpcode());
         gebid_stfu('epci_el').innerText = `${op_name} >${op_code}`;
         gebid_stfu('epci_el').style.color = color_for_word(inst.getEffectiveOpcode());
     } else {
@@ -206,8 +206,12 @@ function fps_update_callback() {
     if (running_fps_avg.length > running_average_limit) { running_fps_avg.shift(); }
     if (running_ips_avg.length > running_average_limit) { running_ips_avg.shift(); }
 
-    const avg_fps = running_fps_avg.reduce(function(accumulator, current) { accumulator += current; return accumulator; });
-    const avg_ips = running_ips_avg.reduce(function(accumulator, current) { accumulator += current; return accumulator; });
+    const avg_fps = running_fps_avg.reduce(
+        function(accumulator, current) { accumulator += current; return accumulator; }
+    );
+    const avg_ips = running_ips_avg.reduce(
+        function(accumulator, current) { accumulator += current; return accumulator; }
+    );
 
     // Weighting the average against the current numbers results in more correct figures during performance drops
     const weighted_fps = ((avg_fps / running_fps_avg.length) + this_fps) / 2;
@@ -347,13 +351,13 @@ function reset_button_onclick(event) {
  **/
 function color_for_word(word) {
     const red_val = extract_binary(word, 16, 11, 5) * 8;
-    const red_string = Math.round(red_val).toString(16).padStart(2, '0');
+    const red_string = number_to_hex(Math.round(red_val), 2);
 
     const green_val = extract_binary(word, 16, 5, 6) * 4;
-    const green_string = Math.round(green_val).toString(16).padStart(2, '0');
+    const green_string = number_to_hex(Math.round(green_val), 2);
 
     const blue_val = extract_binary(word, 16, 0, 5) * 8;
-    const blue_string = Math.round(blue_val).toString(16).padStart(2, '0');
+    const blue_string = number_to_hex(Math.round(blue_val), 2);
 
     const color_string = `#${red_string}${green_string}${blue_string}`;
     return color_string;
