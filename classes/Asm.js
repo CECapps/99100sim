@@ -7,6 +7,8 @@ import { OpInfo } from "./OpInfo";
 
 export { Asm, AsmParseLineResult };
 
+/*global number_to_hex */
+
 class Asm {
 
     static #pi_list = [
@@ -88,11 +90,11 @@ class Asm {
         this.#parsed_lines = [];
         let i = 0;
         for (const line of this.#lines) {
-            // Break each line into individual components.
             const line_processed = this.#parseLine(line, i);
-            // Extract symbols from the line
-            this.#preProcessLineSymbols(line_processed);
-            // PIs that change the line itself need to be run now
+            // Extract possible symbols, but don't alter the line
+            this.#processLineSymbolsIntoSymbolTable(line_processed);
+            // Now check for PIs that alter the line.  This relies on having a
+            // completely defined (up until now) symbol table.
             const line_pid = this.#preProcessLinePIs(line_processed);
             this.#parsed_lines[i++] = line_pid;
         }
@@ -102,10 +104,6 @@ class Asm {
         this.#preProcessLocationCounterSymbols();
         // Symbols can be self-referential, so resolve those references.
         this.#preProcessUndefinedSymbols();
-        // We're about to do a parameter symbol replacement.  To make things
-        // a bit easier, scan through all of the params and flag those that
-        // contain symbols or otherwise aren't just numbers or registers.
-        this.#scanParams();
         // All symbols should be defined by this point, so go ahead and sub in
         // their values inside each candidate param.
         this.#preProcessParamSymbols();
@@ -123,25 +121,9 @@ class Asm {
         // With all symbols substituted, we can now build our bytecode.
         this.#processLinesToBytecode();
 
-        // const old_symbol_table = this.#symbol_table;
+        // And now ignore all of the above and do it the old way lol
 
         this.#buildSymbolTable();
-
-        /*
-        const old_key_compare = Object.keys(old_symbol_table).sort().join(',');
-        const new_key_compare = Object.keys(this.#symbol_table).sort().join(',');
-        if (old_key_compare == new_key_compare) {
-            for (let symbol_name in old_symbol_table) {
-                const old_symbol = old_symbol_table[symbol_name];
-                if (old_symbol.symbol_type != 'location') {
-                    continue;
-                }
-                const new_symbol = this.#symbol_table[symbol_name];
-                console.debug(symbol_name, old_symbol.symbol_value, new_symbol.symbol_value * 2, old_symbol.symbol_value == new_symbol.symbol_value * 2);
-            }
-        }
-        */
-
         this.#applySymbolTable();
 
         // Our lines have been processed and symbols replaced.  We can finally
@@ -172,7 +154,7 @@ class Asm {
                         words.push(word);
                     }
                 } else {
-                    words.push(line.word);
+                    words.push(line.fallback_word);
                 }
             }
         }
@@ -192,9 +174,9 @@ class Asm {
         for (const line of this.#parsed_lines) {
             const is_pi_data = ((line.line_type == 'pi') && (line.instruction == 'data'));
             if (is_pi_data) {
-                const f_word = line.word.toString(16).toUpperCase().padStart(4, '0');
+                const f_word = number_to_hex(line.fallback_word);
                 const f_comments = line.comments.length ? ` ; ${line.comments}` : '';
-                const f_string = `.data   0x${f_word}`;
+                const f_string = `DATA >${f_word}`;
                 asm.push(f_string.padEnd(18, ' ') + f_comments);
             }
 
@@ -216,7 +198,8 @@ class Asm {
             const f_params = [];
             for (const param_name of instr.opcode_info.format_info.asm_param_order) {
                 if (param_name == '_immediate_word_') {
-                    f_params.push(`0x${instr.getImmediateValue().toString(16).toUpperCase()}`);
+                    const imword = number_to_hex(instr.getImmediateValue());
+                    f_params.push(`>${imword}`);
                     continue;
                 }
 
@@ -331,28 +314,15 @@ class Asm {
             line = line.substring(result.instruction.length).trim();
 
             // Extract the likely params
-            /** @FIXME We know which instructions don't have params.  Add exceptions. */
+            /** @TODO We know which instructions don't have params.  Add exceptions. */
             const ppres = this.#parseParams(line, line_number);
             result.parsed_params = ppres.params;
             line = ppres.remainder;
 
             // Old code relies on instruction_params being a normal array, so let's fake it.
-            result.instruction_params = [];
-            for (const parsed_param of ppres.params) {
-                result.instruction_params.push(parsed_param.param_string);
-            }
+            result.instruction_params = result.parsed_params.map( (pp) => { return pp.param_string; } );
             result.instruction_argument = result.instruction_params.join(',');
 
-            /*
-            const params_regex = /^([^\s]+)/;
-            const params_matches = line.match(params_regex);
-            if (params_matches) {
-                result.instruction_argument = params_matches[1];
-                line = line.substring(result.instruction_argument.length);
-                result.instruction_params = result.instruction_argument.split(',');
-            }
-            */
-            // Whatever remains must be a comment.
             result.comments += line.trim();
         }
 
@@ -394,6 +364,7 @@ class Asm {
      **/
     #parseParams(param_string, line_number) {
         let remainder = '';
+        const orig_param_string = param_string;
 
         /** @type {AsmParam[]} */
         const parsed_params = [];
@@ -403,16 +374,18 @@ class Asm {
         const quoted_string_regex = /^('((?:[^'\\]|\\.)+?)'|"((?:[^"\\]|\\.)+?)")/;
 
         const glom_until_comma_regex = /^([^\s,]+),?/;
-        const indexed_mode_regex = /^@?(.+)\((.+)\)$/;
 
-        while (param_string.length > 0) {
+        let limit = 100;
+
+        while (param_string.length > 0 && limit-- > 0) {
             const new_param = new AsmParam;
             new_param.line_number = line_number;
             new_param.param_index = parsed_params.length;
 
             // We need to split this param from any that follow.  This can
             // normally be done by just grabbing everything up to the next comma
-            // or until the end of the string, but string arguments make that hard.
+            // or until the end of the string, but string arguments make that hard
+            // because they are allowed to contain commas.  It's regex time!
             const quoted_match = param_string.match(quoted_string_regex);
             if (quoted_match) {
                 new_param.param_string = quoted_match[1];
@@ -455,58 +428,25 @@ class Asm {
             }
 
             // If we got this far, we have a parameter in extracted_param.
-
-            // Let's eliminate the obvious.
-            if (looks_like_number(extracted_param)) {
-                new_param.param_type = 'number';
-                new_param.param_string = extracted_param;
-                new_param.param_numeric = number_format_helper(extracted_param);
-                new_param.value_assigned = true;
-                parsed_params.push(new_param);
-                continue;
-            }
-
-            // This looks for register-like strings in modes 0, 1, and 3.
-            if (looks_like_register(extracted_param)) {
-                new_param.param_type = 'register';
-                new_param.param_string = extracted_param;
-                new_param.value_assigned = true;
-                parsed_params.push(new_param);
-                continue;
-            }
-
-            // How about symbolic mode with a plain old regular number?
-            if (extracted_param.startsWith('@') && looks_like_number(extracted_param.substring(1))) {
-                new_param.param_type = 'symbolic';
-                new_param.param_string = extracted_param;
-                new_param.param_numeric = number_format_helper(extracted_param.substring(1));
-                new_param.value_assigned = true;
-                parsed_params.push(new_param);
-                continue;
-            }
-
-            // One final check: Is it indexed mode with regular numbers?
-            const indexed_matches = extracted_param.match(indexed_mode_regex);
-            if (
-                indexed_matches
-                && looks_like_number(indexed_matches[1])
-                && looks_like_register(indexed_matches[2])
-            ) {
-                // Yes, we aren't recording the extracted bits.  That happens later.
-                new_param.param_type = 'indexed';
-                new_param.param_string = extracted_param;
-                new_param.value_assigned = true;
-                parsed_params.push(new_param);
-                continue;
-            }
-
-            // It's not a number, it's not a register in 0, 1, or 3, and it's
-            // also not an easily parsed symbolic mode or indexed mode string.
-            // It's very likely that something inside here needs symbol swapping.
-            new_param.param_type = 'unknown';
             new_param.param_string = extracted_param;
-            new_param.value_assigned = false;
+            // So, what exactly is it?
+            new_param.param_type = this.#paramLooksLikeSymbolHelper(extracted_param);
+            // An unknown return implies an unreplaced symbol
+            new_param.value_assigned = new_param.param_type == 'unknown';
+
+            if (new_param.param_type == 'number') {
+                new_param.param_numeric = number_format_helper(extracted_param);
+            } else if (new_param.param_type == 'symbolic') {
+                // We'll only ever get symbolic back from the helper if there
+                // was a preceding at sign, which we must strip.
+                new_param.param_numeric = number_format_helper(extracted_param.substring(1));
+            }
             parsed_params.push(new_param);
+        }
+
+        if (limit <= 0) {
+            console.error(orig_param_string, param_string, parsed_params);
+            throw new Error('parseParams loop limit exceeded, what a great bug!');
         }
 
         const res = new AsmParamParseResult;
@@ -523,7 +463,7 @@ class Asm {
      *
      * @param {AsmParseLineResult} line
      **/
-    #preProcessLineSymbols(line) {
+    #processLineSymbolsIntoSymbolTable(line) {
         if (
             // Expect instruction lines that have a label, or...
             (line.line_type == 'instruction' && !line.label)
@@ -644,7 +584,7 @@ class Asm {
      * up to the caller to make sure that #current_ckpt_default is kept up to
      * date and in sync with calls to this function.
      *
-     * @FIXME instruction_argument being instruction_params joins is BOGUS
+     * @FIXME instruction_argument being instruction_params joins is bogus?
      *
      * @param {AsmParseLineResult} line
      * @returns {AsmParseLineResult}
@@ -820,67 +760,45 @@ class Asm {
     }
 
     /**
-     * Third generation symbol processing.  Correct.
+     * Given a single parameter string value, determine what it's most likely
+     * to be.  This is intended to sniff out symbols.
      *
-     * Scans through the parsed lines and seeks out parameters that must be symbols.
-     * There is a huge logical overlap between this and #symbolReplaceHelper.
-     * Unfortunately I can't think of a simple way to reuse the logic, so they
-     * will remain separate for now.
-     *
-     * This code does not rely on the symbol table.
-     *
-     * @FIXME lol it doesn't actually store the data anywhere.
-     * @TODO Actually, break the core of this out.  I think this might belong in parseParams.
+     * @param {string} param_value
+     * @returns { 'number' | 'register' | 'indexed' | 'symbolic' | 'text' | 'unknown' }
      **/
-    #scanParams() {
-        /** @type {Array<number[]>} */
-        const possible_symbols = [];
-
-        for (const line of this.#parsed_lines) {
-            // Can't do substitutions if there's nothing to substitute.
-            if (!line.instruction_params.length) {
-                continue;
-            }
-            let index = 0;
-            for (const param_value of line.instruction_params) {
-                index++;
-                // First up, let's dismiss obvious numbers.
-                if (looks_like_number(param_value)) {
-                    continue;
-                }
-                // Second, obvious registers in addressing modes 0, 1, and 3.
-                if (looks_like_register(param_value)) {
-                    continue;
-                }
-                // Third, concrete values in obviously indexed mode.
-                const indexed_matches = param_value.match(/^@?(.+)\((.+)\)$/);
-                if (
-                    indexed_matches
-                    && looks_like_number(indexed_matches[1])
-                    && looks_like_register(indexed_matches[2])
-                ) {
-                    continue;
-                }
-                // Fourth, concrete values in obviously symbolic mode.
-                if (param_value.startsWith('@') && looks_like_number(param_value.substring(1))) {
-                    continue;
-                }
-                // Fifth, some instructions allow quoted ASCII strings.  The spec uses single quotes only.
-                const string_matches = param_value.match(/^(["'])(.+?)\1$/);
-                if (string_matches) {
-                    continue;
-                }
-                // It's not any of our expected formats, so let's tag it as being a possible symbol.
-                possible_symbols.push([line.line_number, index - 1]);
-            }
+    #paramLooksLikeSymbolHelper(param_value) {
+        // First up, let's dismiss obvious numbers.
+        if (looks_like_number(param_value)) {
+            return 'number';
         }
-
-        console.debug('scanParams:', possible_symbols);
-
+        // Second, obvious registers in addressing modes 0, 1, and 3.
+        if (looks_like_register(param_value)) {
+            return 'register';
+        }
+        // Third, concrete values in obviously indexed mode.
+        const indexed_matches = param_value.match(/^@?(.+)\((.+)\)$/);
+        if (
+            indexed_matches
+            && looks_like_number(indexed_matches[1])
+            && looks_like_register(indexed_matches[2])
+        ) {
+            return 'indexed';
+        }
+        // Fourth, concrete values in obviously symbolic mode.
+        if (param_value.startsWith('@') && looks_like_number(param_value.substring(1))) {
+            return 'symbolic';
+        }
+        // Fifth, some instructions allow quoted ASCII strings.  The spec uses single quotes only.
+        const string_matches = param_value.match(/^(["'])(.+?)\1$/);
+        if (string_matches) {
+            return 'text';
+        }
+        return 'unknown';
     }
 
     #preProcessUndefinedSymbols() {}
     #preProcessParamSymbols() {}
+
     #processLocationCounterSymbols() {}
     #processUndefinedSymbols() {}
     #processParamSymbols() {}
@@ -1192,19 +1110,21 @@ class Asm {
     #registerAddressingModeToStringHelper(line, type, value) {
         let string = '';
         if (type == 0) {
-            // S is the number of the workspace register containing the value
+            // Register direct mode
             string = `R${value}`;
         } else if (type == 1 || type == 3) {
-            // S is the workspace register containing the address with the value
+            // Register indirect mode
             string = `*R${value}`;
             if (type == 3) {
+                // Register indirect with autoinc
                 string += '+';
             }
         } else if (type == 2) {
             // We must be in symbolic or indexed memory mode.  In both cases,
             // a word will follow with our actual value.
-            /** @FIXME this is bogus */
-            string = `@0x${line.word.toString(16).toUpperCase().padStart(4, '0')}`;
+            /** @FIXME this may be bogus */
+            const imword = number_to_hex(line.fallback_word);
+            string = `@>${imword}`;
             if (value > 0) {
                 // S is not zero, so we're in indexed mode.  The first word
                 // after the instruction is our base value.
@@ -1228,14 +1148,18 @@ class Asm {
         let immediate_word = 0;
 
         if (register_string.startsWith('*')) {
+            // Register indirect mode
             mode = 1;
             register_string = register_string.substring(1);
             if (register_string.endsWith('+')) {
+                // Register indirect autoinc
                 mode = 3;
                 register_string = register_string.substring(0, register_string.length - 1);
             }
         }
+
         if (register_string.startsWith('@')) {
+            // Symbolic (explicit)
             console.debug('mode = 2');
             mode = 2;
             if (register_string.endsWith(')')) {
@@ -1262,10 +1186,17 @@ class Asm {
             if (mode == 0) {
                 //console.debug('mode = 0');
             }
+            // Not using looks_like_register here because we don't want to match
+            // modes 1 or 3, and we want to extract the numeric value
             const regstring_format_test = register_string.match(/^(WR|R)?(\d{1,2})$/);
             if (regstring_format_test) {
                 register = parseInt(regstring_format_test[2], 10);
+                if (register > 16) {
+                    throw new Error('Parse error trying to rectify register string, value greater than 16');
+                }
             } else {
+                // It's probably symbolic, but we can't deal with that yet
+                /** @FIXME figure out how to make non-@ symbolic work here? */
                 throw new Error('Parse error extracting register value from mode=0,1,3 arg string');
             }
         }
@@ -1276,6 +1207,7 @@ class Asm {
 
 class AsmParseLineResult {
     line_number =           0;
+    /** @type { 'ERROR' | 'pending' | 'label' | 'comment' | 'instruction' | 'pi' | 'fallthrough' } */
     line_type =             'ERROR';
     line =                  'ERROR';
     label =                 'ERROR';
@@ -1286,7 +1218,7 @@ class AsmParseLineResult {
     /** @type {AsmParam[]} */
     parsed_params =         [];
     comments =              'ERROR';
-    word =                  0;
+    fallback_word =         0;
     /** @type {EncodedInstruction|null} */
     encoded_instruction =   null;
 }
