@@ -26,8 +26,6 @@ class Asm {
         'CSEG', // Common Segment: A declared area of stuff that contains data to be shared between multiple programs.  Relocatable etc
         'CEND', // Common Segment End
 
-        'IDT',  // Program Identifier: Assign printable program name, not placed in program.
-
         'BYTE', // Initialize byte(s)/word(s)/ASCII text string
         'DATA',
         'TEXT',
@@ -42,19 +40,32 @@ class Asm {
     ];
 
     // These PIs can define symbols through the location counter and change the location counter when doing so.
-    #pi_location_change_list = ['AORG', 'DORG', 'BSS', 'BES', 'EVEN'];
+    static #pi_location_change_list = ['AORG', 'DORG', 'BSS', 'BES', 'EVEN'];
     // These PIs declare segments of code or data
-    #pi_segment_list = ['PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
+    static #pi_segment_list = ['PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
     // These PIs can define symbols that reference the current value of the location counter
-    #pi_location_list = ['BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
+    static #pi_location_list = ['BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
     // These PIs define symbols through their operands.
-    #pi_assign_list = ['EQU', 'DFOP', 'DXOP', 'END'];
+    static #pi_assign_list = ['EQU', 'DFOP', 'DXOP', 'END'];
     // These PIs declare data that will be included in the bytecode output.
-    #pi_emitters_list = ['BYTE', 'DATA', 'TEXT', 'BSS', 'BES'];
+    static #pi_emitters_list = ['BYTE', 'DATA', 'TEXT', 'BSS', 'BES'];
     // These PIs manipulate the contents of other lines.
-    #pi_replace_list = ['CKPT', 'DFOP', 'DXOP'];
+    static #pi_replace_list = ['CKPT', 'DFOP', 'DXOP'];
     // These PIs are instantly replaced with another instruction.
-    #pi_macro_list = ['NOP', 'RT'];
+    static #pi_macro_list = ['NOP', 'RT'];
+    // These PIs are not supported.
+    /*eslint-disable array-element-newline */
+    static #pi_unsupported_list = [
+        // Source code printing options
+        'OPTION', 'IDT', 'TITL', 'LIST', 'UNL', 'PAGE', 'SETRM',
+        // Complex replacement operations dealing with transfer vectors
+        'WPNT', 'XVEC',
+        // Relocatable segment and external reference instructions
+        'RORG', 'DEF', 'REF', 'SREF', 'LOAD', 'COPY',
+        // Conditional and macro instructions
+        'ASMIF', 'ASMELS', 'ASMEND', 'SETMNL',
+    ];
+    /*eslint-enable array-element-newline */
 
     /** @type string[] */
     #lines = [];
@@ -305,16 +316,36 @@ class Asm {
         line = line.trim();
 
         // All instructions are one to four all-capital letters, but there are
-        // a few PIs that extend up to six letters.
+        // a few PIs that extend up to six letters.  Not all things that we see
+        // in the instruction field are going to be instructions.  Let's tag
+        // things we know are unsupported, that we know are PIs, and that we
+        // know are instructions.
+        let is_instruction = false;
+        let is_pi = false;
         const instruction_regex = /^([A-Z]{1,6})(\s|$)/;
         const instruction_matches = line.match(instruction_regex);
         if (result.line_type == 'pending' && instruction_matches) {
             result.instruction = instruction_matches[1];
-            result.line_type = Asm.#pi_list.includes(result.instruction) ? 'pi' : 'instruction';
+            if (Asm.#pi_list.includes(result.instruction)) {
+                is_pi = true;
+            } else if (OpInfo.opNameIsValid(result.instruction)) {
+                is_instruction = true;
+            } else if (Asm.#pi_unsupported_list.includes(result.instruction)) {
+                console.error('Unsupported PI, ignoring', result, line);
+                result.line_type = 'comment';
+                result.comments += line;
+                line = '';
+            }
+        }
+
+        // We might still see an unknown instruction here, but that is fine.
+        // Things like DFOP & DXOP may well convert it into a real instruction,
+        // but that can't yet be dealt with here.
+        if (is_instruction || is_pi || (result.line_type == 'pending' && instruction_matches)) {
+            result.line_type = is_pi ? 'pi' : 'instruction';
             line = line.substring(result.instruction.length).trim();
 
             // Extract the likely params
-            /** @TODO We know which instructions don't have params.  Add exceptions. */
             const ppres = this.#parseParams(line, line_number);
             result.parsed_params = ppres.params;
             line = ppres.remainder;
@@ -461,6 +492,8 @@ class Asm {
      * Given a line, scan it for things that might be symbols.  If the symbol
      * is also defined right here, assign it a value.
      *
+     * @FIXME this has a whole lot of duplicate code, can it be sanely streamlined?
+     *
      * @param {AsmParseLineResult} line
      **/
     #processLineSymbolsIntoSymbolTable(line) {
@@ -549,8 +582,8 @@ class Asm {
 
         // Skip irrelevant PIs.
         if (line.line_type == 'pi'
-            && !this.#pi_location_change_list.includes(line.instruction)
-            && !this.#pi_location_list.includes(line.instruction)
+            && !Asm.#pi_location_change_list.includes(line.instruction)
+            && !Asm.#pi_location_list.includes(line.instruction)
         ) {
             return;
         }
@@ -843,8 +876,8 @@ class Asm {
                 continue;
             }
 
-            const is_assign = line.line_type == 'pi' && line.instruction && this.#pi_assign_list.includes(line.instruction);
-            const is_location = line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && this.#pi_location_list.includes(line.instruction));
+            const is_assign = line.line_type == 'pi' && line.instruction && Asm.#pi_assign_list.includes(line.instruction);
+            const is_location = line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && Asm.#pi_location_list.includes(line.instruction));
 
             if (is_assign) {
                 const sym = new AsmSymbol;
@@ -876,7 +909,7 @@ class Asm {
         // Number of times we've iterated over parsed_lines: 3
         for (const line of this.#parsed_lines) {
             // The word values in this iteration should be more correct.
-            const is_pi_location = line.line_type == 'pi' && line.label && this.#pi_location_list.includes(line.instruction);
+            const is_pi_location = line.line_type == 'pi' && line.label && Asm.#pi_location_list.includes(line.instruction);
             if (line.line_type == 'label' || is_pi_location) {
                 location_instructions[line.label].symbol_value = estimated_word_count;
                 location_instructions[line.label].value_assigned = true;
