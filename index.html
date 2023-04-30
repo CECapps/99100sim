@@ -167,15 +167,14 @@ window.addEventListener('DOMContentLoaded', function () {
                 place-content: start;
             }
             #codebox_grid_container textarea {
+                font-size: 0.9rem;
                 grid-column-start: 1;
                 grid-row-start: 1;
             }
             #codebox_grid_container pre {
                 padding-left: 1rem;
                 grid-column-start: 2;
-                font-size: 1.15rem;
                 font-weight: normal;
-                line-height: 1.1rem;
             }
             #codebox_grid_container button {
                 grid-column-start: 1;
@@ -265,19 +264,36 @@ window.addEventListener('DOMContentLoaded', function () {
                 <br>
                 <section>
                     <section id="codebox_grid_container">
-<textarea id="codebox" cols="70" spellcheck="false">
-                BYTE 99
-                DATA >1701              lol a comment
-                TEXT 'Hello, world!'    another comment
+<textarea id="codebox" cols="80" spellcheck="false">
+                DSEG
+start_pixel     EQU     R1
+end_pixel       EQU     R2
+color_increment EQU     R3
+pixel_increment EQU     R4
+initial_color   EQU     R5
 
-start_pixel     EQU R1
-end_pixel       EQU R2
-color_increment EQU R3
-pixel_increment EQU R4
-initial_color   EQU R5
+current_pixel   EQU     R8
+current_color   EQU     R9
+                DEND
 
-current_pixel   EQU R8
-current_color   EQU R9
+                AORG    0
+
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 0 - 3
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 4 - 7
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 8 - 11
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 12 - 15
+
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100  ; XOP 0 - 3
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100  ; XOP 4 - 7
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100  ; XOP 8 - 11
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100  ; XOP 12 - 15
+
+                AORG    >0080
+
+workspace       BSS     32
+scratch         BSS     32
+
+                AORG    >0100
 
 setup:
     LI      start_pixel,>0200
@@ -288,6 +304,8 @@ setup:
 init:
     MOV     start_pixel,current_pixel
     MOV     initial_color,current_color
+    MOV     workspace,R6
+    MOV     scratch,R7
 loop:
     MOV     current_color,*current_pixel    ; Draw pixel
     A       pixel_increment,current_pixel   ; Bump next pixel
@@ -303,6 +321,8 @@ ok2:
     MOV     initial_color,current_color     ; Reset color
 
     JMP     loop                            ; => loop
+
+    END     setup ; entry point
 </textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>

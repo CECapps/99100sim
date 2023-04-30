@@ -134,7 +134,7 @@ class Asm {
 
         // And now ignore all of the above and do it the old way lol
 
-        this.#buildSymbolTable();
+        //this.#buildSymbolTable();
         this.#applySymbolTable();
 
         // Our lines have been processed and symbols replaced.  We can finally
@@ -162,6 +162,7 @@ class Asm {
             if (is_instruction || is_pi_data) {
                 if (line.encoded_instruction !== null) {
                     for (const word of line.encoded_instruction.words) {
+                        console.debug(line.line_number, line.instruction, word);
                         words.push(word);
                     }
                 } else {
@@ -204,6 +205,7 @@ class Asm {
                 throw new Error('Can not reconstruct asm line without an EncodedInstruction');
             }
             const instr = InstructionDecode.getInstructionFromEncoded(line.encoded_instruction);
+            console.debug(line.encoded_instruction);
 
             const f_instr = instr.opcode_info.name.padEnd(8, ' ');
             const f_params = [];
@@ -1042,35 +1044,47 @@ class Asm {
             if (line.line_type != 'instruction') {
                 continue;
             }
+            console.groupCollapsed(line.line_number);
             // Clean up the mess from earlier processing.
-            line.instruction_params = line.instruction_argument.split(',');
+            //line.instruction_params = line.instruction_argument.split(',');
 
             // Yay yet another disposable Instruction!
-            const inst = Instruction.newFromString(line.instruction);
+            let inst = Instruction.newFromString(line.instruction);
             const format = inst.opcode_info.format;
             for (const i in line.instruction_params) {
                 for (const sym_name in this.#symbol_table) {
-                    if (!this.#symbol_table[sym_name].value_assigned) {
-                        continue;
-                    }
-                    let symbol_value = this.#symbol_table[sym_name].symbol_value;
                     // Jump instructions get the offset adjust thing.  This SHOULD
                     // be as simple as subtracting the current word count from
                     // the word count (== value) of the location symbol and then
                     // doubling the value because that's how jumps work?
+                    let numeric_value = this.#symbol_table[sym_name].symbol_value;
                     if (this.#symbol_table[sym_name].symbol_type == 'location' && (format == 2 || format == 17)) {
-                        symbol_value = (symbol_value - word_count) * 2;
+                        numeric_value = (numeric_value - word_count) * 2;
                     }
+
+                    /** @FIXME hardcoding zero is probably wrong */
+                    const string_value = this.#symbol_table[sym_name].symbol_params[0];
+                    const b4 = line.instruction_params[i];
                     line.instruction_params[i] = this.#symbolReplaceHelper(
                         line.instruction_params[i],
                         sym_name,
-                        symbol_value.toString()
+                        this.#symbol_table[sym_name].value_assigned ? numeric_value.toString() : string_value
                     );
+                    if (b4 != line.instruction_params[i]) {
+                        //console.debug('Successfully replaced', sym_name, 'in string', b4, 'line:', line);
+                        break;
+                    }
                 }
+                /** @FIXME this is where you left off.  setParam isn't getting the right data! */
+                console.debug(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
                 inst.setParam(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
             }
+            inst = this.#getInstructionFromLine(line);
             const ei = InstructionDecode.getEncodedInstruction(inst);
             word_count += ei.words.length;
+            line.encoded_instruction = ei;
+            console.debug(inst, ei);
+            console.groupEnd();
         }
     }
 
@@ -1180,6 +1194,8 @@ class Asm {
         let register = 0;
         let immediate_word = 0;
 
+        const orig_register_string = register_string;
+
         if (register_string.startsWith('*')) {
             // Register indirect mode
             mode = 1;
@@ -1227,10 +1243,15 @@ class Asm {
                 if (register > 16) {
                     throw new Error('Parse error trying to rectify register string, value greater than 16');
                 }
+            } else if (looks_like_number(register_string)) {
+                // It's symbolic, without the at.
+                mode = 2;
+                register = 0;
+                immediate_word = number_format_helper(register_string);
+                console.debug(orig_register_string, register_string, mode, register, immediate_word);
             } else {
-                // It's probably symbolic, but we can't deal with that yet
-                /** @FIXME figure out how to make non-@ symbolic work here? */
-                throw new Error('Parse error extracting register value from mode=0,1,3 arg string');
+                console.debug(orig_register_string, register_string, mode, register, immediate_word);
+                throw new Error('Unlikely fallthrough during addressing mode check (BUG)');
             }
         }
         return [mode, register, immediate_word];
