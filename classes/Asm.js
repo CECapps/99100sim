@@ -115,26 +115,8 @@ class Asm {
         this.#preProcessLocationCounterSymbols();
         // Symbols can be self-referential, so resolve those references.
         this.#preProcessUndefinedSymbols();
-        // All symbols should be defined by this point, so go ahead and sub in
-        // their values inside each candidate param.
-        this.#preProcessParamSymbols();
-
-        // Subbing in symbol values can change the word count for a whole bunch
-        // of different instructions.  The values assigned should be good enough
-        // to create an accurate location counter and thus more accurate locations.
-        this.#processLocationCounterSymbols();
-        // With location symbols resolved, it's time to go back through all
-        // of the symbols and rebuild self-referential references.
-        this.#processUndefinedSymbols();
-        // With all symbols resolved we can perform the final param substitution.
-        this.#processParamSymbols();
-
-        // With all symbols substituted, we can now build our bytecode.
-        this.#processLinesToBytecode();
-
-        // And now ignore all of the above and do it the old way lol
-
-        //this.#buildSymbolTable();
+        // We should now have temporary values for everything.  Clean up the
+        // temporary mess we've created and do a fresh swap of all symbols.
         this.#applySymbolTable();
 
         // Our lines have been processed and symbols replaced.  We can finally
@@ -162,7 +144,7 @@ class Asm {
             if (is_instruction || is_pi_data) {
                 if (line.encoded_instruction !== null) {
                     for (const word of line.encoded_instruction.words) {
-                        console.debug(line.line_number, line.instruction, word);
+                        //console.debug(line.line_number, line.instruction, word);
                         words.push(word);
                     }
                 } else {
@@ -205,7 +187,7 @@ class Asm {
                 throw new Error('Can not reconstruct asm line without an EncodedInstruction');
             }
             const instr = InstructionDecode.getInstructionFromEncoded(line.encoded_instruction);
-            console.debug(line.encoded_instruction);
+            //console.debug(line.encoded_instruction);
 
             const f_instr = instr.opcode_info.name.padEnd(8, ' ');
             const f_params = [];
@@ -707,10 +689,11 @@ class Asm {
             if (this.#symbol_table[symbol_name].symbol_type != 'location') {
                 continue;
             }
+            /** @FIXME This artificially limits the number of symbols per line to 1, which is not strictly true */
             symbols_by_line[this.#symbol_table[symbol_name].line_number] = symbol_name;
         }
 
-        // The location counter operates in bytes, not words.
+        // Remember: the location counter operates in bytes, not words.
         let location_counter = 0;
         for (const line of this.#parsed_lines) {
             if (line.line_type == 'comment') {
@@ -787,11 +770,8 @@ class Asm {
                 this.#symbol_table[symbols_by_line[line.line_number]].symbol_value = location_counter;
                 this.#symbol_table[symbols_by_line[line.line_number]].value_assigned = true;
             }
-
         }
-
-        console.debug('preProcessLocationCounterSymbols:', this.#symbol_table);
-
+        //console.debug('preProcessLocationCounterSymbols:', this.#symbol_table);
     }
 
     /**
@@ -831,13 +811,62 @@ class Asm {
         return 'unknown';
     }
 
-    #preProcessUndefinedSymbols() {}
-    #preProcessParamSymbols() {}
+    /**
+     * Third generation symbol preprocessing.  Incomplete.
+     *
+     * All value symbols that had assignable values and all location symbols
+     * have now been given something resembling a real value.  Some symbols can
+     * reference other symbols, leaving them undefined.  Let's go through and
+     * see if we can resolve those undefined symbols.  This SHOULD handle
+     * recursive resolution properly.  SHOULD.
+     *
+     * This directly updates the symbol table.
+     **/
+    #preProcessUndefinedSymbols() {
+        let limiter = this.#parsed_lines.length * 10; // allows for 10 levels of recursion before freaking out
+        let replace_count = 0;
+        do {
+            replace_count = 0;
+            for (const outer_symbol_name in this.#symbol_table) {
+                const sym = this.#symbol_table[outer_symbol_name];
+                // Only unassigned assign symbols can be unassigned, for our purposes.
+                /** @FIXME This isn't strictly true.  Create exceptions for weird PIs */
+                if (sym.symbol_type == 'location' || sym.value_assigned == true) {
+                    //console.log('preProcessUndefinedSymbols: skip loc or assigned');
+                    continue;
+                }
+                let i = 0;
+                for (const param_value of sym.symbol_params) {
+                    const b4 = param_value;
+                    if (this.#paramLooksLikeSymbolHelper(param_value) != 'unknown') {
+                        //console.log('preProcessUndefinedSymbols: skip not unknown');
+                        continue;
+                    }
+                    for (const inner_symbol_name in this.#symbol_table) {
+                        const inner_sym = this.#symbol_table[inner_symbol_name];
+                        //console.log(sym, inner_sym);
+                        const after = this.#symbolReplaceHelper(
+                            param_value, inner_sym.symbol_name, inner_sym.symbol_params[0]
+                        );
+                        //console.debug(sym.symbol_name, i, b4, after, inner_sym.symbol_name);
+                        if (b4 != after) {
+                            this.#symbol_table[outer_symbol_name].symbol_params[i] = after;
+                            this.#symbol_table[outer_symbol_name].value_assigned = true;
+                            replace_count++;
+                            break;
+                        }
+                    }
+                    i++;
+                }
+                //console.debug('replace_count: ', replace_count);
+            }
+        } while (replace_count > 0 && --limiter > 0);
+        if (limiter < 1) {
+            console.error('hit limiter!');
+        }
 
-    #processLocationCounterSymbols() {}
-    #processUndefinedSymbols() {}
-    #processParamSymbols() {}
-    #processLinesToBytecode() {}
+        //console.debug(this.#symbol_table);
+    }
 
     /**
      * Second generation symbol table stuff.  Correct for common cases only.  To be retired.
@@ -1044,9 +1073,9 @@ class Asm {
             if (line.line_type != 'instruction') {
                 continue;
             }
-            console.groupCollapsed(line.line_number);
+            //console.groupCollapsed(line.line_number);
             // Clean up the mess from earlier processing.
-            //line.instruction_params = line.instruction_argument.split(',');
+            line.instruction_params = this.#parseParams(line.instruction_argument, line.line_number);
 
             // Yay yet another disposable Instruction!
             let inst = Instruction.newFromString(line.instruction);
@@ -1076,15 +1105,15 @@ class Asm {
                     }
                 }
                 /** @FIXME this is where you left off.  setParam isn't getting the right data! */
-                console.debug(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
+                //console.debug(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
                 inst.setParam(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
             }
             inst = this.#getInstructionFromLine(line);
             const ei = InstructionDecode.getEncodedInstruction(inst);
             word_count += ei.words.length;
             line.encoded_instruction = ei;
-            console.debug(inst, ei);
-            console.groupEnd();
+            //console.debug(inst, ei);
+            //console.groupEnd();
         }
     }
 
@@ -1248,7 +1277,7 @@ class Asm {
                 mode = 2;
                 register = 0;
                 immediate_word = number_format_helper(register_string);
-                console.debug(orig_register_string, register_string, mode, register, immediate_word);
+                //console.debug(orig_register_string, register_string, mode, register, immediate_word);
             } else {
                 console.debug(orig_register_string, register_string, mode, register, immediate_word);
                 throw new Error('Unlikely fallthrough during addressing mode check (BUG)');
@@ -1280,6 +1309,7 @@ class AsmParseLineResult {
 class AsmSymbol {
     line_number = 0;
     symbol_name = '';
+    /** @type { 'ERROR' | 'assign' | 'location' } */
     symbol_type = 'ERROR';
     value_assigned = false;
     symbol_value = 0;

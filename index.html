@@ -265,16 +265,18 @@ window.addEventListener('DOMContentLoaded', function () {
                 <section>
                     <section id="codebox_grid_container">
 <textarea id="codebox" cols="80" spellcheck="false">
-                DSEG
+                DORG
 start_pixel     EQU     R1
 end_pixel       EQU     R2
 color_increment EQU     R3
 pixel_increment EQU     R4
 initial_color   EQU     R5
 
+foo             EQU     initial_color
+bar             EQU     foo
+
 current_pixel   EQU     R8
 current_color   EQU     R9
-                DEND
 
                 AORG    0
 
