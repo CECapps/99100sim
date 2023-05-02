@@ -153,15 +153,34 @@ class Asm {
             if (is_instruction || is_pi_data) {
                 if (line.encoded_instruction !== null) {
                     for (const word of line.encoded_instruction.words) {
-                        //console.debug(line.line_number, line.instruction, word);
+                        //console.debug(`toWords line ${line.line_number} instr ${line.instruction} word ${number_to_hex(word)}`);
                         words.push(word);
                     }
                 } else {
+                    console.debug(`toWords (fallback) line ${line.line_number} instr ${line.instruction} word ${number_to_hex(word)}`);
                     words.push(line.fallback_word);
                 }
             }
         }
         return words;
+    }
+
+    /**
+     * @returns {Uint8Array}
+     **/
+    toBytes() {
+        const data = new Uint8Array(2 ** 16);
+        let location = 0;
+        for (const segment of this.#segments) {
+            location = segment.starting_point;
+            for (const seg_bytes of segment.data) {
+                for (const byte of seg_bytes.bytes) {
+                    data[location++] = byte;
+                }
+            }
+        }
+        console.debug(this.#segments);
+        return data;
     }
 
     /**
@@ -720,6 +739,7 @@ class Asm {
 
             // Do we have a candidate symbol?  Now is the time to assign a location to it.
             if (symbols_by_line[line.line_number]) {
+                console.debug(`${symbols_by_line[line.line_number]} => ${location_counter}`);
                 this.#symbol_table[symbols_by_line[line.line_number]].symbol_value = location_counter;
                 this.#symbol_table[symbols_by_line[line.line_number]].value_assigned = true;
             }
@@ -782,6 +802,7 @@ class Asm {
                 }
             }
 
+            //console.debug('pplcs: ', location_counter, adjustment, reassign_counter, reassign_symbol, line);
             if (reassign_counter) {
                 location_counter = adjustment;
             } else {
@@ -895,7 +916,7 @@ class Asm {
      * Reviews all lines and then does an immediate substitution before considering
      * the symbols to be valid.  This technique is flawed.
      **/
-    #buildSymbolTable() {
+    #XXbuildSymbolTable() {
         /** @type {Object.<string,AsmSymbol>} */
         const assign_instructions = {};
         /** @type {Object.<string,AsmSymbol>} */
@@ -1132,8 +1153,10 @@ class Asm {
                     );
 
                     // The definition of a symbol in a param is quite literally
-                    // if it gets substituted by symbolReplaceHelper.
-                    if (b4 != line.instruction_params[i]) {
+                    // if it gets substituted by symbolReplaceHelper and isn't
+                    // also a number.
+                    if (line.parsed_params[i].param_type != 'number' && b4 != line.instruction_params[i]) {
+                        //console.debug(line.line_number, i, 'b4 != line.instruction_params[i]', b4, line.instruction_params[i]);
                         let line_param_idxes = this.#symbol_map.get(sym_name).get(line.line_number);
                         if (line_param_idxes === undefined) {
                             line_param_idxes = [];
@@ -1169,6 +1192,23 @@ class Asm {
     #buildSegments() {
         this.#segments = [];
 
+        // We're eventually doing some param symbol replacement.  Earlier, we
+        // collected #symbol_map, which is a list of the symbols and where they
+        // appear.  It turns out it's more convenient for us to get that per-line.
+        //            line       index   symbol
+        /** @type Map<number,Map<number,string>> */
+        const line_symbol_map = new Map;
+        for (const [sym_name, line_map] of this.#symbol_map) {
+            for (const [line_number, param_indexes] of line_map) {
+                for (const param_index of param_indexes) {
+                    if (!line_symbol_map.has(line_number)) {
+                        line_symbol_map.set(line_number, new Map);
+                    }
+                    line_symbol_map.get(line_number).set(param_index, sym_name);
+                }
+            }
+        }
+
         // We start out assuming we're in absolute mode, and that we're starting
         // from the very first byte.  (We're always in absolute mode, lol)
         let current_segment = new AsmSegment;
@@ -1178,7 +1218,6 @@ class Asm {
 
         for (const line of this.#parsed_lines) {
             let did_something = false;
-            let close_segment = false;
             // All valid lines are considered.  We should never encounter these:
             if (['ERROR', 'pending', 'fallthrough'].includes(line.line_type)) {
                 console.error(line);
@@ -1196,6 +1235,7 @@ class Asm {
 
             // While all labels become symbols, only *most* labels end up defining a location.
             if (line.label && this.#symbol_table[line.label].symbol_type == 'location') {
+                // Adjust the symbol accordingly.
                 this.#symbol_table[line.label].symbol_value = location_counter;
                 this.#symbol_table[line.label].value_assigned = true;
 
@@ -1207,6 +1247,11 @@ class Asm {
 
                     did_something = true;
                 }
+            }
+
+            // lol
+            if (line.instruction == 'AORG') {
+                location_counter = line.parsed_params[0].param_numeric;
             }
 
             if (line.instruction && Asm.#pi_emitters_list.includes(line.instruction)) {
@@ -1230,12 +1275,13 @@ class Asm {
                     // WRONG.
                     for (const pp of line.parsed_params) {
                         const param_string = pp.param_string;
-                        let param_numeric = [pp.param_numeric];
+                        let param_numeric = [word_high_byte(pp.param_numeric), word_low_byte(pp.param_numeric)];
                         let value_assigned = pp.value_assigned;
 
                         if (pp.param_type == 'unknown' && Object.hasOwn(this.#symbol_table, param_string)) {
                             const sym = this.#symbol_table[param_string];
-                            param_numeric = [sym.symbol_value];
+                            console.log(sym.symbol_value);
+                            param_numeric = [word_high_byte(sym.symbol_value), word_low_byte(sym.symbol_value)];
                             value_assigned = sym.value_assigned;
                         } else if (pp.param_type == 'text') {
                             param_numeric = string_to_ords(param_string);
@@ -1260,14 +1306,51 @@ class Asm {
             }
 
             if (line.instruction && OpInfo.opNameIsValid(line.instruction)) {
+                const opcode_info = OpInfo.getFromOpName(line.instruction);
+                // Rebuild our line params with fresh symbol values.  Numeric
+                // and other conversions have already occurred at this point.
+
+                // THIS IS BROKEN, RESTART HERE
+                // THIS IS BROKEN, RESTART HERE
+                // THIS IS BROKEN, RESTART HERE
+                // THIS IS BROKEN, RESTART HERE
+
+                const line_symbols = line_symbol_map.get(line.line_number) ?? new Map;
+                for (const i in line.parsed_params) {
+                    console.debug(line.parsed_params[i]);
+                    const sym_name = line_symbols.get(i);
+                    if (sym_name) {
+                        const b4 = line.parsed_params[i].value_assigned
+                            ? line.parsed_params[i].param_numeric.toString()
+                            : line.parsed_params[i].param_string;
+                        const replacement = this.#symbol_table[sym_name].value_assigned
+                            ? this.#symbol_table[sym_name].symbol_value.toString()
+                            : this.#symbol_table[sym_name].symbol_params[0];
+                        console.debug(`${line.instruction_params[i]}, ${sym_name}, ${replacement}`);
+                        line.instruction_params[i] = this.#symbolReplaceHelper(
+                            b4, sym_name, replacement
+                        );
+
+                        // Instructions in formats 2 and 17 (jumps) take a relative
+                        // *BYTE* offset to their target, but the location symbol
+                        // that we just subbed in is absolute.  Relativize it.
+                        if (opcode_info.format == 2 || opcode_info.format == 17) {
+                            line.instruction_params[i] = (2 + location_counter - line.instruction_params[i]).toString();
+                            console.debug(`jmp: lc = ${location_counter}, target = ${line.instruction_params[i]}, actual = ${b4}`, line);
+                        }
+                    }
+                }
+                // JIC
+                line.instruction_argument = line.instruction_params.join(',');
+
                 const instr_bytes = new AsmSegmentBytes;
                 instr_bytes.line_number = line.line_number;
 
-                const instr = this.#getInstructionFromLine(line); // <------------------------------ WRONG
+                const instr = this.#getInstructionFromLine(line);
                 const ei = InstructionDecode.getEncodedInstruction(instr);
 
                 for (const word of ei.words) {
-                    //console.debug(word);
+                    //console.debug(`buildSegments line ${line.line_number} instr ${instr.opcode_info.name} word ${number_to_hex(word)}`);
                     const msb = word_high_byte(word);
                     const lsb = word_low_byte(word);
 
@@ -1277,6 +1360,7 @@ class Asm {
                 }
 
                 current_segment.data.push(instr_bytes);
+                location_counter += instr_bytes.bytes.length;
             }
 
             if (line.instruction && Asm.#pi_segment_end_list.includes(line.instruction)) {
@@ -1291,8 +1375,7 @@ class Asm {
 
         }
 
-        console.debug(this.#segments);
-
+        this.#segments.push(current_segment);
     }
 
     /*

@@ -325,6 +325,9 @@ ok2:
     JMP     loop                            ; => loop
 
     END     setup ; entry point
+
+    AORG    >FFFC       ; reset vector
+    DATA    >80,>100
 </textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>

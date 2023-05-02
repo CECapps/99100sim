@@ -153,10 +153,19 @@ function assemble_codebox() {
     const results = asm.toWords();
     gebid_stfu('assembled').innerText = asm.toAsm().join("\n");
 
+    /**
     if (results && results instanceof Array) {
         for (const i in results) {
             sim.state.setWord(0x0100 + (parseInt(i, 10) * 2), results[i]);
         }
+    }
+    */
+    const bytes = asm.toBytes();
+    for (const i in bytes) {
+        /*if (i < 400 || i > 65530) {
+            console.debug(i, bytes[i]);
+        }*/
+        sim.state.setByte(i, bytes[i]);
     }
 }
 
