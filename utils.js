@@ -94,6 +94,30 @@ window.swap_bytes = swap_bytes;
 
 
 /**
+ * Given a 16-bit word in big-endian format, return the high / first / MSB 8-bit byte.
+ * @param {number} value    An unsigned 16-bit integer in big-endian format.
+ * @returns {number}        The high byte (MSB) of the given integer.
+ **/
+function word_high_byte(value) {
+    return (value >> 8) & 0xff;
+}
+Reflect.set(window, 'word_high_byte', word_high_byte);
+window.word_high_byte = word_high_byte;
+
+
+/**
+ * Given a 16-bit word in big-endian format, return the second / low / LSB 8-bit byte.
+ * @param {number} value    An unsigned 16-bit integer in big-endian format.
+ * @returns {number}        The low byte (LSB) of the given integer.
+ **/
+function word_low_byte(value) {
+    return value & 0xff;
+}
+Reflect.set(window, 'word_low_byte', word_low_byte);
+window.word_low_byte = word_low_byte;
+
+
+/**
  * @param {bigint} bigint_value An unsigned 32-bit integer.
  * @param {number} bit_start    Index from the Least Significant Bit to start selection of bits, no greater than 31.
  * @param {number} bit_count    Count of bits to return after bit_start, no greater than 31.
@@ -233,3 +257,33 @@ function number_to_hex(num, padding = 4) {
 }
 Reflect.set(window, 'number_to_hex', number_to_hex);
 window.number_to_hex = number_to_hex;
+
+
+/**
+ * Return the numeric values for each 8-bit byte in the given Javascript UTF-8 string.
+ *
+ * For example, given 'foo🎆bar', it will internally convert it into the URI-safe
+ * 'foo%F0%9F%8E%86bar', which then gets converted into the final byte array
+ * [ 102, 111, 111, 240, 159, 142, 134, 98, 97, 114 ]
+ *
+ * @param {string} str
+ * @returns {number[]}
+ **/
+function string_to_ords(str) {
+    const encoded = encodeURIComponent(str);
+    const bytes = [];
+    for (let i = 0; i < encoded.length; i++) {
+        const char = encoded.slice(i, i + 1);
+        let num = 0;
+        if (char == '%') {
+            const hex = encoded.slice(i + 1, i + 3);
+            num = parseInt(hex, 16);
+            i += 2;
+        } else {
+            // codePointAt returns a 16-bit number, but we only care about the first 8.
+            num = char.codePointAt(0) & 0xff;
+        }
+        bytes.push(num);
+    }
+    return bytes;
+}

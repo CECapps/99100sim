@@ -7,7 +7,7 @@ import { OpInfo } from "./OpInfo";
 
 export { Asm, AsmParseLineResult };
 
-/*global number_to_hex */
+/*global number_to_hex,string_to_ords,word_high_byte,word_low_byte */
 
 class Asm {
 
@@ -41,12 +41,14 @@ class Asm {
 
     // These PIs can define symbols through the location counter and change the location counter when doing so.
     static #pi_location_change_list = ['AORG', 'DORG', 'BSS', 'BES', 'EVEN'];
-    // These PIs declare segments of code or data
-    static #pi_segment_list = ['PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
+    // These PIs declare the start of a code or data segment.
+    static #pi_segment_start_list = ['PSEG', 'DSEG', 'CSEG', 'AORG', 'DORG'];
+    // These PIs will end the current segment, even if the types don't match.
+    static #pi_segment_end_list = ['PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND', 'AORG', 'DORG', 'END'];
     // These PIs can define symbols that reference the current value of the location counter
     static #pi_location_list = ['BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
     // These PIs define symbols through their operands.
-    static #pi_assign_list = ['EQU', 'DFOP', 'DXOP', 'END'];
+    static #pi_assign_list = ['EQU', 'DFOP', 'DXOP'];
     // These PIs declare data that will be included in the bytecode output.
     static #pi_emitters_list = ['BYTE', 'DATA', 'TEXT', 'BSS', 'BES'];
     // These PIs manipulate the contents of other lines.
@@ -84,6 +86,11 @@ class Asm {
     /** @type {Object<string,AsmSymbol>} */
     #symbol_table = {};
 
+    /** @type {Map<string,Map<number,number[]>>} That is, map<symbol_name, map<line_number,param_indexes[]>> */
+    #symbol_map = new Map;
+
+    /** @type {AsmSegment[]} */
+    #segments = [];
 
     /** @param {string} lines */
     setLines(lines) {
@@ -118,6 +125,8 @@ class Asm {
         // We should now have temporary values for everything.  Clean up the
         // temporary mess we've created and do a fresh swap of all symbols.
         this.#applySymbolTable();
+
+        this.#buildSegments();
 
         // Our lines have been processed and symbols replaced.  We can finally
         // build our bytecode.
@@ -447,7 +456,7 @@ class Asm {
             // So, what exactly is it?
             new_param.param_type = this.#paramLooksLikeSymbolHelper(extracted_param);
             // An unknown return implies an unreplaced symbol
-            new_param.value_assigned = new_param.param_type == 'unknown';
+            new_param.value_assigned = new_param.param_type != 'unknown';
 
             if (new_param.param_type == 'number') {
                 new_param.param_numeric = number_format_helper(extracted_param);
@@ -650,8 +659,13 @@ class Asm {
         if (Object.hasOwn(this.#dxops, line.instruction)) {
             line.line_type = 'instruction';
             line.instruction = 'XOP';
+            /** @TODO this way is really dumb, make it less dumb.  also make below less dumb */
             line.instruction_params.unshift(this.#dxops[line.instruction].toString());
             line.instruction_argument = line.instruction_params.join(',');
+            line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number);
+            line.instruction_params = line.parsed_params.map( (pp) => { return pp.param_string; } );
+            line.instruction_argument = line.instruction_params.join(',');
+
             // No further processing is possible or needed.
             return line;
         }
@@ -662,7 +676,11 @@ class Asm {
         if (line.line_type == 'instruction' && OpInfo.opNameIsValid(line.instruction)) {
             const opcode_info = OpInfo.getFromOpName(line.instruction);
             if (opcode_info.format == 12 && !looks_like_register(line.instruction_params[2])) {
+                /** @TODO this way is really dumb, make it less dumb.  also make above less dumb */
                 line.instruction_params[2] = `R${this.#current_ckpt_default.toString()}`;
+                line.instruction_argument = line.instruction_params.join(',');
+                line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number);
+                line.instruction_params = line.parsed_params.map( (pp) => { return pp.param_string; } );
                 line.instruction_argument = line.instruction_params.join(',');
             }
         }
@@ -752,6 +770,9 @@ class Asm {
                         break;
                     case 'AORG': // The single param is assigned to the location counter and the label.
                     case 'DORG':
+                        if (!line.instruction_params.length) {
+                            throw new Error('AORG/DORG require a parameter');
+                        }
                         adjustment = number_format_helper(line.instruction_params[0]);
                         reassign_symbol = true;
                         reassign_counter = true;
@@ -1062,22 +1083,31 @@ class Asm {
     }
 
     /**
-     * Second generation symbol stuff.  To be retired.
+     * Second generation symbol stuff.  To be retired?
      *
      * Given a filled and correct #symbol_table, crawl through all params and replace.
      **/
     #applySymbolTable() {
+        // Keep track of where symbols appear in params for later possible correction.
+        this.#symbol_map = new Map;
+        for (const sym_name in this.#symbol_table) {
+            this.#symbol_map.set(sym_name, new Map);
+        }
+
         let word_count = 0;
-        // Number of times we've iterated over parsed_lines: 4
         for (const line of this.#parsed_lines) {
+            // We don't care about PIs here.
             if (line.line_type != 'instruction') {
                 continue;
             }
             //console.groupCollapsed(line.line_number);
-            // Clean up the mess from earlier processing.
-            line.instruction_params = this.#parseParams(line.instruction_argument, line.line_number);
 
-            // Yay yet another disposable Instruction!
+            // Clean up the mess from earlier processing by resetting the params
+            // to their original parsed state.  This is safe as long as earlier
+            // preprocessing correctly readjusts parsed_params.
+            line.instruction_params = line.parsed_params.map( (pp) => { return pp.param_string; } );
+            line.instruction_argument = line.instruction_params.join(',');
+
             let inst = Instruction.newFromString(line.instruction);
             const format = inst.opcode_info.format;
             for (const i in line.instruction_params) {
@@ -1091,20 +1121,30 @@ class Asm {
                         numeric_value = (numeric_value - word_count) * 2;
                     }
 
-                    /** @FIXME hardcoding zero is probably wrong */
+                    /** @TODO hardcoding zero is probably wrong, but is it really? */
                     const string_value = this.#symbol_table[sym_name].symbol_params[0];
                     const b4 = line.instruction_params[i];
+
                     line.instruction_params[i] = this.#symbolReplaceHelper(
                         line.instruction_params[i],
                         sym_name,
                         this.#symbol_table[sym_name].value_assigned ? numeric_value.toString() : string_value
                     );
+
+                    // The definition of a symbol in a param is quite literally
+                    // if it gets substituted by symbolReplaceHelper.
                     if (b4 != line.instruction_params[i]) {
+                        let line_param_idxes = this.#symbol_map.get(sym_name).get(line.line_number);
+                        if (line_param_idxes === undefined) {
+                            line_param_idxes = [];
+                            this.#symbol_map.get(sym_name).set(line.line_number, line_param_idxes);
+                        }
+                        // Maps are magic and this correctly updates the value inside without a reassign.
+                        line_param_idxes.push(i);
                         //console.debug('Successfully replaced', sym_name, 'in string', b4, 'line:', line);
                         break;
                     }
                 }
-                /** @FIXME this is where you left off.  setParam isn't getting the right data! */
                 //console.debug(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
                 inst.setParam(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
             }
@@ -1116,6 +1156,159 @@ class Asm {
             //console.groupEnd();
         }
     }
+
+    /**
+     * By this time we should have a completely filled out symbol table.  We can
+     * assume that all assign symbols are resolved to acceptable values and that
+     * all location symbols have sane placeholder values.
+     *
+     * Group lines into segments, keeping a new, 100% accurate location counter
+     * along the way.  Update location symbol definitions as they are found and
+     * manually reprocess each use of a location symbol.
+     **/
+    #buildSegments() {
+        this.#segments = [];
+
+        // We start out assuming we're in absolute mode, and that we're starting
+        // from the very first byte.  (We're always in absolute mode, lol)
+        let current_segment = new AsmSegment;
+        current_segment.segment_type = 'AORG';
+        current_segment.starting_point = 0;
+        let location_counter = 0;
+
+        for (const line of this.#parsed_lines) {
+            let did_something = false;
+            let close_segment = false;
+            // All valid lines are considered.  We should never encounter these:
+            if (['ERROR', 'pending', 'fallthrough'].includes(line.line_type)) {
+                console.error(line);
+                throw new Error(`buildSegments encountered bogus line type "${line.line_type}"`);
+            }
+
+            // We include comment line references in the segment for reference purposes.
+            if (line.line_type == 'comment') {
+                const comment_seg_bytes = new AsmSegmentBytes;
+                comment_seg_bytes.line_number = line.line_number;
+                current_segment.data.push(comment_seg_bytes);
+
+                did_something = true;
+            }
+
+            // While all labels become symbols, only *most* labels end up defining a location.
+            if (line.label && this.#symbol_table[line.label].symbol_type == 'location') {
+                this.#symbol_table[line.label].symbol_value = location_counter;
+                this.#symbol_table[line.label].value_assigned = true;
+
+                // Like comments, include the label definition line in the segment.
+                if (line.line_type == 'label') {
+                    const label_seg_bytes = new AsmSegmentBytes;
+                    label_seg_bytes.line_number = line.line_number;
+                    current_segment.data.push(label_seg_bytes);
+
+                    did_something = true;
+                }
+            }
+
+            if (line.instruction && Asm.#pi_emitters_list.includes(line.instruction)) {
+                const emitter_bytes = new AsmSegmentBytes;
+                emitter_bytes.line_number = line.line_number;
+
+                if (line.instruction == 'BSS' || line.instruction == 'BES') {
+                    //console.debug('BSS/BES', line);
+                    // BSS and BES allocate an empty chunk of space.
+                    emitter_bytes.bytes = Array(line.parsed_params[0].param_numeric).fill(0);
+                } else {
+                    // Freshly extract each parsed param and coerce it into a
+                    // value.  Earlier replacements have adjusted the param
+                    // string and the comma-exploded string directly, so we also
+                    // need to perform symbol replacement.  For these three
+                    // remaining emitter PIs, we will assume that any "unknown"
+                    // param is supposed to be a symbol.  We will also assume
+                    // that the user has provided only bytes for BYTE, only words
+                    // for DATA, and only a single text string for TEXT.  Being
+                    // lazy like this saves time and effort at the cost of being
+                    // WRONG.
+                    for (const pp of line.parsed_params) {
+                        const param_string = pp.param_string;
+                        let param_numeric = [pp.param_numeric];
+                        let value_assigned = pp.value_assigned;
+
+                        if (pp.param_type == 'unknown' && Object.hasOwn(this.#symbol_table, param_string)) {
+                            const sym = this.#symbol_table[param_string];
+                            param_numeric = [sym.symbol_value];
+                            value_assigned = sym.value_assigned;
+                        } else if (pp.param_type == 'text') {
+                            param_numeric = string_to_ords(param_string);
+                            value_assigned = true;
+                        } else if (['register', 'indexed', 'symbolic', 'ERROR'].includes(pp.param_type)) {
+                            console.error(pp, line);
+                            throw new Error(`Encountered unexpected parsed param type "${pp.param_type}" in emitter PI`);
+                        }
+
+                        if (!value_assigned) {
+                            console.error(pp, line);
+                            throw new Error(`Encountered unassigned parsed param "${pp.param_string}" in emitter PI`);
+                        }
+
+                        emitter_bytes.bytes = emitter_bytes.bytes.concat(param_numeric);
+                    }
+
+                }
+                did_something = true;
+                location_counter += emitter_bytes.bytes.length;
+                current_segment.data.push(emitter_bytes);
+            }
+
+            if (line.instruction && OpInfo.opNameIsValid(line.instruction)) {
+                const instr_bytes = new AsmSegmentBytes;
+                instr_bytes.line_number = line.line_number;
+
+                const instr = this.#getInstructionFromLine(line); // <------------------------------ WRONG
+                const ei = InstructionDecode.getEncodedInstruction(instr);
+
+                for (const word of ei.words) {
+                    //console.debug(word);
+                    const msb = word_high_byte(word);
+                    const lsb = word_low_byte(word);
+
+                    //console.debug(word.toString(2).padStart(16, '0'), msb.toString(2).padStart(8, '0'), lsb.toString(2).padStart(8, '0'));
+                    instr_bytes.bytes.push(msb);
+                    instr_bytes.bytes.push(lsb);
+                }
+
+                current_segment.data.push(instr_bytes);
+            }
+
+            if (line.instruction && Asm.#pi_segment_end_list.includes(line.instruction)) {
+                this.#segments.push(current_segment);
+
+                const next_segment = new AsmSegment;
+                next_segment.segment_type = 'AORG';
+                next_segment.starting_point = location_counter;
+
+                current_segment = next_segment;
+            }
+
+        }
+
+        console.debug(this.#segments);
+
+    }
+
+    /*
+    // These PIs can define symbols through the location counter and change the location counter when doing so.
+    static #pi_location_change_list = ['AORG', 'DORG', 'BSS', 'BES', 'EVEN'];
+    // These PIs declare the start of a code or data segment.
+    static #pi_segment_start_list = ['PSEG', 'DSEG', 'CSEG', 'AORG', 'DORG'];
+    // These PIs will end the current segment, even if the types don't match.
+    static #pi_segment_end_list = ['PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND', 'AORG', 'DORG', 'END'];
+    // These PIs can define symbols that reference the current value of the location counter
+    static #pi_location_list = ['BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
+    // These PIs define symbols through their operands.
+    static #pi_assign_list = ['EQU', 'DFOP', 'DXOP'];
+    // These PIs declare data that will be included in the bytecode output.
+    static #pi_emitters_list = ['BYTE', 'DATA', 'TEXT', 'BSS', 'BES'];
+    */
 
     /**
      * First generation parsing stuff.  Seems correct, to be kept.
@@ -1325,11 +1518,27 @@ class AsmParamParseResult {
 
 class AsmParam {
     line_number = 0;
+    /** @type { 'ERROR' | 'number' | 'register' | 'indexed' | 'symbolic' | 'text' | 'unknown' } */
     param_type = 'ERROR';
     param_index = 0;
     param_string = '';
     param_numeric = 0;
     value_assigned = false;
+}
+
+class AsmSegment {
+    /** @type { 'ERROR' | 'PSEG' | 'DSEG' | 'CSEG' | 'AORG' | 'DORG' } */
+    segment_type = 'ERROR';
+    starting_point = 0;
+    /** @type {AsmSegmentBytes[]} */
+    data = [];
+}
+
+class AsmSegmentBytes {
+    line_number = 0;
+    argument_number = 0;
+    /** @type {number[]} */
+    bytes = [];
 }
 
 
