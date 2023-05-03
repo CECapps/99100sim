@@ -116,17 +116,22 @@ class Asm {
             const line_pid = this.#preProcessLinePIs(line_processed);
             this.#parsed_lines[i++] = line_pid;
         }
+        console.log(`check 1: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
 
         // Estimate the location counter values and give location symbols values
         // that are good enough estimates to continue.
+        console.log(`check 2: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
         this.#preProcessLocationCounterSymbols();
         // Symbols can be self-referential, so resolve those references.
         this.#preProcessUndefinedSymbols();
+        console.log(`check 3: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
         // We should now have temporary values for everything.  Clean up the
         // temporary mess we've created and do a fresh swap of all symbols.
         this.#applySymbolTable();
+        console.log(`check 4: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
 
         this.#buildSegments();
+        console.log(`check 5: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
 
         // Our lines have been processed and symbols replaced.  We can finally
         // build our bytecode.
@@ -739,7 +744,7 @@ class Asm {
 
             // Do we have a candidate symbol?  Now is the time to assign a location to it.
             if (symbols_by_line[line.line_number]) {
-                console.debug(`${symbols_by_line[line.line_number]} => ${location_counter}`);
+                //console.debug(`pplcs: ${symbols_by_line[line.line_number]} => ${location_counter}`);
                 this.#symbol_table[symbols_by_line[line.line_number]].symbol_value = location_counter;
                 this.#symbol_table[symbols_by_line[line.line_number]].value_assigned = true;
             }
@@ -908,136 +913,6 @@ class Asm {
         }
 
         //console.debug(this.#symbol_table);
-    }
-
-    /**
-     * Second generation symbol table stuff.  Correct for common cases only.  To be retired.
-     *
-     * Reviews all lines and then does an immediate substitution before considering
-     * the symbols to be valid.  This technique is flawed.
-     **/
-    #XXbuildSymbolTable() {
-        /** @type {Object.<string,AsmSymbol>} */
-        const assign_instructions = {};
-        /** @type {Object.<string,AsmSymbol>} */
-        const location_instructions = {};
-
-        // The location instructions are far more difficult to deal with than
-        // the assign instructions.  Each of them represents a specific byte
-        // offset into the eventual assembled list of words.  To calculate their
-        // actual values, we need to generate the word(s) for each instruction.
-        // But we can't actually do that until we've substituted all the symbols.
-        // But to substitute all the symbols, we need to generate the word(s) for
-        // each instruction.  Additionally, instructions in any Format that
-        // includes Ts or Td can actually spring additional words depending on
-        // the substitutions!  Oh, and the jump instructions of Formats 2 and 17
-        // take a *RELATIVE* location instead of the absolute location, so we
-        // need to calculate those.
-
-        let estimated_word_count = 0;
-        // Number of times we've iterated over parsed_lines: 2
-        for (const line of this.#parsed_lines) {
-            if (line.line_type == 'instruction') {
-                if (!OpInfo.opNameIsValid(line.instruction)) {
-                    throw new Error(`Invalid instruction "${line.instruction}" on line ${line.line_number}`);
-                }
-                estimated_word_count += OpInfo.getFromOpName(line.instruction).minimum_instruction_words;
-                continue;
-            }
-            // Symbols are labels, so don't bother looking at label-less PIs.
-            if (!line.label.length) {
-                continue;
-            }
-
-            const is_assign = line.line_type == 'pi' && line.instruction && Asm.#pi_assign_list.includes(line.instruction);
-            const is_location = line.line_type == 'label' || (line.line_type == 'pi' && line.instruction && Asm.#pi_location_list.includes(line.instruction));
-
-            if (is_assign) {
-                const sym = new AsmSymbol;
-                sym.symbol_name = line.label;
-                sym.symbol_value = number_format_helper(line.instruction_params[0]);
-                sym.symbol_type = 'assign';
-
-                sym.line_number = line.line_number;
-                sym.symbol_params = line.instruction_params;
-                sym.value_assigned = true;
-                assign_instructions[line.label] = sym;
-            } else if (is_location) {
-                const sym = new AsmSymbol;
-                sym.symbol_name = line.label;
-                sym.symbol_value = estimated_word_count;
-                sym.symbol_type = 'location';
-
-                sym.line_number = line.line_number;
-                sym.symbol_params = line.instruction_params;
-                sym.value_assigned = false; // yes really
-                location_instructions[line.label] = sym;
-            }
-        }
-
-        // We now have correct values for our assign instructions, and reasonable
-        // best guesses for our location instructions.  This should be enough to
-        // substitute in values where needed.
-        estimated_word_count = 0;
-        // Number of times we've iterated over parsed_lines: 3
-        for (const line of this.#parsed_lines) {
-            // The word values in this iteration should be more correct.
-            const is_pi_location = line.line_type == 'pi' && line.label && Asm.#pi_location_list.includes(line.instruction);
-            if (line.line_type == 'label' || is_pi_location) {
-                location_instructions[line.label].symbol_value = estimated_word_count;
-                location_instructions[line.label].value_assigned = true;
-            }
-
-            if (line.line_type != 'instruction') {
-                continue;
-            }
-            const format = OpInfo.getFromOpName(line.instruction).format;
-
-            for (const i in line.instruction_params) {
-                for (const symbol_name in assign_instructions) {
-                    line.instruction_params[i] = this.#symbolReplaceHelper(
-                        line.instruction_params[i],
-                        symbol_name,
-                        assign_instructions[symbol_name].symbol_params[0] // lol hack
-                    );
-                }
-                for (const symbol_name in location_instructions) {
-                    let nv = location_instructions[symbol_name].symbol_value;
-                    // Jump instructions get the offset adjust thing.
-                    if (format == 2 || format == 17) {
-                        // We count words but jumps take bytes
-                        nv = (nv - estimated_word_count) * 2;
-                    }
-                    line.instruction_params[i] = this.#symbolReplaceHelper(
-                        line.instruction_params[i],
-                        symbol_name,
-                        nv.toString()
-                    );
-                }
-            }
-            const ei = InstructionDecode.getEncodedInstruction(this.#getInstructionFromLine(line));
-            estimated_word_count += ei.words.length;
-
-            // All of this was a draft, so let's reset the params to process later.
-            //line.instruction_params = line.instruction_argument.split(',');
-        }
-
-        // We should now have correct location instruction values.  We can finally
-        // build the symbol table!
-        this.#symbol_table = {};
-        for (const symbol_name in assign_instructions) {
-            if (assign_instructions[symbol_name].value_assigned) {
-                this.#symbol_table[symbol_name] = assign_instructions[symbol_name];
-            }
-        }
-        for (const symbol_name in location_instructions) {
-            if (location_instructions[symbol_name].value_assigned && !Object.hasOwn(this.#symbol_table, symbol_name)) {
-                this.#symbol_table[symbol_name] = location_instructions[symbol_name];
-            }
-        }
-
-        console.debug('buildSymbolTable:', this.#symbol_table);
-
     }
 
     /**
@@ -1217,7 +1092,6 @@ class Asm {
         let location_counter = 0;
 
         for (const line of this.#parsed_lines) {
-            let did_something = false;
             // All valid lines are considered.  We should never encounter these:
             if (['ERROR', 'pending', 'fallthrough'].includes(line.line_type)) {
                 console.error(line);
@@ -1229,13 +1103,12 @@ class Asm {
                 const comment_seg_bytes = new AsmSegmentBytes;
                 comment_seg_bytes.line_number = line.line_number;
                 current_segment.data.push(comment_seg_bytes);
-
-                did_something = true;
             }
 
             // While all labels become symbols, only *most* labels end up defining a location.
             if (line.label && this.#symbol_table[line.label].symbol_type == 'location') {
                 // Adjust the symbol accordingly.
+                //console.debug(`bs: ${line.label} => ${location_counter}`);
                 this.#symbol_table[line.label].symbol_value = location_counter;
                 this.#symbol_table[line.label].value_assigned = true;
 
@@ -1245,7 +1118,6 @@ class Asm {
                     label_seg_bytes.line_number = line.line_number;
                     current_segment.data.push(label_seg_bytes);
 
-                    did_something = true;
                 }
             }
 
@@ -1300,7 +1172,6 @@ class Asm {
                     }
 
                 }
-                did_something = true;
                 location_counter += emitter_bytes.bytes.length;
                 current_segment.data.push(emitter_bytes);
             }
@@ -1309,36 +1180,27 @@ class Asm {
                 const opcode_info = OpInfo.getFromOpName(line.instruction);
                 // Rebuild our line params with fresh symbol values.  Numeric
                 // and other conversions have already occurred at this point.
-
-                // THIS IS BROKEN, RESTART HERE
-                // THIS IS BROKEN, RESTART HERE
-                // THIS IS BROKEN, RESTART HERE
-                // THIS IS BROKEN, RESTART HERE
-
                 const line_symbols = line_symbol_map.get(line.line_number) ?? new Map;
                 for (const i in line.parsed_params) {
-                    console.debug(line.parsed_params[i]);
+                    const pp = line.parsed_params[i];
+                    let param_value = pp.value_assigned ? pp.param_numeric.toString() : pp.param_string;
+
                     const sym_name = line_symbols.get(i);
                     if (sym_name) {
-                        const b4 = line.parsed_params[i].value_assigned
-                            ? line.parsed_params[i].param_numeric.toString()
-                            : line.parsed_params[i].param_string;
-                        const replacement = this.#symbol_table[sym_name].value_assigned
-                            ? this.#symbol_table[sym_name].symbol_value.toString()
-                            : this.#symbol_table[sym_name].symbol_params[0];
-                        console.debug(`${line.instruction_params[i]}, ${sym_name}, ${replacement}`);
-                        line.instruction_params[i] = this.#symbolReplaceHelper(
-                            b4, sym_name, replacement
-                        );
+                        const sym = this.#symbol_table[sym_name];
+                        const replace_value = sym.value_assigned ? sym.symbol_value.toString() : sym.symbol_params[0];
+                        param_value = this.#symbolReplaceHelper(param_value, sym_name, replace_value);
 
-                        // Instructions in formats 2 and 17 (jumps) take a relative
-                        // *BYTE* offset to their target, but the location symbol
-                        // that we just subbed in is absolute.  Relativize it.
+                        // Instructions in formats 2 and 17, mostly jumps, take
+                        // *relative* addresses.  We just subbed in a non-relative
+                        // location.  Adjust it to be relative based on our
+                        // current location counter value.
                         if (opcode_info.format == 2 || opcode_info.format == 17) {
-                            line.instruction_params[i] = (2 + location_counter - line.instruction_params[i]).toString();
-                            console.debug(`jmp: lc = ${location_counter}, target = ${line.instruction_params[i]}, actual = ${b4}`, line);
+                            param_value = (parseInt(param_value, 10) - location_counter).toString();
                         }
                     }
+
+                    line.instruction_params[i] = param_value;
                 }
                 // JIC
                 line.instruction_argument = line.instruction_params.join(',');
