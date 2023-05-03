@@ -116,22 +116,17 @@ class Asm {
             const line_pid = this.#preProcessLinePIs(line_processed);
             this.#parsed_lines[i++] = line_pid;
         }
-        console.log(`check 1: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
 
         // Estimate the location counter values and give location symbols values
         // that are good enough estimates to continue.
-        console.log(`check 2: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
         this.#preProcessLocationCounterSymbols();
         // Symbols can be self-referential, so resolve those references.
         this.#preProcessUndefinedSymbols();
-        console.log(`check 3: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
         // We should now have temporary values for everything.  Clean up the
         // temporary mess we've created and do a fresh swap of all symbols.
         this.#applySymbolTable();
-        console.log(`check 4: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
 
         this.#buildSegments();
-        console.log(`check 5: ok1 is ${this.#symbol_table['ok1'].symbol_value}, ok2 is ${this.#symbol_table['ok2'].symbol_value}`);
 
         // Our lines have been processed and symbols replaced.  We can finally
         // build our bytecode.
@@ -162,7 +157,7 @@ class Asm {
                         words.push(word);
                     }
                 } else {
-                    console.debug(`toWords (fallback) line ${line.line_number} instr ${line.instruction} word ${number_to_hex(word)}`);
+                    console.debug(`toWords (fallback) line ${line.line_number} instr ${line.instruction} word ${number_to_hex(line.fallback_word)}`);
                     words.push(line.fallback_word);
                 }
             }
@@ -367,9 +362,7 @@ class Asm {
             result.parsed_params = ppres.params;
             line = ppres.remainder;
 
-            // Old code relies on instruction_params being a normal array, so let's fake it.
-            result.instruction_params = result.parsed_params.map( (pp) => { return pp.param_string; } );
-            result.instruction_argument = result.instruction_params.join(',');
+            result.instruction_params = result.parsed_params.map( (pp) => { return pp.value; } );
 
             result.comments += line.trim();
         }
@@ -406,13 +399,13 @@ class Asm {
      * Params are separated by a comma.  Params may not contain whitespace
      * or commas ... unless they're in a string.  Empty params are valid.
      *
-     * @param {string} param_string
+     * @param {string} raw_param_string
      * @param {number} line_number
      * @returns {AsmParamParseResult}
      **/
-    #parseParams(param_string, line_number) {
+    #parseParams(raw_param_string, line_number) {
         let remainder = '';
-        const orig_param_string = param_string;
+        const orig_param_string = raw_param_string;
 
         /** @type {AsmParam[]} */
         const parsed_params = [];
@@ -425,7 +418,7 @@ class Asm {
 
         let limit = 100;
 
-        while (param_string.length > 0 && limit-- > 0) {
+        while (raw_param_string.length > 0 && limit-- > 0) {
             const new_param = new AsmParam;
             new_param.line_number = line_number;
             new_param.param_index = parsed_params.length;
@@ -434,17 +427,16 @@ class Asm {
             // normally be done by just grabbing everything up to the next comma
             // or until the end of the string, but string arguments make that hard
             // because they are allowed to contain commas.  It's regex time!
-            const quoted_match = param_string.match(quoted_string_regex);
+            const quoted_match = raw_param_string.match(quoted_string_regex);
             if (quoted_match) {
-                new_param.param_string = quoted_match[1];
+                new_param.parsed_string = quoted_match[1];
                 new_param.param_type = 'string';
-                new_param.value_assigned = true;
                 parsed_params.push(new_param);
 
                 // Trim off what we just grabbed, including the comma.
-                param_string = param_string.substring(quoted_match[1].length);
-                if (param_string.startsWith(',')) {
-                    param_string = param_string.substring(1);
+                raw_param_string = raw_param_string.substring(quoted_match[1].length);
+                if (raw_param_string.startsWith(',')) {
+                    raw_param_string = raw_param_string.substring(1);
                 }
 
                 continue;
@@ -453,47 +445,47 @@ class Asm {
             let extracted_param = '';
             // We won't be dealing with a quoted string so we can safely glom up
             // everything until the next comma.
-            const glommed_matches = param_string.match(glom_until_comma_regex);
+            const glommed_matches = raw_param_string.match(glom_until_comma_regex);
             if (glommed_matches) {
                 extracted_param = glommed_matches[1];
 
                 // Trim off what we just grabbed, including the comma.
-                param_string = param_string.substring(extracted_param.length);
-                if (param_string.startsWith(',')) {
-                    param_string = param_string.substring(1);
+                raw_param_string = raw_param_string.substring(extracted_param.length);
+                if (raw_param_string.startsWith(',')) {
+                    raw_param_string = raw_param_string.substring(1);
                 }
             } else {
                 // There wasn't anything left to glom up.  The most likely
                 // situation is that we found whitespace. If so, that marks the
                 // end of the parameters.  Let's make sure that's true.
-                if (param_string.length == 0 || param_string.match(/^\s+/)) {
-                    remainder = param_string;
+                if (raw_param_string.length == 0 || raw_param_string.match(/^\s+/)) {
+                    remainder = raw_param_string;
                     break;
                 }
                 // This should be unreachable.
-                console.debug(parsed_params, param_string);
+                console.debug(parsed_params, raw_param_string);
                 throw new Error('Parse error: can not make heads or tails of param');
             }
 
             // If we got this far, we have a parameter in extracted_param.
-            new_param.param_string = extracted_param;
+            new_param.parsed_string = extracted_param;
             // So, what exactly is it?
             new_param.param_type = this.#paramLooksLikeSymbolHelper(extracted_param);
-            // An unknown return implies an unreplaced symbol
-            new_param.value_assigned = new_param.param_type != 'unknown';
 
             if (new_param.param_type == 'number') {
                 new_param.param_numeric = number_format_helper(extracted_param);
+                new_param.is_numeric = true;
             } else if (new_param.param_type == 'symbolic') {
                 // We'll only ever get symbolic back from the helper if there
-                // was a preceding at sign, which we must strip.
+                // was a preceding at sign which we must strip.
                 new_param.param_numeric = number_format_helper(extracted_param.substring(1));
+                new_param.is_numeric = true;
             }
             parsed_params.push(new_param);
         }
 
         if (limit <= 0) {
-            console.error(orig_param_string, param_string, parsed_params);
+            console.error(orig_param_string, raw_param_string, parsed_params);
             throw new Error('parseParams loop limit exceeded, what a great bug!');
         }
 
@@ -514,24 +506,23 @@ class Asm {
      * @param {AsmParseLineResult} line
      **/
     #processLineSymbolsIntoSymbolTable(line) {
-        if (
-            // Expect instruction lines that have a label, or...
-            (line.line_type == 'instruction' && !line.label)
-            // ... lines that are PIs or known labels.
-            || (line.line_type != 'pi' && line.line_type != 'label')
-        ) {
+        if ( !(line.label.length > 0 || line.line_type == 'pi')) {
+            // Do not process lines that can not define a symbol.
             return;
         }
+
         const sym = new AsmSymbol;
-        sym.symbol_params = line.instruction_params;
         sym.line_number = line.line_number;
+        sym.symbol_params = line.instruction_params;
+        sym.symbol_value_string = sym.symbol_params.length ? sym.symbol_params[0] : '';
+        sym.symbol_value_type = sym.symbol_params.length ? this.#paramLooksLikeSymbolHelper(sym.symbol_value_string) : 'unknown';
+        sym.symbol_value_numeric = sym.symbol_value_type == 'number' ? number_format_helper(sym.symbol_value_string) : 0;
+        sym.has_resolved_value = false;
 
         // Pure labels become location symbols that we have to resolve later.
         if (line.line_type == 'label') {
             sym.symbol_name = line.label;
             sym.symbol_type = 'location';
-            sym.symbol_value = 0;
-            sym.value_assigned = false;
 
             if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
                 throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
@@ -544,11 +535,12 @@ class Asm {
         if (line.instruction == 'EQU') {
             sym.symbol_type = 'assign';
             sym.symbol_name = line.label;
-            sym.value_assigned = false;
 
-            if (looks_like_number(line.instruction_params[0])) {
-                sym.symbol_value = number_format_helper(line.instruction_params[0]);
-                sym.value_assigned = true;
+            if (sym.symbol_value_type == 'number') {
+                sym.is_numeric = true;
+            }
+            if (sym.symbol_value_type != 'unknown') {
+                sym.has_resolved_value = true;
             }
 
             if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
@@ -563,16 +555,18 @@ class Asm {
         // of the code assumes that the symbol value is numeric.  Meh.
         if (line.instruction == 'DFOP') {
             sym.symbol_type = 'assign';
-            sym.symbol_name = line.instruction_params[0];
-            sym.symbol_value = 0;
-            sym.value_assigned = false; // A lie to be corrected later.
+            sym.symbol_name = sym.symbol_params[0];
+            sym.symbol_value_string = sym.symbol_params[1];
+            sym.symbol_value_type = this.#paramLooksLikeSymbolHelper(sym.symbol_value_string);
+            sym.symbol_value_numeric = 0;
+            sym.has_resolved_value = true;
 
             if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
                 throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
             }
             this.#symbol_table[sym.symbol_name] = sym;
 
-            this.#dfops[sym.symbol_name] = line.instruction_params[1];
+            this.#dfops[sym.symbol_name] = sym.symbol_value_string;
             return;
         }
 
@@ -580,12 +574,12 @@ class Asm {
         // Unlike DFOP, DXOP gets the luxury of actually assigning a number.
         if (line.instruction == 'DXOP') {
             sym.symbol_type = 'assign';
-            sym.symbol_name = line.instruction_params[0];
-            sym.value_assigned = false;
+            sym.symbol_name = sym.symbol_params[0];
 
-            if (looks_like_number(line.instruction_params[0])) {
-                sym.symbol_value = number_format_helper(line.instruction_params[1]);
-                sym.value_assigned = true;
+            if (looks_like_number(sym.symbol_params[0])) {
+                sym.symbol_value_numeric = number_format_helper(line.instruction_params[1]);
+                sym.is_numeric = true;
+                sym.has_resolved_value = true;
             }
 
             if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
@@ -593,7 +587,7 @@ class Asm {
             }
             this.#symbol_table[sym.symbol_name] = sym;
 
-            this.#dxops[sym.symbol_name] = sym.symbol_value;
+            this.#dxops[sym.symbol_name] = sym.symbol_value_numeric;
             return;
         }
 
@@ -604,17 +598,18 @@ class Asm {
         ) {
             return;
         }
-        // If we got here, our line creates a symbol using the label, assigning the
-        // value of the location counter.  We're too early in the process to
-        // actually have a location counter, so these don't get assigned a value.
-        if (!line.label) {
-            // This should actually be caught by the initial return check at the top.
+
+        // If we've managed to get this far, the only remaining possible symbol
+        // has to come from the line label.  No label?  No symbol.
+        if (!line.label || line.label.length == 0) {
             return;
         }
+
+        // Congrats, it's a location symbol!
         sym.symbol_name = line.label;
         sym.symbol_type = 'location';
-        sym.symbol_value = 0;
-        sym.value_assigned = false;
+        sym.symbol_value_numeric = 0;
+        sym.has_resolved_value = false;
 
         if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
             throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
@@ -655,7 +650,9 @@ class Asm {
             line.line_type = 'instruction';
             line.instruction = 'B';
             line.instruction_argument = '*R11';
-            line.instruction_params = ['*R11'];
+            line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number).params;
+            line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
+
             // No further processing is possible or needed.
             return line;
         }
@@ -665,7 +662,9 @@ class Asm {
             line.line_type = 'instruction';
             line.instruction = 'JMP';
             line.instruction_argument = '2';
-            line.instruction_params = ['2'];
+            line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number).params;
+            line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
+
             // No further processing is possible or needed.
             return line;
         }
@@ -683,12 +682,10 @@ class Asm {
         if (Object.hasOwn(this.#dxops, line.instruction)) {
             line.line_type = 'instruction';
             line.instruction = 'XOP';
-            /** @TODO this way is really dumb, make it less dumb.  also make below less dumb */
-            line.instruction_params.unshift(this.#dxops[line.instruction].toString());
-            line.instruction_argument = line.instruction_params.join(',');
-            line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number);
-            line.instruction_params = line.parsed_params.map( (pp) => { return pp.param_string; } );
-            line.instruction_argument = line.instruction_params.join(',');
+
+            line.instruction_argument = this.#dxops[line.instruction].toString() + ',' + line.instruction_argument;
+            line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number).params;
+            line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
 
             // No further processing is possible or needed.
             return line;
@@ -700,12 +697,11 @@ class Asm {
         if (line.line_type == 'instruction' && OpInfo.opNameIsValid(line.instruction)) {
             const opcode_info = OpInfo.getFromOpName(line.instruction);
             if (opcode_info.format == 12 && !looks_like_register(line.instruction_params[2])) {
-                /** @TODO this way is really dumb, make it less dumb.  also make above less dumb */
+                /** @FIXME instruction_argument should **NEVER** be overwritten this way! */
                 line.instruction_params[2] = `R${this.#current_ckpt_default.toString()}`;
                 line.instruction_argument = line.instruction_params.join(',');
                 line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number);
-                line.instruction_params = line.parsed_params.map( (pp) => { return pp.param_string; } );
-                line.instruction_argument = line.instruction_params.join(',');
+                line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
             }
         }
         return line;
@@ -745,8 +741,9 @@ class Asm {
             // Do we have a candidate symbol?  Now is the time to assign a location to it.
             if (symbols_by_line[line.line_number]) {
                 //console.debug(`pplcs: ${symbols_by_line[line.line_number]} => ${location_counter}`);
-                this.#symbol_table[symbols_by_line[line.line_number]].symbol_value = location_counter;
-                this.#symbol_table[symbols_by_line[line.line_number]].value_assigned = true;
+                this.#symbol_table[symbols_by_line[line.line_number]].symbol_value_numeric = location_counter;
+                this.#symbol_table[symbols_by_line[line.line_number]].has_resolved_value = true;
+                this.#symbol_table[symbols_by_line[line.line_number]].is_numeric = true;
             }
 
             // Three general classes of things can adjust the location counter:
@@ -814,8 +811,9 @@ class Asm {
                 location_counter += adjustment;
             }
             if (reassign_symbol && symbols_by_line[line.line_number]) {
-                this.#symbol_table[symbols_by_line[line.line_number]].symbol_value = location_counter;
-                this.#symbol_table[symbols_by_line[line.line_number]].value_assigned = true;
+                this.#symbol_table[symbols_by_line[line.line_number]].symbol_value_numeric = location_counter;
+                this.#symbol_table[symbols_by_line[line.line_number]].has_resolved_value = true;
+                this.#symbol_table[symbols_by_line[line.line_number]].is_numeric = true;
             }
         }
         //console.debug('preProcessLocationCounterSymbols:', this.#symbol_table);
@@ -829,6 +827,11 @@ class Asm {
      * @returns { 'number' | 'register' | 'indexed' | 'symbolic' | 'text' | 'unknown' }
      **/
     #paramLooksLikeSymbolHelper(param_value) {
+        // If it's a nothing, it's an unknown.
+        if (param_value === null || param_value === undefined) {
+            console.trace('paramLooksLikeSymbolHelper: Got undef or null param_value, (BUG?)');
+            return 'unknown';
+        }
         // First up, let's dismiss obvious numbers.
         if (looks_like_number(param_value)) {
             return 'number';
@@ -870,49 +873,54 @@ class Asm {
      * This directly updates the symbol table.
      **/
     #preProcessUndefinedSymbols() {
-        let limiter = this.#parsed_lines.length * 10; // allows for 10 levels of recursion before freaking out
-        let replace_count = 0;
+        let replaced = false;
         do {
-            replace_count = 0;
-            for (const outer_symbol_name in this.#symbol_table) {
-                const sym = this.#symbol_table[outer_symbol_name];
-                // Only unassigned assign symbols can be unassigned, for our purposes.
-                /** @FIXME This isn't strictly true.  Create exceptions for weird PIs */
-                if (sym.symbol_type == 'location' || sym.value_assigned == true) {
-                    //console.log('preProcessUndefinedSymbols: skip loc or assigned');
+            replaced = false;
+            for (const sym_name in this.#symbol_table) {
+                const sym = this.#symbol_table[sym_name];
+                if (sym.has_resolved_value) {
                     continue;
                 }
-                let i = 0;
-                for (const param_value of sym.symbol_params) {
-                    const b4 = param_value;
-                    if (this.#paramLooksLikeSymbolHelper(param_value) != 'unknown') {
-                        //console.log('preProcessUndefinedSymbols: skip not unknown');
+                // Okay, is it just another symbol name?
+                if (Object.hasOwn(this.#symbol_table, sym.symbol_value_string)) {
+                    // And if so, is it one with a resolved value?
+                    if (this.#symbol_table[sym.symbol_value_string].has_resolved_value) {
+                        const outer_sym_name = sym.symbol_value_string;
+                        // Easy!
+                        sym.symbol_value_string = this.#symbol_table[outer_sym_name].symbol_value_string;
+                        sym.symbol_value_numeric = this.#symbol_table[outer_sym_name].symbol_value_numeric;
+                        sym.is_numeric = this.#symbol_table[outer_sym_name].is_numeric;
+
+                        sym.symbol_value_type = this.#paramLooksLikeSymbolHelper(sym.symbol_value_string);
+                        sym.has_resolved_value = true;
+
+                        replaced = true;
                         continue;
                     }
-                    for (const inner_symbol_name in this.#symbol_table) {
-                        const inner_sym = this.#symbol_table[inner_symbol_name];
-                        //console.log(sym, inner_sym);
-                        const after = this.#symbolReplaceHelper(
-                            param_value, inner_sym.symbol_name, inner_sym.symbol_params[0]
-                        );
-                        //console.debug(sym.symbol_name, i, b4, after, inner_sym.symbol_name);
-                        if (b4 != after) {
-                            this.#symbol_table[outer_symbol_name].symbol_params[i] = after;
-                            this.#symbol_table[outer_symbol_name].value_assigned = true;
-                            replace_count++;
-                            break;
-                        }
-                    }
-                    i++;
                 }
-                //console.debug('replace_count: ', replace_count);
-            }
-        } while (replace_count > 0 && --limiter > 0);
-        if (limiter < 1) {
-            console.error('hit limiter!');
-        }
+                // It's not easy :(
+                for (const inner_sym_name in this.#symbol_table) {
+                    const inner_sym = this.#symbol_table[inner_sym_name];
+                    // We do not want to accept unresolved symbols as valid things to swap in to other unresolved symbols
+                    if (!inner_sym.has_resolved_value) {
+                        continue;
+                    }
+                    const old_value = sym.symbol_value_string;
+                    const new_value = this.#symbolReplaceHelper(old_value, inner_sym_name, inner_sym.value);
+                    if (old_value != new_value) {
+                        sym.symbol_value_string = inner_sym.symbol_value_string;
+                        sym.symbol_value_numeric = inner_sym.symbol_value_numeric;
+                        sym.is_numeric = inner_sym.is_numeric;
 
-        //console.debug(this.#symbol_table);
+                        sym.symbol_value_type = this.#paramLooksLikeSymbolHelper(sym.symbol_value_string);
+                        sym.has_resolved_value = true;
+
+                        replaced = true;
+                        break;
+                    }
+                }
+            }
+        } while (replaced);
     }
 
     /**
@@ -923,22 +931,17 @@ class Asm {
      *
      * @param {string} param_value
      * @param {string} symbol_name
-     * @param {string} symbol_value
+     * @param {string} symbol_value_numeric
      **/
-    #symbolReplaceHelper(param_value, symbol_name, symbol_value) {
+    #symbolReplaceHelper(param_value, symbol_name, symbol_value_numeric) {
         // Easy mode: the param is the symbol.
         if (param_value == symbol_name) {
-            return symbol_value;
+            return symbol_value_numeric;
         }
 
         // Easy mode: it's just a number, so it can't be a symbol.
         if (looks_like_number(param_value)) {
             return number_format_helper(param_value).toString();
-        }
-
-        // Easy mode: symbolic addressing mode.
-        if (param_value.startsWith('@') && param_value.substring(1) == symbol_name) {
-            return `@${symbol_value}`;
         }
 
         // Easy mode: it's just a register, so it can't be a symbol.  This check
@@ -957,19 +960,26 @@ class Asm {
         if (indirect_matches && indirect_matches[2] == symbol_name && (indirect_matches[1] || indirect_matches[3])) {
             const star = indirect_matches[1] == '*' ? '*' : '';
             const plus = indirect_matches[3] == '+' ? '+' : '';
-            return star + symbol_value + plus;
+            return star + symbol_value_numeric + plus;
         }
 
-        // Hard mode: indexed.  Look in both the immediate value and the register reference.
+        // Easy mode: symbolic addressing in the format of "@symbol_goes_here"
+        if (param_value.startsWith('@') && param_value.substring(1) == symbol_name) {
+            return `@${symbol_value_numeric}`;
+        }
+
+        // Hard mode: indexed.  This looks both at the value and the register,
+        // allowing both "@1234(symbol_goes_here)" and "@symbol_goes_here(R1)".
+        /** @FIXME "@sym1(sym2)" will break somewhere previously I expect, verify and fix */
         const indexed_matches = param_value.match(indexed_regex);
         if (indexed_matches) {
             let addr = indexed_matches[1];
             let index = indexed_matches[2];
             if (addr == symbol_name) {
-                addr = symbol_value;
+                addr = symbol_value_numeric;
             }
             if (index == symbol_name) {
-                index = symbol_value;
+                index = symbol_value_numeric;
             }
             return `@${addr}(${index})`;
         }
@@ -1001,8 +1011,8 @@ class Asm {
             // Clean up the mess from earlier processing by resetting the params
             // to their original parsed state.  This is safe as long as earlier
             // preprocessing correctly readjusts parsed_params.
-            line.instruction_params = line.parsed_params.map( (pp) => { return pp.param_string; } );
-            line.instruction_argument = line.instruction_params.join(',');
+            /** @TODO is this still needed? */
+            line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
 
             let inst = Instruction.newFromString(line.instruction);
             const format = inst.opcode_info.format;
@@ -1012,19 +1022,17 @@ class Asm {
                     // be as simple as subtracting the current word count from
                     // the word count (== value) of the location symbol and then
                     // doubling the value because that's how jumps work?
-                    let numeric_value = this.#symbol_table[sym_name].symbol_value;
+                    let numeric_value = this.#symbol_table[sym_name].symbol_value_numeric;
                     if (this.#symbol_table[sym_name].symbol_type == 'location' && (format == 2 || format == 17)) {
                         numeric_value = (numeric_value - word_count) * 2;
                     }
 
-                    /** @TODO hardcoding zero is probably wrong, but is it really? */
-                    const string_value = this.#symbol_table[sym_name].symbol_params[0];
                     const b4 = line.instruction_params[i];
 
                     line.instruction_params[i] = this.#symbolReplaceHelper(
                         line.instruction_params[i],
                         sym_name,
-                        this.#symbol_table[sym_name].value_assigned ? numeric_value.toString() : string_value
+                        this.#symbol_table[sym_name].value
                     );
 
                     // The definition of a symbol in a param is quite literally
@@ -1109,8 +1117,8 @@ class Asm {
             if (line.label && this.#symbol_table[line.label].symbol_type == 'location') {
                 // Adjust the symbol accordingly.
                 //console.debug(`bs: ${line.label} => ${location_counter}`);
-                this.#symbol_table[line.label].symbol_value = location_counter;
-                this.#symbol_table[line.label].value_assigned = true;
+                this.#symbol_table[line.label].symbol_value_numeric = location_counter;
+                this.#symbol_table[line.label].is_numeric = true;
 
                 // Like comments, include the label definition line in the segment.
                 if (line.line_type == 'label') {
@@ -1123,7 +1131,12 @@ class Asm {
 
             // lol
             if (line.instruction == 'AORG') {
+                /** @FIXME this assumes a successful parse of the param into a number */
                 location_counter = line.parsed_params[0].param_numeric;
+            }
+
+            if (line.instruction == 'EVEN' && location_counter % 2 != 0) {
+                location_counter++;
             }
 
             if (line.instruction && Asm.#pi_emitters_list.includes(line.instruction)) {
@@ -1133,6 +1146,7 @@ class Asm {
                 if (line.instruction == 'BSS' || line.instruction == 'BES') {
                     //console.debug('BSS/BES', line);
                     // BSS and BES allocate an empty chunk of space.
+                    /** @FIXME this assumes a successful parse of the param into a number */
                     emitter_bytes.bytes = Array(line.parsed_params[0].param_numeric).fill(0);
                 } else {
                     // Freshly extract each parsed param and coerce it into a
@@ -1142,21 +1156,22 @@ class Asm {
                     // remaining emitter PIs, we will assume that any "unknown"
                     // param is supposed to be a symbol.  We will also assume
                     // that the user has provided only bytes for BYTE, only words
-                    // for DATA, and only a single text string for TEXT.  Being
-                    // lazy like this saves time and effort at the cost of being
-                    // WRONG.
+                    // for DATA, and only a single text string for TEXT.
+                    /** @FIXME Being lazy like this saves time and effort at the cost of being WRONG. */
                     for (const pp of line.parsed_params) {
-                        const param_string = pp.param_string;
+                        const parsed_string = pp.parsed_string;
                         let param_numeric = [word_high_byte(pp.param_numeric), word_low_byte(pp.param_numeric)];
-                        let value_assigned = pp.value_assigned;
+                        let value_assigned = pp.value.length;
 
-                        if (pp.param_type == 'unknown' && Object.hasOwn(this.#symbol_table, param_string)) {
-                            const sym = this.#symbol_table[param_string];
-                            console.log(sym.symbol_value);
-                            param_numeric = [word_high_byte(sym.symbol_value), word_low_byte(sym.symbol_value)];
-                            value_assigned = sym.value_assigned;
+                        if (pp.param_type == 'unknown' && Object.hasOwn(this.#symbol_table, parsed_string)) {
+                            const sym = this.#symbol_table[parsed_string];
+                            console.log(sym.symbol_value_numeric);
+                            param_numeric = [
+                                word_high_byte(sym.symbol_value_numeric), word_low_byte(sym.symbol_value_numeric)
+                            ];
+                            value_assigned = true;
                         } else if (pp.param_type == 'text') {
-                            param_numeric = string_to_ords(param_string);
+                            param_numeric = string_to_ords(parsed_string);
                             value_assigned = true;
                         } else if (['register', 'indexed', 'symbolic', 'ERROR'].includes(pp.param_type)) {
                             console.error(pp, line);
@@ -1165,7 +1180,7 @@ class Asm {
 
                         if (!value_assigned) {
                             console.error(pp, line);
-                            throw new Error(`Encountered unassigned parsed param "${pp.param_string}" in emitter PI`);
+                            throw new Error(`Encountered unassigned parsed param "${pp.parsed_string}" in emitter PI`);
                         }
 
                         emitter_bytes.bytes = emitter_bytes.bytes.concat(param_numeric);
@@ -1183,13 +1198,13 @@ class Asm {
                 const line_symbols = line_symbol_map.get(line.line_number) ?? new Map;
                 for (const i in line.parsed_params) {
                     const pp = line.parsed_params[i];
-                    let param_value = pp.value_assigned ? pp.param_numeric.toString() : pp.param_string;
+                    let param_value = pp.value;
 
                     const sym_name = line_symbols.get(i);
                     if (sym_name) {
-                        const sym = this.#symbol_table[sym_name];
-                        const replace_value = sym.value_assigned ? sym.symbol_value.toString() : sym.symbol_params[0];
-                        param_value = this.#symbolReplaceHelper(param_value, sym_name, replace_value);
+                        param_value = this.#symbolReplaceHelper(
+                            param_value, sym_name, this.#symbol_table[sym_name].value
+                        );
 
                         // Instructions in formats 2 and 17, mostly jumps, take
                         // *relative* addresses.  We just subbed in a non-relative
@@ -1202,8 +1217,6 @@ class Asm {
 
                     line.instruction_params[i] = param_value;
                 }
-                // JIC
-                line.instruction_argument = line.instruction_params.join(',');
 
                 const instr_bytes = new AsmSegmentBytes;
                 instr_bytes.line_number = line.line_number;
@@ -1449,10 +1462,18 @@ class AsmSymbol {
     symbol_name = '';
     /** @type { 'ERROR' | 'assign' | 'location' } */
     symbol_type = 'ERROR';
-    value_assigned = false;
-    symbol_value = 0;
+    symbol_value_numeric = 0;
+    symbol_value_string = '';
+    /** @type { 'ERROR' | 'number' | 'register' | 'indexed' | 'symbolic' | 'text' | 'unknown' } */
+    symbol_value_type = 'ERROR';
+
     /** @type {string[]} */
     symbol_params = [];
+
+    has_resolved_value = false;
+    is_numeric = false;
+
+    get value() { return this.is_numeric ? this.symbol_value_numeric.toString() : this.symbol_value_string; }
 }
 
 class AsmParamParseResult {
@@ -1466,9 +1487,11 @@ class AsmParam {
     /** @type { 'ERROR' | 'number' | 'register' | 'indexed' | 'symbolic' | 'text' | 'unknown' } */
     param_type = 'ERROR';
     param_index = 0;
-    param_string = '';
+    parsed_string = '';
     param_numeric = 0;
-    value_assigned = false;
+    is_numeric = false;
+
+    get value() { return this.is_numeric ? this.param_numeric.toString() : this.parsed_string; }
 }
 
 class AsmSegment {
