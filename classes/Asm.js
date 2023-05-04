@@ -486,12 +486,12 @@ class Asm {
             new_param.param_type = this.#paramLooksLikeSymbolHelper(extracted_param);
 
             if (new_param.param_type == 'number') {
-                new_param.param_numeric = number_format_helper(extracted_param);
+                new_param.param_numeric = asm_number_format(extracted_param);
                 new_param.is_numeric = true;
             } else if (new_param.param_type == 'symbolic') {
                 // We'll only ever get symbolic back from the helper if there
                 // was a preceding at sign which we must strip.
-                new_param.param_numeric = number_format_helper(extracted_param.substring(1));
+                new_param.param_numeric = asm_number_format(extracted_param.substring(1));
                 new_param.is_numeric = true;
             }
             parsed_params.push(new_param);
@@ -529,7 +529,7 @@ class Asm {
         sym.symbol_params = line.instruction_params;
         sym.symbol_value_string = sym.symbol_params.length ? sym.symbol_params[0] : '';
         sym.symbol_value_type = sym.symbol_params.length ? this.#paramLooksLikeSymbolHelper(sym.symbol_value_string) : 'unknown';
-        sym.symbol_value_numeric = sym.symbol_value_type == 'number' ? number_format_helper(sym.symbol_value_string) : 0;
+        sym.symbol_value_numeric = sym.symbol_value_type == 'number' ? asm_number_format(sym.symbol_value_string) : 0;
         sym.has_resolved_value = false;
 
         // Pure labels become location symbols that we have to resolve later.
@@ -590,7 +590,7 @@ class Asm {
             sym.symbol_name = sym.symbol_params[0];
 
             if (looks_like_number(sym.symbol_params[0])) {
-                sym.symbol_value_numeric = number_format_helper(line.instruction_params[1]);
+                sym.symbol_value_numeric = asm_number_format(line.instruction_params[1]);
                 sym.is_numeric = true;
                 sym.has_resolved_value = true;
             }
@@ -685,7 +685,7 @@ class Asm {
         // CKPT defines the current, running checkpoint value for Format 12,
         // which we process below.
         if (line.instruction == 'CKPT') {
-            this.#current_ckpt_default = number_format_helper(line.instruction_params[0]);
+            this.#current_ckpt_default = asm_number_format(line.instruction_params[0]);
             // No further processing is possible or needed.
             return line;
         }
@@ -794,11 +794,11 @@ class Asm {
                         //console.debug('TEXT', adjustment);
                         break;
                     case 'BSS': // The single param is a relative adjustment to the counter.
-                        adjustment = number_format_helper(line.instruction_params[0]);
+                        adjustment = asm_number_format(line.instruction_params[0]);
                         //console.debug('BSS', adjustment);
                         break;
                     case 'BES': // The single param is a relative adjustment, but that adjustment is given to the label!
-                        adjustment = number_format_helper(line.instruction_params[0]);
+                        adjustment = asm_number_format(line.instruction_params[0]);
                         reassign_symbol = true;
                         //console.debug('BES', adjustment);
                         break;
@@ -814,7 +814,7 @@ class Asm {
                         if (!line.instruction_params.length) {
                             throw new Error('AORG/DORG require a parameter');
                         }
-                        adjustment = number_format_helper(line.instruction_params[0]);
+                        adjustment = asm_number_format(line.instruction_params[0]);
                         reassign_symbol = true;
                         reassign_counter = true;
                         //console.debug('AORG/DORG', adjustment);
@@ -851,48 +851,6 @@ class Asm {
             }
         }
         //console.debug('preProcessLocationCounterSymbols:', this.#symbol_table);
-    }
-
-    /**
-     * Given a single parameter string value, determine what it's most likely
-     * to be.  This is intended to sniff out symbols.
-     *
-     * @param {string} param_value
-     * @returns { 'number' | 'register' | 'indexed' | 'symbolic' | 'text' | 'unknown' }
-     **/
-    #paramLooksLikeSymbolHelper(param_value) {
-        // If it's a nothing, it's an unknown.
-        if (param_value === null || param_value === undefined) {
-            console.trace('paramLooksLikeSymbolHelper: Got undef or null param_value, (BUG?)');
-            return 'unknown';
-        }
-        // First up, let's dismiss obvious numbers.
-        if (looks_like_number(param_value)) {
-            return 'number';
-        }
-        // Second, obvious registers in addressing modes 0, 1, and 3.
-        if (looks_like_register(param_value)) {
-            return 'register';
-        }
-        // Third, concrete values in obviously indexed mode.
-        const indexed_matches = param_value.match(/^@?(.+)\((.+)\)$/);
-        if (
-            indexed_matches
-            && looks_like_number(indexed_matches[1])
-            && looks_like_register(indexed_matches[2])
-        ) {
-            return 'indexed';
-        }
-        // Fourth, concrete values in obviously symbolic mode.
-        if (param_value.startsWith('@') && looks_like_number(param_value.substring(1))) {
-            return 'symbolic';
-        }
-        // Fifth, some instructions allow quoted ASCII strings.  The spec uses single quotes only.
-        const string_matches = param_value.match(/^(["'])(.+?)\1$/);
-        if (string_matches) {
-            return 'text';
-        }
-        return 'unknown';
     }
 
     /**
@@ -955,71 +913,6 @@ class Asm {
                 }
             }
         } while (replaced);
-    }
-
-    /**
-     * Second generation symbol stuff.  Seems correct.
-     *
-     * Look for a symbol name in a parameter value, and replace it with a given
-     * symbol value.  This is only hard due to addressing mode 2.
-     *
-     * @param {string} param_value
-     * @param {string} symbol_name
-     * @param {string} symbol_value_numeric
-     **/
-    #symbolReplaceHelper(param_value, symbol_name, symbol_value_numeric) {
-        // Easy mode: the param is the symbol.
-        if (param_value == symbol_name) {
-            return symbol_value_numeric;
-        }
-
-        // Easy mode: it's just a number, so it can't be a symbol.
-        if (looks_like_number(param_value)) {
-            return number_format_helper(param_value).toString();
-        }
-
-        // Easy mode: it's just a register, so it can't be a symbol.  This check
-        // does addressing modes 0, 1, and 3, but is only true if the register
-        // reference itself is a normal register reference, which will not be
-        // a symbol.
-        if (looks_like_register(param_value)) {
-            return param_value;
-        }
-
-        const indirect_regex = /^(\*)?(.+)(\+)?$/;
-        const indexed_regex = /^@?(.+)\((.+)\)$/;
-
-        // Challenge mode: the param is a register.  Check for modes 0, 1, and 3.
-        const indirect_matches = param_value.match(indirect_regex);
-        if (indirect_matches && indirect_matches[2] == symbol_name && (indirect_matches[1] || indirect_matches[3])) {
-            const star = indirect_matches[1] == '*' ? '*' : '';
-            const plus = indirect_matches[3] == '+' ? '+' : '';
-            return star + symbol_value_numeric + plus;
-        }
-
-        // Easy mode: symbolic addressing in the format of "@symbol_goes_here"
-        if (param_value.startsWith('@') && param_value.substring(1) == symbol_name) {
-            return `@${symbol_value_numeric}`;
-        }
-
-        // Hard mode: indexed.  This looks both at the value and the register,
-        // allowing both "@1234(symbol_goes_here)" and "@symbol_goes_here(R1)".
-        /** @FIXME "@sym1(sym2)" will break somewhere previously I expect, verify and fix */
-        const indexed_matches = param_value.match(indexed_regex);
-        if (indexed_matches) {
-            let addr = indexed_matches[1];
-            let index = indexed_matches[2];
-            if (addr == symbol_name) {
-                addr = symbol_value_numeric;
-            }
-            if (index == symbol_name) {
-                index = symbol_value_numeric;
-            }
-            return `@${addr}(${index})`;
-        }
-
-        // Fallthrough!
-        return param_value;
     }
 
     /**
@@ -1375,10 +1268,10 @@ class Asm {
                 continue;
             }
             if (param_name == '_immediate_word_') {
-                inst.setImmediateValue(number_format_helper(this_param));
+                inst.setImmediateValue(asm_number_format(this_param));
                 continue;
             }
-            inst.setParam(param_name, number_format_helper(this_param));
+            inst.setParam(param_name, asm_number_format(this_param));
         }
         inst.finalize();
 
@@ -1470,7 +1363,7 @@ class Asm {
             const value_regex = /^@(0x|0b|>)?([0-9A-F]+)/;
             const value_test = register_string.match(value_regex);
             if (value_test) {
-                immediate_word = number_format_helper(value_test[2]);
+                immediate_word = asm_number_format(value_test[2]);
             } else {
                 throw new Error('Parse error extracting a Symbolic or Indexed (mode=2) immediate value');
             }
@@ -1491,7 +1384,7 @@ class Asm {
                 // It's symbolic, without the at.
                 mode = 2;
                 register = 0;
-                immediate_word = number_format_helper(register_string);
+                immediate_word = asm_number_format(register_string);
                 //console.debug(orig_register_string, register_string, mode, register, immediate_word);
             } else {
                 console.debug(orig_register_string, register_string, mode, register, immediate_word);
@@ -1499,6 +1392,113 @@ class Asm {
             }
         }
         return [mode, register, immediate_word];
+    }
+
+    /**
+     * Given a single parameter string value, determine what it's most likely
+     * to be.  This is intended to sniff out symbols.
+     *
+     * @param {string} param_value
+     * @returns { 'number' | 'register' | 'indexed' | 'symbolic' | 'text' | 'unknown' }
+     **/
+    #paramLooksLikeSymbolHelper(param_value) {
+        // If it's a nothing, it's an unknown.
+        if (param_value === null || param_value === undefined) {
+            console.trace('paramLooksLikeSymbolHelper: Got undef or null param_value, (BUG?)');
+            return 'unknown';
+        }
+        // First up, let's dismiss obvious numbers.
+        if (looks_like_number(param_value)) {
+            return 'number';
+        }
+        // Second, obvious registers in addressing modes 0, 1, and 3.
+        if (looks_like_register(param_value)) {
+            return 'register';
+        }
+        // Third, concrete values in obviously indexed mode.
+        const indexed_matches = param_value.match(/^@?(.+)\((.+)\)$/);
+        if (
+            indexed_matches
+            && looks_like_number(indexed_matches[1])
+            && looks_like_register(indexed_matches[2])
+        ) {
+            return 'indexed';
+        }
+        // Fourth, concrete values in obviously symbolic mode.
+        if (param_value.startsWith('@') && looks_like_number(param_value.substring(1))) {
+            return 'symbolic';
+        }
+        // Fifth, some instructions allow quoted ASCII strings.  The spec uses single quotes only.
+        const string_matches = param_value.match(/^(["'])(.+?)\1$/);
+        if (string_matches) {
+            return 'text';
+        }
+        return 'unknown';
+    }
+
+    /**
+     * Second generation symbol stuff.  Seems correct.
+     *
+     * Look for a symbol name in a parameter value, and replace it with a given
+     * symbol value.  This is only hard due to addressing mode 2.
+     *
+     * @param {string} param_value
+     * @param {string} symbol_name
+     * @param {string} symbol_value_numeric
+     **/
+    #symbolReplaceHelper(param_value, symbol_name, symbol_value_numeric) {
+        // Easy mode: the param is the symbol.
+        if (param_value == symbol_name) {
+            return symbol_value_numeric;
+        }
+
+        // Easy mode: it's just a number, so it can't be a symbol.
+        if (looks_like_number(param_value)) {
+            return asm_number_format(param_value).toString();
+        }
+
+        // Easy mode: it's just a register, so it can't be a symbol.  This check
+        // does addressing modes 0, 1, and 3, but is only true if the register
+        // reference itself is a normal register reference, which will not be
+        // a symbol.
+        if (looks_like_register(param_value)) {
+            return param_value;
+        }
+
+        const indirect_regex = /^(\*)?(.+)(\+)?$/;
+        const indexed_regex = /^@?(.+)\((.+)\)$/;
+
+        // Challenge mode: the param is a register.  Check for modes 0, 1, and 3.
+        const indirect_matches = param_value.match(indirect_regex);
+        if (indirect_matches && indirect_matches[2] == symbol_name && (indirect_matches[1] || indirect_matches[3])) {
+            const star = indirect_matches[1] == '*' ? '*' : '';
+            const plus = indirect_matches[3] == '+' ? '+' : '';
+            return star + symbol_value_numeric + plus;
+        }
+
+        // Easy mode: symbolic addressing in the format of "@symbol_goes_here"
+        if (param_value.startsWith('@') && param_value.substring(1) == symbol_name) {
+            return `@${symbol_value_numeric}`;
+        }
+
+        // Hard mode: indexed.  This looks both at the value and the register,
+        // allowing both "@1234(symbol_goes_here)" and "@symbol_goes_here(R1)".
+        /** @FIXME "@sym1(sym2)" will break somewhere previously I expect, verify and fix */
+        const indexed_matches = param_value.match(indexed_regex);
+        if (indexed_matches) {
+            let addr = indexed_matches[1];
+            let index = indexed_matches[2];
+            if (addr == symbol_name) {
+                addr = symbol_value_numeric;
+            }
+            if (index == symbol_name) {
+                index = symbol_value_numeric;
+            }
+            return `@${addr}(${index})`;
+        }
+
+        // Fallthrough!
+        return param_value;
     }
 
 }
@@ -1581,7 +1581,7 @@ class AsmSegmentBytes {
  * @param {string} string
  * @returns {number}
  **/
-function number_format_helper(string) {
+function asm_number_format(string) {
     let is_hex = false;
     let is_binary = false;
     let is_decimal = false;
@@ -1615,7 +1615,7 @@ function number_format_helper(string) {
 
     if (!is_hex && !is_binary && !is_decimal) {
         console.debug(string);
-        throw new Error('number_format_helper: unparsable value');
+        throw new Error('asm_number_format: unparsable value');
     }
 
     let num = parseInt(string, is_decimal ? 10 : (is_hex ? 16 : (is_binary ? 2 : 10)));
@@ -1642,7 +1642,7 @@ function looks_like_register(string) {
 
 /**
  * Given something that might be numeric, determine if it could be a number.
- * Assumes asm-approved numeric syntax, similar to that of number_format_helper.
+ * Assumes asm-approved numeric syntax, similar to that of asm_number_format.
  * Does *NOT* accept addressing mode 0 register syntax as a valid number.
  *
  * @param {string} string
