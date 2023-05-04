@@ -125,45 +125,12 @@ class Asm {
         // We should now have temporary values for everything.  Clean up the
         // temporary mess we've created and do a fresh swap of all symbols.
         this.#applySymbolTable();
-
+        // Now that everything is in the right place, build our bytecode segments!
         this.#buildSegments();
+        /** @FIXME lol and then do it again because location counters are broken */
         this.#buildSegments();
 
-        // Our lines have been processed and symbols replaced.  We can finally
-        // build our bytecode.
-        for (const line of this.#parsed_lines) {
-            if (line.line_type == 'instruction') {
-                line.encoded_instruction = InstructionDecode.getEncodedInstruction(this.#getInstructionFromLine(line));
-            }
-        }
         return this.#parsed_lines;
-    }
-
-    /**
-     * First generation parsing.  Works but insufficient, thinks only of the
-     * program section and ignores actual data.
-     *
-     * Transform our parsed lines into bytecode.
-     **/
-    toWords() {
-        /** @type number[] */
-        const words = [];
-        for (const line of this.#parsed_lines) {
-            const is_instruction = line.line_type == 'instruction';
-            const is_pi_data = ((line.line_type == 'pi') && (line.instruction == 'data'));
-            if (is_instruction || is_pi_data) {
-                if (line.encoded_instruction !== null) {
-                    for (const word of line.encoded_instruction.words) {
-                        //console.debug(`toWords line ${line.line_number} instr ${line.instruction} word ${number_to_hex(word)}`);
-                        words.push(word);
-                    }
-                } else {
-                    console.debug(`toWords (fallback) line ${line.line_number} instr ${line.instruction} word ${number_to_hex(line.fallback_word)}`);
-                    words.push(line.fallback_word);
-                }
-            }
-        }
-        return words;
     }
 
     /**
@@ -266,30 +233,29 @@ class Asm {
     }
 
     /**
-     * First generation line parsing.  Correct but plays fast and loose with the spec.
+     * Assembly line parser.
      *
-     * TI assembler syntax sucks, but there's only so much I can do to make it
-     * suck less without making it harder to use other people's unmodified code.
+     * TI assembler syntax is clunky, but there's only so much I can do to make
+     * it nicer without making it harder to use other people's unmodified code.
      *
      * The core syntax is built on the assumption of a 60-character wide grid.
-     * You know.  PUNCHCARDS.
+     * Why?  PUNCHCARDS.  That's how old this platform is!
      *
      * The nature of the line is driven by the first character.  An asterisk
      * means that it's a comment.  Whitespace means it's an instruction.  Anything
-     * else becomes a label/identifier, and then the rest of the line is treated
-     * as an instruction.
+     * else becomes a label, and then the rest of the line is treated as an
+     * instruction.
      *
      * Instructions come in the form of a 1-6 character long capitalized string.
      * Most instructions have operands that immediately follow after whitespace.
-     * Parameters are divided by commas.  No whitespace is permitted within.
-     * Any whitespace signals the end of the operand.  Anything following the
-     * operands is treated as comment.  In general, instructions that take
-     * optional operands only permit comments if an operand is given.
-     *
-     * Some instructions are processing instructions, like DATA, EQU, and TEXT.
-     * Instructions and parameters are processed to replace labels with their
-     * associated values before any instructions are actually processed.  Some
-     * other instructions are treated as macros, like "RT" becoming "B *R11"
+     * Parameters are divided by commas.  Any whitespace signals the end of the
+     * operand area.  TEXT processing instructions may include whitespace inside
+     * of single quotes.  Anything following the operands is treated as comment.
+     * In general, instructions that take optional operands only permit comments
+     * if an operand is given.  Operands given for instructions that do not take
+     * operands are teated as comments. (@TODO NYI).  To disambiguate, we also
+     * treat anything after the first semicolon in the line as a comment, but
+     * that is a violation of the spec.  (@TODO use asterisks instead)
      *
      * @param {string} line
      * @param {number} line_number
@@ -297,13 +263,13 @@ class Asm {
     #parseLine(line, line_number) {
         const result = new AsmParseLineResult();
 
-        result.line = line;
-        result.line_number = line_number;
-        result.line_type = 'pending';
-        result.label = '';
-        result.instruction = '';
+        result.line                 = line;
+        result.line_number          = line_number;
+        result.line_type            = 'pending';
+        result.label                = '';
+        result.instruction          = '';
         result.instruction_argument = '';
-        result.comments = '';
+        result.comments             = '';
 
         // Collapse all whitespace.
         line = line.replaceAll(/[\s\t\r\n]+/g, "\x20");
@@ -400,15 +366,14 @@ class Asm {
     }
 
     /**
-     * Third generation line parsing.  Seems correct.
-     *
      * Given the asm string of parameters for a given line, parse it for params
-     * and return them and any remaining content (== a comment).
+     * and return them and any remaining content, which should be treated by the
+     * caller as a comment.
      *
      * Parsing params is harder than it looks at first glance.  A param can
      * be a string, a normal base 10 number, a prefixed hex or binary number,
      * or a symbol.  The spec also allows for math operations, but that's a
-     * real pain in the ass right now and I'm gonna ignore it. (@TODO)
+     * real pain in the ass right now and I'm gonna ignore it. (@TODO math lol)
      * Params are separated by a comma.  Params may not contain whitespace
      * or commas ... unless they're in a string.  Empty params are valid.
      *
@@ -424,7 +389,8 @@ class Asm {
         const parsed_params = [];
 
         // This line noise captures single quoted strings that may contain
-        // escaped single quotes, and then the same thing for double quotes.
+        // backslash-escaped single quotes, and then the same thing for double
+        // quotes.  Backslash escaping and double quotes are not in the spec.
         const quoted_string_regex = /^('((?:[^'\\]|\\.)+?)'|"((?:[^"\\]|\\.)+?)")/;
 
         const glom_until_comma_regex = /^([^\s,]+),?/;
@@ -446,12 +412,13 @@ class Asm {
                 new_param.param_type = 'string';
                 parsed_params.push(new_param);
 
-                // Trim off what we just grabbed, including the comma.
+                // Trim off what we just grabbed, including any trailing comma.
                 raw_param_string = raw_param_string.substring(quoted_match[1].length);
                 if (raw_param_string.startsWith(',')) {
                     raw_param_string = raw_param_string.substring(1);
                 }
 
+                // This param needs no further processing, so move on.
                 continue;
             }
 
@@ -462,7 +429,7 @@ class Asm {
             if (glommed_matches) {
                 extracted_param = glommed_matches[1];
 
-                // Trim off what we just grabbed, including the comma.
+                // Trim off what we just grabbed, including any trailing comma.
                 raw_param_string = raw_param_string.substring(extracted_param.length);
                 if (raw_param_string.startsWith(',')) {
                     raw_param_string = raw_param_string.substring(1);
@@ -477,7 +444,7 @@ class Asm {
                 }
                 // This should be unreachable.
                 console.debug(parsed_params, raw_param_string);
-                throw new Error('Parse error: can not make heads or tails of param');
+                throw new Error('Parse error: can not make heads or tails of remaining param');
             }
 
             // If we got this far, we have a parameter in extracted_param.
@@ -489,8 +456,9 @@ class Asm {
                 new_param.param_numeric = asm_number_format(extracted_param);
                 new_param.is_numeric = true;
             } else if (new_param.param_type == 'symbolic') {
-                // We'll only ever get symbolic back from the helper if there
-                // was a preceding at sign which we must strip.
+                // paramLooksLikeSymbolHelper returns "symbolic" only if the param
+                // is an at sign followed by something that looks like a number.
+                // This means we can reliably strip the at sign and make it numeric.
                 new_param.param_numeric = asm_number_format(extracted_param.substring(1));
                 new_param.is_numeric = true;
             }
@@ -509,12 +477,15 @@ class Asm {
     }
 
     /**
-     * Third generation symbol parsing.  Correct but very brittle.
+     * Line processing, stage 2:
+     * Given a line, extract any symbols it contains and add them to the symbol table.
      *
-     * Given a line, scan it for things that might be symbols.  If the symbol
-     * is also defined right here, assign it a value.
+     * Note: DFOP and DXOP definitions are given symbols, though their values
+     * later on do not flow through the symbol table but through the separate
+     * extracted values.
      *
-     * @FIXME this has a whole lot of duplicate code, can it be sanely streamlined?
+     * @TODO make DFOP and DXOP store their canonical values inside the symbol table
+     * @TODO This allows the definition of only one symbol per line, which might be wrong.
      *
      * @param {AsmParseLineResult} line
      **/
@@ -525,17 +496,17 @@ class Asm {
         }
 
         const sym = new AsmSymbol;
-        sym.line_number = line.line_number;
-        sym.symbol_params = line.instruction_params;
-        sym.symbol_value_string = sym.symbol_params.length ? sym.symbol_params[0] : '';
-        sym.symbol_value_type = sym.symbol_params.length ? this.#paramLooksLikeSymbolHelper(sym.symbol_value_string) : 'unknown';
-        sym.symbol_value_numeric = sym.symbol_value_type == 'number' ? asm_number_format(sym.symbol_value_string) : 0;
-        sym.has_resolved_value = false;
+        sym.line_number             = line.line_number;
+        sym.symbol_params           = line.instruction_params;
+        sym.symbol_value_string     = sym.symbol_params.length ? sym.symbol_params[0] : '';
+        sym.symbol_value_type       = sym.symbol_params.length ? this.#paramLooksLikeSymbolHelper(sym.symbol_value_string) : 'unknown';
+        sym.symbol_value_numeric    = sym.symbol_value_type == 'number' ? asm_number_format(sym.symbol_value_string) : 0;
+        sym.has_resolved_value      = false;
 
-        // Pure labels become location symbols that we have to resolve later.
+        // Pure labels become location symbols to be resolved later.
         if (line.line_type == 'label') {
-            sym.symbol_name = line.label;
             sym.symbol_type = 'location';
+            sym.symbol_name = line.label;
 
             if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
                 throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
@@ -564,27 +535,25 @@ class Asm {
         }
 
         // DFOP creates a string value symbol that is valid only in the context
-        // of replacing an instruction.  This makes things ugly because the rest
-        // of the code assumes that the symbol value is numeric.  Meh.
+        // of replacing an instruction.
         if (line.instruction == 'DFOP') {
-            sym.symbol_type = 'assign';
-            sym.symbol_name = sym.symbol_params[0];
-            sym.symbol_value_string = sym.symbol_params[1];
-            sym.symbol_value_type = this.#paramLooksLikeSymbolHelper(sym.symbol_value_string);
-            sym.symbol_value_numeric = 0;
-            sym.has_resolved_value = true;
+            sym.symbol_type             = 'assign';
+            sym.symbol_name             = sym.symbol_params[0];
+            sym.symbol_value_string     = sym.symbol_params[1];
+            sym.symbol_value_type       = this.#paramLooksLikeSymbolHelper(sym.symbol_value_string);
+            sym.symbol_value_numeric    = 0;
+            sym.has_resolved_value      = true;
 
             if (Object.hasOwn(this.#symbol_table, sym.symbol_name)) {
                 throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
             }
             this.#symbol_table[sym.symbol_name] = sym;
-
             this.#dfops[sym.symbol_name] = sym.symbol_value_string;
             return;
         }
 
-        // Like DFOP, DXOP works only in the context of replacing an instruction.
-        // Unlike DFOP, DXOP gets the luxury of actually assigning a number.
+        // Like DFOP, DXOP works only in the context of replacing an instruction,
+        // though the replacement is much more of a pain in the ass later on.
         if (line.instruction == 'DXOP') {
             sym.symbol_type = 'assign';
             sym.symbol_name = sym.symbol_params[0];
@@ -599,12 +568,11 @@ class Asm {
                 throw new Error(`Attempt to redefine symbol ${sym.symbol_name} on line ${line.line_number}`);
             }
             this.#symbol_table[sym.symbol_name] = sym;
-
             this.#dxops[sym.symbol_name] = sym.symbol_value_numeric;
             return;
         }
 
-        // Skip irrelevant PIs.
+        // If it's a PI, but not a location-related PI, we're done.
         if (line.line_type == 'pi'
             && !Asm.#pi_location_change_list.includes(line.instruction)
             && !Asm.#pi_location_list.includes(line.instruction)
@@ -631,18 +599,18 @@ class Asm {
     }
 
     /**
-     * Third generation line parsing.  Correct, except for the Format 12 replacement.
+     * Line processing, stage 3:
+     * Some PIs are dealt with later, and some PIs are dealt with immediately.
+     * Given a line, deal with the immediate PIs.
      *
-     * Some PIs are effectively macros that should have immediate effect.
-     * RT and NOP get replaced entirely.
-     * Instructions that are DFOPs get transformed into the real thing.
-     * Instructions that are DXOPs get replaced by their XOP call.
-     * Format 12 instructions without a valid CKPT value get replaced immediately
-     * as well, and then only with the then-current default CKPT value.  It is
-     * up to the caller to make sure that #current_ckpt_default is kept up to
-     * date and in sync with calls to this function.
+     * RT and NOP are effectively macros and swap out the entire line.
      *
-     * @FIXME instruction_argument being instruction_params joins is bogus?
+     * CKPT defines a FUCKING STATEFUL symbol that gets swapped into any given
+     * Format 12 line.
+     *
+     * This is also where DFOP and DXOP aliases turn into the correct instruction.
+     *
+     * @FIXME Remove the CKPT default value and error out if one is not defined, per spec.
      *
      * @param {AsmParseLineResult} line
      * @returns {AsmParseLineResult}
@@ -652,7 +620,15 @@ class Asm {
             return line;
         }
 
-        // DFOPs get replaced with their real operation
+        // DFOPs are easy, it's just swapping the instruction with the value defined
+        // during symbol processing.  For example:
+        //      DFOP    CMP,C
+        // ; later followed by by
+        //      CMP     R1,R2
+        // ; becomes
+        //      C       R1,R2
+        // We process this first because it can do things like become a DXOP or
+        // a CKPT or something else incredibly annoying.
         if (Object.hasOwn(this.#dfops, line.instruction)) {
             line.line_type = 'instruction';
             line.instruction = this.#dfops[line.instruction];
@@ -670,11 +646,35 @@ class Asm {
             return line;
         }
 
-        // NOP becomes JMP 2
+        // NOP becomes JMP $+2
         if (line.instruction == 'NOP') {
             line.line_type = 'instruction';
             line.instruction = 'JMP';
             line.instruction_argument = '2';
+            line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number).params;
+            line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
+
+            // No further processing is possible or needed.
+            return line;
+        }
+
+        // DXOPs get replaced with the appropriate XOP call by prepending the
+        // XOP number to the params.  The remaining param is Ts+S.  For example:
+        //      DXOP    FOO,7
+        // ; later followed by
+        //      FOO     *R2
+        // ; becomes
+        //      XOP     7,*R2
+        if (Object.hasOwn(this.#dxops, line.instruction)) {
+            line.line_type = 'instruction';
+            line.instruction = 'XOP';
+
+            // instruction_argument is supposed to contain the unprocessed,
+            // unreplaced original operand string.  Replacing it this way is
+            // very rude, but there's not really a better way outside of deferring
+            // the entire DXOP replacement until we're actually building our
+            // segments below.
+            line.instruction_argument = this.#dxops[line.instruction].toString() + ',' + line.instruction_argument;
             line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number).params;
             line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
 
@@ -690,23 +690,12 @@ class Asm {
             return line;
         }
 
-        // DXOPs get replaced with the appropriate XOP call by prepending the
-        // XOP number to the params.  The remaining param is Ts+S.
-        if (Object.hasOwn(this.#dxops, line.instruction)) {
-            line.line_type = 'instruction';
-            line.instruction = 'XOP';
-
-            line.instruction_argument = this.#dxops[line.instruction].toString() + ',' + line.instruction_argument;
-            line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number).params;
-            line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
-
-            // No further processing is possible or needed.
-            return line;
-        }
-
-        // Format 12 instructions are interruptable and store their state in a
+        // Format 12 instructions are "interruptable" and store their state in a
         // specified register called the checkpoint register.  A default can be
-        // be specified via the CKPT PI (done above).  Sub it in if needed.
+        // be specified via the CKPT PI (done above).  If the third param in the
+        // instruction is blank or omitted, we need to swap it in.
+        // The spec says that this swap should not occur if there is no previous
+        // defined CKPT, but we ignore that and define the default CKPT as R10.
         if (line.line_type == 'instruction' && OpInfo.opNameIsValid(line.instruction)) {
             const opcode_info = OpInfo.getFromOpName(line.instruction);
             if (opcode_info.format == 12 && !looks_like_register(line.instruction_params[2])) {
@@ -721,17 +710,15 @@ class Asm {
     }
 
     /**
-     * Third generation symbol preprocessing.  Incomplete.
+     * Line processing, stage 4:
+     * Perform an estimate of location counter values for any location symbol.
      *
-     * While value symbols can be assigned immediately, location symbols get their
-     * value from the location counter.  Build a location counter and then fill
-     * in *LIKELY* byte offset values.
+     * This is quick and dirty and gives wrong answers sometimes, but it's needed
+     * before we can safely continue processing.
      *
-     * This directly updates the symbol table.
+     * parsed_lines iteration count: 2
      *
-     * @FIXME BSS, BES, AORG and DORG can all be symbols instead of numbers, so
-     * the looks_like_number checks within could fail spectacularly.  Is there
-     * a sane way to fix this without doing nasty recursive bullshit?
+     * @FIXME this should not produce wrong answers :(
      **/
     #preProcessLocationCounterSymbols() {
         // Let's pre-locate all of the location symbols for rewrite
@@ -854,15 +841,11 @@ class Asm {
     }
 
     /**
-     * Third generation symbol preprocessing.  Incomplete.
+     * Line processing, stage 5:
+     * Symbols can reference other symbols in their definitions.  Resolve those
+     * recursive references now.
      *
-     * All value symbols that had assignable values and all location symbols
-     * have now been given something resembling a real value.  Some symbols can
-     * reference other symbols, leaving them undefined.  Let's go through and
-     * see if we can resolve those undefined symbols.  This SHOULD handle
-     * recursive resolution properly.  SHOULD.
-     *
-     * This directly updates the symbol table.
+     * @FIXME this can give wrong answers by proxy of preProcessLocationCounterSymbols :(
      **/
     #preProcessUndefinedSymbols() {
         let replaced = false;
@@ -870,10 +853,12 @@ class Asm {
             replaced = false;
             for (const sym_name in this.#symbol_table) {
                 const sym = this.#symbol_table[sym_name];
+                // If the value has been resolved, we have no work to do.
                 if (sym.has_resolved_value) {
                     continue;
                 }
-                // Okay, is it just another symbol name?
+
+                // Okay, is it just another symbol name?  That's easy!
                 if (Object.hasOwn(this.#symbol_table, sym.symbol_value_string)) {
                     // And if so, is it one with a resolved value?
                     if (this.#symbol_table[sym.symbol_value_string].has_resolved_value) {
@@ -893,7 +878,7 @@ class Asm {
                 // It's not easy :(
                 for (const inner_sym_name in this.#symbol_table) {
                     const inner_sym = this.#symbol_table[inner_sym_name];
-                    // We do not want to accept unresolved symbols as valid things to swap in to other unresolved symbols
+                    // Don't accept unresolved symbols as valid things to swap in to other unresolved symbols
                     if (!inner_sym.has_resolved_value) {
                         continue;
                     }
@@ -916,9 +901,13 @@ class Asm {
     }
 
     /**
-     * Second generation symbol stuff.  To be retired?
+     * Line processing, stage 6:
+     * All symbols should now have resolved values, so go through all the instructions
+     * and swap out the symbols in their params for the actual values
      *
-     * Given a filled and correct #symbol_table, crawl through all params and replace.
+     * parsed_lines iteration count: 3
+     *
+     * @FIXME This rebuilds the location counter inline, but does it wrong.
      **/
     #applySymbolTable() {
         // Keep track of where symbols appear in params for later possible correction.
@@ -933,6 +922,12 @@ class Asm {
             if (line.line_type != 'instruction') {
                 continue;
             }
+            if (!OpInfo.opNameIsValid(line.instruction)) {
+                console.debug(line);
+                throw new Error(`Encountered unknown instruction "${line.instruction}" on line ${line.line_number}`);
+            }
+            const opcode_info = OpInfo.getFromOpName(line.instruction);
+            const format = opcode_info.format;
             //console.groupCollapsed(line.line_number);
 
             // Clean up the mess from earlier processing by resetting the params
@@ -941,8 +936,6 @@ class Asm {
             /** @TODO is this still needed? */
             line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
 
-            let inst = Instruction.newFromString(line.instruction);
-            const format = inst.opcode_info.format;
             for (const i in line.instruction_params) {
                 for (const sym_name in this.#symbol_table) {
                     // Jump instructions get the offset adjust thing.  This SHOULD
@@ -979,25 +972,31 @@ class Asm {
                     }
                 }
                 //console.debug(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
-                inst.setParam(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
+                //inst.setParam(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
             }
-            inst = this.#getInstructionFromLine(line);
+            // With the correct params subbed into each instruction_params, we
+            // can now safely build an Instruction that has a more correct word
+            // count, which in turn will give us a more accurate location counter.
+            const inst = this.#getInstructionFromLine(line);
             const ei = InstructionDecode.getEncodedInstruction(inst);
             word_count += ei.words.length;
-            line.encoded_instruction = ei;
             //console.debug(inst, ei);
             //console.groupEnd();
         }
     }
 
     /**
+     * Line processing, stage 7:
      * By this time we should have a completely filled out symbol table.  We can
      * assume that all assign symbols are resolved to acceptable values and that
      * all location symbols have sane placeholder values.
      *
      * Group lines into segments, keeping a new, 100% accurate location counter
-     * along the way.  Update location symbol definitions as they are found and
-     * manually reprocess each use of a location symbol.
+     * along the way.  Update location symbol definitions as they are found so
+     * that future references to that symbol are correct.
+     *
+     * @FIXME Whoops, location symbols that are used before they are defined might
+     *        end up with subtly wrong values from preProcessLocationCounterSymbols / applySymbolTable
      **/
     #buildSegments() {
         this.#segments = [];
@@ -1006,7 +1005,10 @@ class Asm {
         // collected #symbol_map, which is a list of the symbols and where they
         // appear.  It turns out it's more convenient for us to get that per-line.
         //            line       index   symbol
-        /** @type Map<number,Map<number,string>> */
+        /**
+         * @FIXME This is yet another place where we accidentally limit symbol defs to one per line
+         * @type {Map<number,Map<number,string>>} That is, map of line_number=>map of symbol_name=>param_index
+         **/
         const line_symbol_map = new Map;
         for (const [sym_name, line_map] of this.#symbol_map) {
             for (const [line_number, param_indexes] of line_map) {
@@ -1033,7 +1035,7 @@ class Asm {
                 throw new Error(`buildSegments encountered bogus line type "${line.line_type}"`);
             }
 
-            // We include comment line references in the segment for reference purposes.
+            // We include comment line numbers in the segment for reference/debugging.
             if (line.line_type == 'comment') {
                 const comment_seg_bytes = new AsmSegmentBytes;
                 comment_seg_bytes.line_number = line.line_number;
@@ -1047,18 +1049,19 @@ class Asm {
                 this.#symbol_table[line.label].symbol_value_numeric = location_counter;
                 this.#symbol_table[line.label].is_numeric = true;
 
-                // Like comments, include the label definition line in the segment.
+                // Like comments, include label-only line numbers for reference/debugging.
                 if (line.line_type == 'label') {
                     const label_seg_bytes = new AsmSegmentBytes;
                     label_seg_bytes.line_number = line.line_number;
                     current_segment.data.push(label_seg_bytes);
-
                 }
             }
 
-            // lol
             if (line.instruction == 'AORG') {
-                /** @FIXME this assumes a successful parse of the param into a number */
+                /**
+                 * @FIXME this assumes a successful parse of the param into a number
+                 * @FIXME also, where do we even do that validation?
+                 **/
                 location_counter = line.parsed_params[0].param_numeric;
             }
 
@@ -1118,6 +1121,7 @@ class Asm {
                 current_segment.data.push(emitter_bytes);
             }
 
+            // Finally!
             if (line.instruction && OpInfo.opNameIsValid(line.instruction)) {
                 const opcode_info = OpInfo.getFromOpName(line.instruction);
                 // Rebuild our line params with fresh symbol values.  Numeric
@@ -1178,8 +1182,11 @@ class Asm {
                 const instr_bytes = new AsmSegmentBytes;
                 instr_bytes.line_number = line.line_number;
 
+                // Finally, at long last, we can get the actual instruction data from the line!
                 const instr = this.#getInstructionFromLine(line);
                 const ei = InstructionDecode.getEncodedInstruction(instr);
+                // Hell, we can even store it with the line now!
+                line.encoded_instruction = ei;
 
                 for (const word of ei.words) {
                     //console.debug(`buildSegments line ${line.line_number} instr ${instr.opcode_info.name} word ${number_to_hex(word)}`);
@@ -1195,6 +1202,10 @@ class Asm {
                 location_counter += instr_bytes.bytes.length;
             }
 
+            // Any time we find a segment-ending instruction, we can close up
+            // this segment and open up another.  It's fine if this ends up
+            // being an empty segment or ends up unused, the bytecode emitter
+            // bits will simply skip over them.
             if (line.instruction && Asm.#pi_segment_end_list.includes(line.instruction)) {
                 this.#segments.push(current_segment);
 
@@ -1210,27 +1221,11 @@ class Asm {
         this.#segments.push(current_segment);
     }
 
-    /*
-    // These PIs can define symbols through the location counter and change the location counter when doing so.
-    static #pi_location_change_list = ['AORG', 'DORG', 'BSS', 'BES', 'EVEN'];
-    // These PIs declare the start of a code or data segment.
-    static #pi_segment_start_list = ['PSEG', 'DSEG', 'CSEG', 'AORG', 'DORG'];
-    // These PIs will end the current segment, even if the types don't match.
-    static #pi_segment_end_list = ['PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND', 'AORG', 'DORG', 'END'];
-    // These PIs can define symbols that reference the current value of the location counter
-    static #pi_location_list = ['BYTE', 'DATA', 'TEXT', 'DFOP', 'DXOP', 'PSEG', 'PEND', 'DSEG', 'DEND', 'CSEG', 'CEND'];
-    // These PIs define symbols through their operands.
-    static #pi_assign_list = ['EQU', 'DFOP', 'DXOP'];
-    // These PIs declare data that will be included in the bytecode output.
-    static #pi_emitters_list = ['BYTE', 'DATA', 'TEXT', 'BSS', 'BES'];
-    */
-
     /**
-     * First generation parsing stuff.  Seems correct, to be kept.
-     *
-     * Given an AsmParseLineResult, create and return an Instruction with populated Params.
+     * Given an AsmParseLineResult, create and return an Instruction with populated params.
      *
      * @param {AsmParseLineResult} line
+     * @returns {Instruction}
      **/
     #getInstructionFromLine(line) {
         const inst = Instruction.newFromString(line.instruction);
@@ -1239,9 +1234,9 @@ class Asm {
             console.error('illegal op??', line, inst);
             throw new Error(`Illegal instruction (1) while parsing line ${line.line_number}`);
         }
-        // These are the ones we see in the assembly
+        // These are the ones we see in the assembly text
         const asm_param_list = inst.opcode_info.format_info.asm_param_order;
-        // These are the ones we put into the opcode
+        // These are the ones we put into the bytecode output
         const opcode_param_list = Object.keys(inst.opcode_info.args);
         // We're dealing with assembly-side things.
         const split_params = line.instruction_params;
@@ -1249,6 +1244,7 @@ class Asm {
         let offset = 0;
         for (const param_name of asm_param_list) {
             const this_param = split_params[offset++];
+            // Addressing mode encoder for the Source / Type of Source params
             if (param_name == 'S' && opcode_param_list.includes('Ts')) {
                 const res = this.#registerStringToAddressingModeHelper(this_param);
                 inst.setParam('Ts', res[0]);
@@ -1258,6 +1254,7 @@ class Asm {
                 }
                 continue;
             }
+            // Addressing mode encoder for the Destination / Type of Destination params
             if (param_name == 'D' && opcode_param_list.includes('Td')) {
                 const res = this.#registerStringToAddressingModeHelper(this_param);
                 inst.setParam('Td', res[0]);
@@ -1267,6 +1264,7 @@ class Asm {
                 }
                 continue;
             }
+            // A hack for instructions with immediate values
             if (param_name == '_immediate_word_') {
                 inst.setImmediateValue(asm_number_format(this_param));
                 continue;
@@ -1283,13 +1281,14 @@ class Asm {
     }
 
     /**
-     * Second generation parsing stuff.  Seems mostly correct, except for type 2...
-     *
      * Given an AsmParseLineResult and addressing mode information, return a working register string.
+     *
+     * @FIXME addressing mode 2 is broken here
      *
      * @param {AsmParseLineResult} line
      * @param {number} type
      * @param {number} value
+     * @returns {string}
      **/
     #registerAddressingModeToStringHelper(line, type, value) {
         let string = '';
@@ -1304,14 +1303,10 @@ class Asm {
                 string += '+';
             }
         } else if (type == 2) {
-            // We must be in symbolic or indexed memory mode.  In both cases,
-            // a word will follow with our actual value.
-            /** @FIXME this may be bogus */
+            /** @FIXME fallback_word is dead so this is completely broken */
             const imword = number_to_hex(line.fallback_word);
             string = `@>${imword}`;
             if (value > 0) {
-                // S is not zero, so we're in indexed mode.  The first word
-                // after the instruction is our base value.
                 string += `(R${value})`;
             }
         }
@@ -1319,9 +1314,9 @@ class Asm {
     }
 
     /**
-     * Second generation parsing stuff.  Seems mostly correct.
-     *
      * Given a register string, decode and return addressing mode information.
+     *
+     * @FIXME addressing mode 2 and the fallback bits are almost certainly broken here
      *
      * @param {string} register_string
      * @returns {number[]}
@@ -1437,10 +1432,10 @@ class Asm {
     }
 
     /**
-     * Second generation symbol stuff.  Seems correct.
-     *
      * Look for a symbol name in a parameter value, and replace it with a given
      * symbol value.  This is only hard due to addressing mode 2.
+     *
+     * @FIXME addressing mode 2 is almost certainly broken here
      *
      * @param {string} param_value
      * @param {string} symbol_name
@@ -1503,6 +1498,9 @@ class Asm {
 
 }
 
+/**
+ * A processed assembly line.
+ **/
 class AsmParseLineResult {
     line_number =           0;
     /** @type { 'ERROR' | 'pending' | 'label' | 'comment' | 'instruction' | 'pi' | 'fallthrough' } */
@@ -1521,6 +1519,9 @@ class AsmParseLineResult {
     encoded_instruction =   null;
 }
 
+/**
+ * A processed symbol
+ **/
 class AsmSymbol {
     line_number = 0;
     symbol_name = '';
@@ -1540,12 +1541,18 @@ class AsmSymbol {
     get value() { return this.is_numeric ? this.symbol_value_numeric.toString() : this.symbol_value_string; }
 }
 
+/**
+ * lol
+ **/
 class AsmParamParseResult {
     /** @type {AsmParam[]} */
     params = [];
     remainder = '';
 }
 
+/**
+ * A processed instruction parameter
+ **/
 class AsmParam {
     line_number = 0;
     /** @type { 'ERROR' | 'number' | 'register' | 'indexed' | 'symbolic' | 'text' | 'unknown' } */
@@ -1558,6 +1565,9 @@ class AsmParam {
     get value() { return this.is_numeric ? this.param_numeric.toString() : this.parsed_string; }
 }
 
+/**
+ * An assembly bytecode segment
+ **/
 class AsmSegment {
     /** @type { 'ERROR' | 'PSEG' | 'DSEG' | 'CSEG' | 'AORG' | 'DORG' } */
     segment_type = 'ERROR';
@@ -1566,9 +1576,11 @@ class AsmSegment {
     data = [];
 }
 
+/**
+ * A container for one line worth of output into a bytecode segment.
+ **/
 class AsmSegmentBytes {
     line_number = 0;
-    argument_number = 0;
     /** @type {number[]} */
     bytes = [];
 }
