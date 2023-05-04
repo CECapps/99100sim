@@ -127,6 +127,7 @@ class Asm {
         this.#applySymbolTable();
 
         this.#buildSegments();
+        this.#buildSegments();
 
         // Our lines have been processed and symbols replaced.  We can finally
         // build our bytecode.
@@ -179,7 +180,19 @@ class Asm {
                 }
             }
         }
+
+        /*
+        let lc = 0;
+        for (const segment of this.#segments) {
+            lc = segment.starting_point;
+            for (const data of segment.data) {
+                lc += data.bytes.length;
+                console.debug('line', data.line_number, ', lc=', lc, 'bytes=', data.bytes.length, ' so words=', data.bytes.length / 2);
+            }
+        }
+        */
         console.debug(this.#segments);
+
         return data;
     }
 
@@ -770,24 +783,30 @@ class Asm {
                 switch (line.instruction) {
                     case 'BYTE': // The params are each single bytes.
                         adjustment = line.instruction_params.length;
+                        //console.debug('BYTE', adjustment);
                         break;
-                    case 'WORD': // The params are each one word, so two bytes.
+                    case 'DATA': // The params are each one word, so two bytes.
                         adjustment = line.instruction_params.length * 2;
+                        //console.debug('DATA', adjustment);
                         break;
                     case 'TEXT': // The single param is a string of (7-bit (lol)) ASCII bytes, in quotes.
                         adjustment = line.instruction_argument.length - 2;
+                        //console.debug('TEXT', adjustment);
                         break;
                     case 'BSS': // The single param is a relative adjustment to the counter.
                         adjustment = number_format_helper(line.instruction_params[0]);
+                        //console.debug('BSS', adjustment);
                         break;
                     case 'BES': // The single param is a relative adjustment, but that adjustment is given to the label!
                         adjustment = number_format_helper(line.instruction_params[0]);
                         reassign_symbol = true;
+                        //console.debug('BES', adjustment);
                         break;
                     case 'EVEN': // Move the location counter forward to the next word boundary (even byte), if needed.
                         if (location_counter % 2 !== 0) {
                             adjustment = 1;
                             reassign_symbol = true;
+                            //console.debug('EVEN', adjustment);
                         }
                         break;
                     case 'AORG': // The single param is assigned to the location counter and the label.
@@ -798,13 +817,28 @@ class Asm {
                         adjustment = number_format_helper(line.instruction_params[0]);
                         reassign_symbol = true;
                         reassign_counter = true;
+                        //console.debug('AORG/DORG', adjustment);
                         break;
                     default: // Does nothing, goes nowhere.
                         break;
                 }
             }
-
-            //console.debug('pplcs: ', location_counter, adjustment, reassign_counter, reassign_symbol, line);
+            /*
+            console.debug(
+                line.line_number,
+                symbols_by_line[line.line_number],
+                line.instruction,
+                line.instruction_params.join(','),
+                'lc=',
+                location_counter,
+                'adj=',
+                adjustment,
+                'reass counter?',
+                reassign_counter,
+                'reass sym?',
+                reassign_symbol
+            );
+            */
             if (reassign_counter) {
                 location_counter = adjustment;
             } else {
@@ -1202,16 +1236,46 @@ class Asm {
 
                     const sym_name = line_symbols.get(i);
                     if (sym_name) {
+                        const b4 = param_value;
                         param_value = this.#symbolReplaceHelper(
                             param_value, sym_name, this.#symbol_table[sym_name].value
                         );
+                        const b42 = param_value;
 
                         // Instructions in formats 2 and 17, mostly jumps, take
                         // *relative* addresses.  We just subbed in a non-relative
                         // location.  Adjust it to be relative based on our
                         // current location counter value.
                         if (opcode_info.format == 2 || opcode_info.format == 17) {
-                            param_value = (parseInt(param_value, 10) - location_counter).toString();
+                            //param_value = (2 + ((parseInt(param_value, 10)) * 2) - (location_counter * 2)).toString();
+                            // We need to think in words, even though the argument
+                            // ends up working in bytes.  Why?  IDK, it's broken.
+                            if (location_counter % 2 != 0) {
+                                throw new Error('Encountered odd location counter during format 2/17 resolution');
+                            }
+                            const location_counter_as_words = location_counter / 2;
+                            const target_location_as_words = parseInt(param_value, 10) / 2;
+
+                            const diff_in_bytes = parseInt(param_value, 10) - location_counter;
+                            const diff_in_words = target_location_as_words - location_counter_as_words;
+                            console.debug(
+                                line.line_number,
+                                line.instruction,
+                                line.parsed_params.map( (pp) => { return pp.value; } ).join(','),
+                                'sym=',
+                                sym_name,
+                                this.#symbol_table[sym_name].value,
+                                'lc=',
+                                location_counter,
+                                diff_in_bytes,
+                                diff_in_words,
+                                'b4=',
+                                b4,
+                                b42,
+                                param_value
+                            );
+
+                            param_value = diff_in_bytes.toString(); // (2 + target_location_as_words - location_counter_as_words).toString();
                         }
                     }
 
