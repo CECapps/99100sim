@@ -1261,7 +1261,7 @@ class Asm {
                             console.debug(
                                 line.line_number,
                                 line.instruction,
-                                line.parsed_params.map( (pp) => { return pp.value; } ).join(','),
+                                line.parsed_params.map( (ipp) => { return ipp.value; } ).join(','),
                                 'sym=',
                                 sym_name,
                                 this.#symbol_table[sym_name].value,
