@@ -1,9 +1,9 @@
 // @ts-check
 "use strict";
 
-import { Instruction } from "./Instruction";
-import { InstructionDecode, EncodedInstruction } from "./InstructionDecode";
-import { OpInfo } from "./OpInfo";
+import { Instruction } from "./Instruction.js";
+import { InstructionDecode, EncodedInstruction } from "./InstructionDecode.js";
+import { OpInfo } from "./OpInfo.js";
 
 export { Asm, AsmParseLineResult };
 

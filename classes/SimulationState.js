@@ -4,7 +4,7 @@ import { Memory } from "./Memory.js";
 import { StatusRegister } from "./StatusRegister.js";
 import { InterruptList } from "./InterruptList.js";
 import { ErrorFlags } from "./ErrorFlags.js";
-import { Instruction } from "./Instruction";
+import { Instruction } from "./Instruction.js";
 
 /**
  * SimulationState: Because even solid-state machines have moving parts.

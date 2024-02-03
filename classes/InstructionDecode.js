@@ -1,7 +1,7 @@
 // @ts-check
 
-import { OpInfo } from "./OpInfo";
-import { Instruction } from "./Instruction";
+import { OpInfo } from "./OpInfo.js";
+import { Instruction } from "./Instruction.js";
 
 export { InstructionDecode, EncodedInstruction };
 

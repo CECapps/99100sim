@@ -1,9 +1,9 @@
 // @ts-check
 
-import { OpInfo } from "./OpInfo";
-import { ExecutionUnit } from "./ExecutionUnit";
-import { Instruction } from "./Instruction";
-import { SimulationState } from "./SimulationState";
+import { OpInfo } from "./OpInfo.js";
+import { ExecutionUnit } from "./ExecutionUnit.js";
+import { Instruction } from "./Instruction.js";
+import { SimulationState } from "./SimulationState.js";
 
 /**
  * Execution Process: An abstraction over Instruction operations.

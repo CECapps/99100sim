@@ -1,8 +1,8 @@
 // @ts-check
 
-import { Instruction } from "./Instruction";
-import { SimulationState } from "./SimulationState";
-import { StatusRegister } from "./StatusRegister";
+import { Instruction } from "./Instruction.js";
+import { SimulationState } from "./SimulationState.js";
+import { StatusRegister } from "./StatusRegister.js";
 
 /*global number_to_hex */
 

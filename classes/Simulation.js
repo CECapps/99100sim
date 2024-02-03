@@ -4,7 +4,7 @@ import { SimulationState } from "./SimulationState.js";
 import { ErrorFlags } from "./ErrorFlags.js";
 import { InterruptList } from "./InterruptList.js";
 import { Flow } from "./Flow.js";
-import { ExecutionProcess } from "./ExecutionProcess";
+import { ExecutionProcess } from "./ExecutionProcess.js";
 
 export class Simulation {
     /** @type {SimulationState} */

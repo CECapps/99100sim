@@ -1,6 +1,6 @@
 // @ts-check
 
-import { ExecutionProcess } from "./ExecutionProcess";
+import { ExecutionProcess } from "./ExecutionProcess.js";
 import { SimulationState } from "./SimulationState.js";
 
 /**

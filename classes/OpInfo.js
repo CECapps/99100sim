@@ -1,6 +1,6 @@
 // @ts-check
 
-import { FormatInfo } from "./Format";
+import { FormatInfo } from "./Format.js";
 
 export class OpInfo {
 

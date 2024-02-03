@@ -2,7 +2,7 @@
 
 /*global insert_binary,extract_binary */
 
-import { OpInfo } from "./OpInfo";
+import { OpInfo } from "./OpInfo.js";
 
 /**
  * Instruction: An Op with defined Parameters.
