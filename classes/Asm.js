@@ -86,7 +86,7 @@ class Asm {
     /** @type {Object<string,AsmSymbol>} */
     #symbol_table = {};
 
-    /** @type {Map<string,Map<number,number[]>>} That is, map<symbol_name, map<line_number,param_indexes[]>> */
+    /** @type {Map<string,Map<number,number[]|string[]>>} That is, map<symbol_name, map<line_number,param_indexes[]>> */
     #symbol_map = new Map;
 
     /** @type {AsmSegment[]} */
@@ -409,7 +409,7 @@ class Asm {
             const quoted_match = raw_param_string.match(quoted_string_regex);
             if (quoted_match) {
                 new_param.parsed_string = quoted_match[1];
-                new_param.param_type = 'string';
+                new_param.param_type = 'text';
                 parsed_params.push(new_param);
 
                 // Trim off what we just grabbed, including any trailing comma.
@@ -702,7 +702,7 @@ class Asm {
                 /** @FIXME instruction_argument should **NEVER** be overwritten this way! */
                 line.instruction_params[2] = `R${this.#current_ckpt_default.toString()}`;
                 line.instruction_argument = line.instruction_params.join(',');
-                line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number);
+                line.parsed_params = this.#parseParams(line.instruction_argument, line.line_number).params;
                 line.instruction_params = line.parsed_params.map( (pp) => { return pp.value; } );
             }
         }
@@ -960,12 +960,19 @@ class Asm {
                     // also a number.
                     if (line.parsed_params[i].param_type != 'number' && b4 != line.instruction_params[i]) {
                         //console.debug(line.line_number, i, 'b4 != line.instruction_params[i]', b4, line.instruction_params[i]);
-                        let line_param_idxes = this.#symbol_map.get(sym_name).get(line.line_number);
+                        let sym_map = this.#symbol_map.get(sym_name);
+                        if (sym_map === undefined) {
+                            sym_map = new Map;
+                            this.#symbol_map.set(sym_name, sym_map);
+                        }
+                        let line_param_idxes = sym_map.get(line.line_number);
                         if (line_param_idxes === undefined) {
                             line_param_idxes = [];
+                            // @ts-ignore 6133 -- sym_name will always be defined inside the symbol map at this point
                             this.#symbol_map.get(sym_name).set(line.line_number, line_param_idxes);
                         }
                         // Maps are magic and this correctly updates the value inside without a reassign.
+                        // @ts-ignore 2345 -- ts is inferring "never[]" here instead of the actual number[] | string[]
                         line_param_idxes.push(i);
                         //console.debug('Successfully replaced', sym_name, 'in string', b4, 'line:', line);
                         break;
@@ -1016,6 +1023,7 @@ class Asm {
                     if (!line_symbol_map.has(line_number)) {
                         line_symbol_map.set(line_number, new Map);
                     }
+                    // @ts-ignore 6133 -- the check above guarantees it'll be set
                     line_symbol_map.get(line_number).set(param_index, sym_name);
                 }
             }
@@ -1091,7 +1099,7 @@ class Asm {
                     for (const pp of line.parsed_params) {
                         const parsed_string = pp.parsed_string;
                         let param_numeric = [word_high_byte(pp.param_numeric), word_low_byte(pp.param_numeric)];
-                        let value_assigned = pp.value.length;
+                        let value_assigned = pp.value.length > 0;
 
                         if (pp.param_type == 'unknown' && Object.hasOwn(this.#symbol_table, parsed_string)) {
                             const sym = this.#symbol_table[parsed_string];
