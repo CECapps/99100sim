@@ -64,6 +64,40 @@ window.addEventListener('memory_updated', viz_request_redraw);
 
 window.addEventListener('DOMContentLoaded', button_onclick_setup);
 window.addEventListener('DOMContentLoaded', function () {
+    fetch('./asmfiles.php').then(function (response) {
+        if (!response.ok) {
+            console.error(response);
+            throw new Error(response);
+        }
+        return response.json();
+    }).then(function (data) {
+        const picker = document.getElementById('asmpicker');
+        for (const filename of data) {
+            const op = document.createElement('option');
+            op.textContent = filename.replace(/^asm\//, '').replace(/\.asm$/, '');
+            op.value = filename;
+            if (filename == 'asm/default.asm') {
+                op.selected = 'selected';
+            }
+            picker.appendChild(op);
+        }
+    });
+
+    document.getElementById('asmpicker_load_button').addEventListener('click', function () {
+        const filename = document.getElementById('asmpicker').value;
+        fetch(filename).then(function (response) {
+            if (!response.ok) {
+                console.error(response);
+                throw new Error(response);
+            }
+            return response.text();
+        }).then(function (data) {
+            document.getElementById('codebox').value = data;
+            reset_simui();
+        })
+    })
+});
+window.addEventListener('DOMContentLoaded', function () {
     setup_simui();
     reset_simui();
     update_simui();
@@ -97,7 +131,7 @@ window.addEventListener('DOMContentLoaded', function () {
                 font-weight: 100;
                 font-size: 0.15in;
             }
-            input, textarea {
+            input, textarea, select {
                 color: var(--text-color);
                 background-color: var(--main-bg-color);
                 font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
@@ -125,6 +159,11 @@ window.addEventListener('DOMContentLoaded', function () {
             }
             button:focus {
                 outline: 2px dotted var(--main-bg-color-lighter-2);
+            }
+            select {
+                padding: 2px;
+                border: 2px solid var(--main-bg-color-lighter-2);
+                border-radius: 5px;
             }
 
             #flexcontainer {
@@ -263,22 +302,11 @@ window.addEventListener('DOMContentLoaded', function () {
                 </section>
                 <br>
                 <section>
+                    File: <select id="asmpicker"></select>
+                    <button id="asmpicker_load_button">Load</button>
+                    <br><br>
                     <section id="codebox_grid_container">
 <textarea id="codebox" cols="80" spellcheck="false">
-                DORG    0
-start_pixel     EQU     R1
-end_pixel       EQU     R2
-color_increment EQU     R3
-pixel_increment EQU     R4
-initial_color   EQU     R5
-
-foo             EQU     initial_color
-bar             EQU     foo
-baz             EQU     99
-
-current_pixel   EQU     R8
-current_color   EQU     R9
-
                 AORG    0
 
                 DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 0 - 3
@@ -298,37 +326,6 @@ scratch         BSS     32
 
                 AORG    >0100
 
-setup:
-    LI      start_pixel,>0200
-    LI      end_pixel,>11FF
-    LI      color_increment,1
-    LI      pixel_increment,2
-    LI      initial_color,0
-init:
-    MOV     start_pixel,current_pixel
-    MOV     initial_color,current_color
-    MOV     workspace,R6
-    MOV     scratch,R7
-loop:
-    MOV     current_color,*current_pixel    ; Draw pixel
-    A       pixel_increment,current_pixel   ; Bump next pixel
-    JNO     ok1                             ; No overflow => continue
-    MOV     start_pixel,current_pixel       ; Reset to min
-ok1:
-    C       current_pixel,end_pixel         ; Out of bounds?
-    JLE     ok2                             ; No bounds => continue
-    MOV     start_pixel,current_pixel       ; Reset to min
-ok2:
-    A       color_increment,current_color   ; Bump next color.
-    JNO     loop                            ; No overflow => loop
-    MOV     initial_color,current_color     ; Reset color
-
-    JMP     loop                            ; => loop
-
-    END     setup ; entry point
-
-    AORG    >FFFC       ; reset vector
-    DATA    >80,>100
 </textarea>
                         <pre id="assembled"></pre>
                         <button id="codebox_process_button">Assemble &amp; Load</button>
