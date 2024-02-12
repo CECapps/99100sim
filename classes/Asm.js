@@ -197,9 +197,9 @@ class Asm {
             const instr = InstructionDecode.getInstructionFromEncoded(line.encoded_instruction);
             //console.debug(line.encoded_instruction);
 
-            const f_instr = instr.opcode_info.name.padEnd(8, ' ');
+            const f_instr = instr.opcode_def.name.padEnd(8, ' ');
             const f_params = [];
-            for (const param_name of instr.opcode_info.format_info.asm_param_order) {
+            for (const param_name of instr.opcode_def.format_info.asm_param_order) {
                 if (param_name == '_immediate_word_') {
                     const imword = number_to_hex(instr.getImmediateValue());
                     f_params.push(`>${imword}`);
@@ -211,11 +211,11 @@ class Asm {
                     throw new Error('hey look another params check failed');
                 }
 
-                if (param_name == 'S' && Object.hasOwn(instr.opcode_info.format_info.opcode_params, 'Ts')) {
+                if (param_name == 'S' && Object.hasOwn(instr.opcode_def.format_info.opcode_params, 'Ts')) {
                     f_params.push(this.#registerAddressingModeToStringHelper(line, instr.getParam('Ts'), instr.getParam('S')));
                     continue;
                 }
-                if (param_name == 'D' && Object.hasOwn(instr.opcode_info.format_info.opcode_params, 'Td')) {
+                if (param_name == 'D' && Object.hasOwn(instr.opcode_def.format_info.opcode_params, 'Td')) {
                     f_params.push(this.#registerAddressingModeToStringHelper(line, instr.getParam('Td'), instr.getParam('D')));
                     continue;
                 }
@@ -697,8 +697,8 @@ class Asm {
         // The spec says that this swap should not occur if there is no previous
         // defined CKPT, but we ignore that and define the default CKPT as R10.
         if (line.line_type == 'instruction' && OpInfo.opNameIsValid(line.instruction)) {
-            const opcode_info = OpInfo.getFromOpName(line.instruction);
-            if (opcode_info.format == 12 && !looks_like_register(line.instruction_params[2])) {
+            const opcode_def = OpInfo.getFromOpName(line.instruction);
+            if (opcode_def.format == 12 && !looks_like_register(line.instruction_params[2])) {
                 /** @FIXME instruction_argument should **NEVER** be overwritten this way! */
                 line.instruction_params[2] = `R${this.#current_ckpt_default.toString()}`;
                 line.instruction_argument = line.instruction_params.join(',');
@@ -761,9 +761,9 @@ class Asm {
             let reassign_counter = false;
 
             if (line.line_type == 'instruction' && OpInfo.opNameIsValid(line.instruction)) {
-                const opcode_info = OpInfo.getFromOpName(line.instruction);
+                const opcode_def = OpInfo.getFromOpName(line.instruction);
                 // This is a lie, but it's a good enough lie for preprocessing.
-                adjustment = opcode_info.minimum_instruction_words * 2;
+                adjustment = opcode_def.minimum_instruction_words * 2;
             }
 
             if (line.line_type == 'pi') {
@@ -926,8 +926,8 @@ class Asm {
                 console.debug(line);
                 throw new Error(`Encountered unknown instruction "${line.instruction}" on line ${line.line_number}`);
             }
-            const opcode_info = OpInfo.getFromOpName(line.instruction);
-            const format = opcode_info.format;
+            const opcode_def = OpInfo.getFromOpName(line.instruction);
+            const format = opcode_def.format;
             //console.groupCollapsed(line.line_number);
 
             // Clean up the mess from earlier processing by resetting the params
@@ -978,8 +978,8 @@ class Asm {
                         break;
                     }
                 }
-                //console.debug(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
-                //inst.setParam(inst.opcode_info.format_info.asm_param_order[i], line.instruction_params[i]);
+                //console.debug(inst.opcode_def.format_info.asm_param_order[i], line.instruction_params[i]);
+                //inst.setParam(inst.opcode_def.format_info.asm_param_order[i], line.instruction_params[i]);
             }
             // With the correct params subbed into each instruction_params, we
             // can now safely build an Instruction that has a more correct word
@@ -1131,7 +1131,7 @@ class Asm {
 
             // Finally!
             if (line.instruction && OpInfo.opNameIsValid(line.instruction)) {
-                const opcode_info = OpInfo.getFromOpName(line.instruction);
+                const opcode_def = OpInfo.getFromOpName(line.instruction);
                 // Rebuild our line params with fresh symbol values.  Numeric
                 // and other conversions have already occurred at this point.
                 const line_symbols = line_symbol_map.get(line.line_number) ?? new Map;
@@ -1151,7 +1151,7 @@ class Asm {
                         // *relative* addresses.  We just subbed in a non-relative
                         // location.  Adjust it to be relative based on our
                         // current location counter value.
-                        if (opcode_info.format == 2 || opcode_info.format == 17) {
+                        if (opcode_def.format == 2 || opcode_def.format == 17) {
                             //param_value = (2 + ((parseInt(param_value, 10)) * 2) - (location_counter * 2)).toString();
                             // We need to think in words, even though the argument
                             // ends up working in bytes.  Why?  IDK, it's broken.
@@ -1197,7 +1197,7 @@ class Asm {
                 line.encoded_instruction = ei;
 
                 for (const word of ei.words) {
-                    //console.debug(`buildSegments line ${line.line_number} instr ${instr.opcode_info.name} word ${number_to_hex(word)}`);
+                    //console.debug(`buildSegments line ${line.line_number} instr ${instr.opcode_def.name} word ${number_to_hex(word)}`);
                     const msb = word_high_byte(word);
                     const lsb = word_low_byte(word);
 
@@ -1243,9 +1243,9 @@ class Asm {
             throw new Error(`Illegal instruction (1) while parsing line ${line.line_number}`);
         }
         // These are the ones we see in the assembly text
-        const asm_param_list = inst.opcode_info.format_info.asm_param_order;
+        const asm_param_list = inst.opcode_def.format_info.asm_param_order;
         // These are the ones we put into the bytecode output
-        const opcode_param_list = Object.keys(inst.opcode_info.args);
+        const opcode_param_list = Object.keys(inst.opcode_def.args);
         // We're dealing with assembly-side things.
         const split_params = line.instruction_params;
 
@@ -1257,7 +1257,7 @@ class Asm {
                 const res = this.#registerStringToAddressingModeHelper(this_param);
                 inst.setParam('Ts', res[0]);
                 inst.setParam('S', res[1]);
-                if (res[0] == 2 && res[1] == 0 && inst.opcode_info.has_possible_immediate_source) {
+                if (res[0] == 2 && res[1] == 0 && inst.opcode_def.has_possible_immediate_source) {
                     inst.setImmediateSourceValue(res[2]);
                 }
                 continue;
@@ -1267,7 +1267,7 @@ class Asm {
                 const res = this.#registerStringToAddressingModeHelper(this_param);
                 inst.setParam('Td', res[0]);
                 inst.setParam('D', res[1]);
-                if (res[0] == 2 && res[1] == 0 && inst.opcode_info.has_possible_immediate_dest) {
+                if (res[0] == 2 && res[1] == 0 && inst.opcode_def.has_possible_immediate_dest) {
                     inst.setImmediateDestValue(res[2]);
                 }
                 continue;

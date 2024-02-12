@@ -1,7 +1,12 @@
 // @ts-check
 
-import { FormatInfo } from "./Format.js";
+import { OpDef } from "./OpDef.js";
+import { OpDef_A } from "./instructions/A.js";
 
+/**
+ * OpInfo: A bag of static methods that maps instructions to their opcodes and
+ * their associated OpDefs.
+ */
 export class OpInfo {
 
     /** @type string[] */
@@ -83,7 +88,7 @@ export class OpInfo {
 
     /**
      * @param {string} opname
-     * @returns {OpInfo}
+     * @returns {OpDef}
      **/
     static getFromOpName(opname) {
         if (!this.opNameIsValid(opname)) {
@@ -94,7 +99,7 @@ export class OpInfo {
 
     /**
      * @param {number} opcode
-     * @returns {OpInfo}
+     * @returns {OpDef}
      **/
     static getFromOpcode(opcode) {
         if (!this.opcodeIsValid(opcode)) {
@@ -105,6 +110,7 @@ export class OpInfo {
 
     /**
      * @param {number} opcode
+     * @returns {boolean}
      **/
     static opcodeCouldBeMID(opcode) {
         for (const mid_name in this.#mids) {
@@ -115,85 +121,14 @@ export class OpInfo {
         return false;
     }
 
-    get name() { return this.op; }
-
-    get has_immediate_operand() {           return this.format == 8; }
-    get has_possible_immediate_source() {   return !!this.args['Ts']; }
-    get has_possible_immediate_dest() {     return !!this.args['Td']; }
-    get has_second_opcode_word() {          return (this.format > 11) && (this.format != 18); }
-    get format_info() {                     return FormatInfo.getFormat(this.format); }
-
-    get minimum_instruction_words() {
-        return 1 + (this.has_immediate_operand ? 1 : 0) + (this.has_second_opcode_word ? 1 : 0);
-    }
-
-    get maximum_instruction_words() {
-        return this.minimum_instruction_words
-               + (this.has_possible_immediate_source ? 1 : 0)
-               + (this.has_possible_immediate_dest ? 1 : 0);
-    }
-
-    // These all get overridden.  Receiving "NOP" is or opcode = 0 is considered
-    // to be an error condition.
-    get op() {                          return "NOP"; }
-    get shortdesc() {                   return "NOP (IMPOSSIBLE ERROR)"; }
-    get opcode() {                      return 0; }
-    get opcode_legal_max() {            return 0; }
-    get arg_start_bit() {               return 0; }
-    /** @return { Object<string,number> } */
-    get args() {                        return { };  }
-    /** @return { Object<string,boolean> } */
-    get platforms() {
-        return { // Platform base (Base instruction set, all platforms)
-            '990/10'  :  false,
-            '9900'    :  false,
-            '990/4'   :  false,
-            '990/12'  :  false,
-            '9995'    :  false,
-            '99000'   :  false,
-            '99110A'  :  false,
-            '990/10A' :  false,
-        };
-    }
-
-    get format() {                      return 0; }
-    get format_var() {                  return 0; }
-    get performs_privilege_check() {    return false; }
-    /** @return { Array<string> } */
-    get touches_status_bits() {         return []; }
-
     /**
-     * @typedef {typeof OpInfo} OpInfoImpl
-     * @type Object<string,OpInfoImpl>
+     * @typedef {typeof OpDef} OpDefImpl
+     * @type Object<string,OpDefImpl>
      **/
     static #ops = {
-        'A': class extends OpInfo {
-            get op() {                          return "A"; }
-            get shortdesc() {                   return "Add int16"; }
-            get opcode() {                      return 40960; } // A000
-            get opcode_legal_max() {            return 45055; } // AFFF
-            get arg_start_bit() {               return 4; }
-            get args() {                        return { 'Td': 2, 'D': 4, 'Ts': 2, 'S': 4 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
+        'A': OpDef_A,
 
-            get format() {                      return 1; }
-            get format_var() {                  return 1; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
-        },
-
-        'AB': class extends OpInfo {
+        'AB': class extends OpDef {
             get op() {                          return "AB"; }
             get shortdesc() {                   return "Add int8"; }
             get opcode() {                      return 45056; } // B000
@@ -219,7 +154,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov', 'Par']; }
         },
 
-        'ABS': class extends OpInfo {
+        'ABS': class extends OpDef {
             get op() {                          return "ABS"; }
             get shortdesc() {                   return "Absolute Value"; }
             get opcode() {                      return 1856; } // 0740
@@ -245,7 +180,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Ov']; }
         },
 
-        'AD': class extends OpInfo {
+        'AD': class extends OpDef {
             get op() {                          return "AD"; }
             get shortdesc() {                   return "Add float64"; }
             get opcode() {                      return 3648; } // 0E40
@@ -271,7 +206,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'AI': class extends OpInfo {
+        'AI': class extends OpDef {
             get op() {                          return "AI"; }
             get shortdesc() {                   return "Add Immediate to reg"; }
             get opcode() {                      return 544; } // 0220
@@ -297,7 +232,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'AM': class extends OpInfo {
+        'AM': class extends OpDef {
             get op() {                          return "AM"; }
             get shortdesc() {                   return "Add bigint"; }
             get opcode() {                      return 42; } // 002A
@@ -323,7 +258,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car']; }
         },
 
-        'ANDI': class extends OpInfo {
+        'ANDI': class extends OpDef {
             get op() {                          return "ANDI"; }
             get shortdesc() {                   return "Logic AND a word"; }
             get opcode() {                      return 576; } // 0240
@@ -349,7 +284,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'ANDM': class extends OpInfo {
+        'ANDM': class extends OpDef {
             get op() {                          return "ANDM"; }
             get shortdesc() {                   return "AND Multiple Precision"; }
             get opcode() {                      return 40; } // 0028
@@ -375,7 +310,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'AR': class extends OpInfo {
+        'AR': class extends OpDef {
             get op() {                          return "AR"; }
             get shortdesc() {                   return "Add float32"; }
             get opcode() {                      return 3136; } // 0C40
@@ -401,7 +336,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'ARJ': class extends OpInfo {
+        'ARJ': class extends OpDef {
             get op() {                          return "ARJ"; }
             get shortdesc() {                   return "Add to Register and Jump"; }
             get opcode() {                      return 3085; } // 0C0D
@@ -427,7 +362,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'B': class extends OpInfo {
+        'B': class extends OpDef {
             get op() {                          return "B"; }
             get shortdesc() {                   return "Unconditional Branch"; }
             get opcode() {                      return 1088; } // 0440
@@ -453,7 +388,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'BDC': class extends OpInfo {
+        'BDC': class extends OpDef {
             get op() {                          return "BDC"; }
             get shortdesc() {                   return "Bigint to ASCII Number String"; }
             get opcode() {                      return 35; } // 0023
@@ -479,7 +414,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Ov']; }
         },
 
-        'BIND': class extends OpInfo {
+        'BIND': class extends OpDef {
             get op() {                          return "BIND"; }
             get shortdesc() {                   return "Branch Indirect"; }
             get opcode() {                      return 320; } // 0140
@@ -505,7 +440,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'BL': class extends OpInfo {
+        'BL': class extends OpDef {
             get op() {                          return "BL"; }
             get shortdesc() {                   return "Branch, PC -> R11"; }
             get opcode() {                      return 1664; } // 0680
@@ -531,7 +466,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'BLSK': class extends OpInfo {
+        'BLSK': class extends OpDef {
             get op() {                          return "BLSK"; }
             get shortdesc() {                   return "Branch, PC -> Stack from Reg"; }
             get opcode() {                      return 176; } // 00B0
@@ -557,7 +492,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'BLWP': class extends OpInfo {
+        'BLWP': class extends OpDef {
             get op() {                          return "BLWP"; }
             get shortdesc() {                   return "Branch, new Workspace"; }
             get opcode() {                      return 1024; } // 0400
@@ -583,7 +518,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'C': class extends OpInfo {
+        'C': class extends OpDef {
             get op() {                          return "C"; }
             get shortdesc() {                   return "Compare words"; }
             get opcode() {                      return 32768; } // 8000
@@ -609,7 +544,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'CB': class extends OpInfo {
+        'CB': class extends OpDef {
             get op() {                          return "CB"; }
             get shortdesc() {                   return "Compare bytes"; }
             get opcode() {                      return 36864; } // 9000
@@ -635,7 +570,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Par']; }
         },
 
-        'CDE': class extends OpInfo {
+        'CDE': class extends OpDef {
             get op() {                          return "CDE"; }
             get shortdesc() {                   return "float64 to int32"; }
             get opcode() {                      return 3077; } // 0C05
@@ -661,7 +596,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CDI': class extends OpInfo {
+        'CDI': class extends OpDef {
             get op() {                          return "CDI"; }
             get shortdesc() {                   return "float64 to int16"; }
             get opcode() {                      return 3073; } // 0C01
@@ -687,7 +622,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CED': class extends OpInfo {
+        'CED': class extends OpDef {
             get op() {                          return "CED"; }
             get shortdesc() {                   return "int32 to float64"; }
             get opcode() {                      return 3079; } // 0C07
@@ -713,7 +648,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CER': class extends OpInfo {
+        'CER': class extends OpDef {
             get op() {                          return "CER"; }
             get shortdesc() {                   return "int32 to float32"; }
             get opcode() {                      return 3078; } // 0C06
@@ -739,7 +674,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CI': class extends OpInfo {
+        'CI': class extends OpDef {
             get op() {                          return "CI"; }
             get shortdesc() {                   return "Compare immediate to Reg"; }
             get opcode() {                      return 640; } // 0280
@@ -765,7 +700,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'CID': class extends OpInfo {
+        'CID': class extends OpDef {
             get op() {                          return "CID"; }
             get shortdesc() {                   return "int16 to float64"; }
             get opcode() {                      return 3712; } // 0E80
@@ -791,7 +726,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CIR': class extends OpInfo {
+        'CIR': class extends OpDef {
             get op() {                          return "CIR"; }
             get shortdesc() {                   return "int16 to float32"; }
             get opcode() {                      return 3200; } // 0C80
@@ -817,7 +752,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CKOF': class extends OpInfo {
+        'CKOF': class extends OpDef {
             get op() {                          return "CKOF"; }
             get shortdesc() {                   return "Interrupt clock on"; }
             get opcode() {                      return 960; } // 03C0
@@ -843,7 +778,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'CKON': class extends OpInfo {
+        'CKON': class extends OpDef {
             get op() {                          return "CKON"; }
             get shortdesc() {                   return "Interrupt clock off"; }
             get opcode() {                      return 928; } // 03A0
@@ -869,7 +804,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'CLR': class extends OpInfo {
+        'CLR': class extends OpDef {
             get op() {                          return "CLR"; }
             get shortdesc() {                   return "Set word to zero"; }
             get opcode() {                      return 1216; } // 04C0
@@ -895,7 +830,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'CNTO': class extends OpInfo {
+        'CNTO': class extends OpDef {
             get op() {                          return "CNTO"; }
             get shortdesc() {                   return "Count ones in a bigbits"; }
             get opcode() {                      return 32; } // 0020
@@ -921,7 +856,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'COC': class extends OpInfo {
+        'COC': class extends OpDef {
             get op() {                          return "COC"; }
             get shortdesc() {                   return "Test for 1 bits using a mask"; }
             get opcode() {                      return 8192; } // 2000
@@ -947,7 +882,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'CR': class extends OpInfo {
+        'CR': class extends OpDef {
             get op() {                          return "CR"; }
             get shortdesc() {                   return "Compare float32"; }
             get opcode() {                      return 769; } // 0301
@@ -973,7 +908,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CRC': class extends OpInfo {
+        'CRC': class extends OpDef {
             get op() {                          return "CRC"; }
             get shortdesc() {                   return "CRC16"; }
             get opcode() {                      return 3616; } // 0E20
@@ -999,7 +934,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'CRE': class extends OpInfo {
+        'CRE': class extends OpDef {
             get op() {                          return "CRE"; }
             get shortdesc() {                   return "float32 to int32"; }
             get opcode() {                      return 3076; } // 0C04
@@ -1025,7 +960,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CRI': class extends OpInfo {
+        'CRI': class extends OpDef {
             get op() {                          return "CRI"; }
             get shortdesc() {                   return "float32 to int16"; }
             get opcode() {                      return 3072; } // 0C00
@@ -1051,7 +986,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'CS': class extends OpInfo {
+        'CS': class extends OpDef {
             get op() {                          return "CS"; }
             get shortdesc() {                   return "Compare strings bytewise"; }
             get opcode() {                      return 64; } // 0040
@@ -1077,7 +1012,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'CZC': class extends OpInfo {
+        'CZC': class extends OpDef {
             get op() {                          return "CZC"; }
             get shortdesc() {                   return "Test for 0 bits using a mask"; }
             get opcode() {                      return 9216; } // 2400
@@ -1103,7 +1038,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'DBC': class extends OpInfo {
+        'DBC': class extends OpDef {
             get op() {                          return "DBC"; }
             get shortdesc() {                   return "ASCII Number String to int16"; }
             get opcode() {                      return 36; } // 0024
@@ -1129,7 +1064,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Ov']; }
         },
 
-        'DD': class extends OpInfo {
+        'DD': class extends OpDef {
             get op() {                          return "DD"; }
             get shortdesc() {                   return "float64 divide"; }
             get opcode() {                      return 3904; } // 0F40
@@ -1155,7 +1090,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'DEC': class extends OpInfo {
+        'DEC': class extends OpDef {
             get op() {                          return "DEC"; }
             get shortdesc() {                   return "Decrement"; }
             get opcode() {                      return 1536; } // 0600
@@ -1181,7 +1116,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'DECT': class extends OpInfo {
+        'DECT': class extends OpDef {
             get op() {                          return "DECT"; }
             get shortdesc() {                   return "Decrement by two"; }
             get opcode() {                      return 1600; } // 0640
@@ -1207,7 +1142,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'DINT': class extends OpInfo {
+        'DINT': class extends OpDef {
             get op() {                          return "DINT"; }
             get shortdesc() {                   return "Disable interrupts"; }
             get opcode() {                      return 47; } // 002F
@@ -1233,7 +1168,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'DIV': class extends OpInfo {
+        'DIV': class extends OpDef {
             get op() {                          return "DIV"; }
             get shortdesc() {                   return "Integer divide"; }
             get opcode() {                      return 15360; } // 3C00
@@ -1259,7 +1194,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Ov']; }
         },
 
-        'DIVS': class extends OpInfo {
+        'DIVS': class extends OpDef {
             get op() {                          return "DIVS"; }
             get shortdesc() {                   return "Divide int32 by int16"; }
             get opcode() {                      return 384; } // 0180
@@ -1285,7 +1220,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Ov']; }
         },
 
-        'DR': class extends OpInfo {
+        'DR': class extends OpDef {
             get op() {                          return "DR"; }
             get shortdesc() {                   return "Divide float32"; }
             get opcode() {                      return 3392; } // 0D40
@@ -1311,7 +1246,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'EINT': class extends OpInfo {
+        'EINT': class extends OpDef {
             get op() {                          return "EINT"; }
             get shortdesc() {                   return "Enable interrupts"; }
             get opcode() {                      return 46; } // 002E
@@ -1337,7 +1272,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'EMD': class extends OpInfo {
+        'EMD': class extends OpDef {
             get op() {                          return "EMD"; }
             get shortdesc() {                   return "Execute diagnostics"; }
             get opcode() {                      return 45; } // 002D
@@ -1363,7 +1298,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov', 'Par', 'XOP', 'Priv', 'Mf', 'MM', 'Oint', 'WCS', 'IntMask']; }
         },
 
-        'EP': class extends OpInfo {
+        'EP': class extends OpDef {
             get op() {                          return "EP"; }
             get shortdesc() {                   return "Expand integer precision"; }
             get opcode() {                      return 1008; } // 03F0
@@ -1389,7 +1324,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'IDLE': class extends OpInfo {
+        'IDLE': class extends OpDef {
             get op() {                          return "IDLE"; }
             get shortdesc() {                   return "Idle until interrupt"; }
             get opcode() {                      return 832; } // 0340
@@ -1415,7 +1350,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'INC': class extends OpInfo {
+        'INC': class extends OpDef {
             get op() {                          return "INC"; }
             get shortdesc() {                   return "Increment"; }
             get opcode() {                      return 1408; } // 0580
@@ -1441,7 +1376,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'INCT': class extends OpInfo {
+        'INCT': class extends OpDef {
             get op() {                          return "INCT"; }
             get shortdesc() {                   return "Increment by two"; }
             get opcode() {                      return 1472; } // 05C0
@@ -1467,7 +1402,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'INSF': class extends OpInfo {
+        'INSF': class extends OpDef {
             get op() {                          return "INSF"; }
             get shortdesc() {                   return "Bitwise substring insert"; }
             get opcode() {                      return 3088; } // 0C10
@@ -1493,7 +1428,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'INV': class extends OpInfo {
+        'INV': class extends OpDef {
             get op() {                          return "INV"; }
             get shortdesc() {                   return "Logic NOT a word"; }
             get opcode() {                      return 1344; } // 0540
@@ -1519,7 +1454,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'IOF': class extends OpInfo {
+        'IOF': class extends OpDef {
             get op() {                          return "IOF"; }
             get shortdesc() {                   return "Bitwise substring NOT"; }
             get opcode() {                      return 3584; } // 0E00
@@ -1545,7 +1480,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JEQ': class extends OpInfo {
+        'JEQ': class extends OpDef {
             get op() {                          return "JEQ"; }
             get shortdesc() {                   return "Jump if Equal"; }
             get opcode() {                      return 4864; } // 1300
@@ -1571,7 +1506,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JGT': class extends OpInfo {
+        'JGT': class extends OpDef {
             get op() {                          return "JGT"; }
             get shortdesc() {                   return "Jump if Greater Than"; }
             get opcode() {                      return 5376; } // 1500
@@ -1597,7 +1532,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JH': class extends OpInfo {
+        'JH': class extends OpDef {
             get op() {                          return "JH"; }
             get shortdesc() {                   return "Jump if Logical Greater"; }
             get opcode() {                      return 6912; } // 1B00
@@ -1623,7 +1558,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JHE': class extends OpInfo {
+        'JHE': class extends OpDef {
             get op() {                          return "JHE"; }
             get shortdesc() {                   return "Jump if Greater or Equal"; }
             get opcode() {                      return 5120; } // 1400
@@ -1649,7 +1584,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JL': class extends OpInfo {
+        'JL': class extends OpDef {
             get op() {                          return "JL"; }
             get shortdesc() {                   return "Jump if Logical Lower"; }
             get opcode() {                      return 6656; } // 1A00
@@ -1675,7 +1610,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JLE': class extends OpInfo {
+        'JLE': class extends OpDef {
             get op() {                          return "JLE"; }
             get shortdesc() {                   return "Jump if Lower or Equal"; }
             get opcode() {                      return 4608; } // 1200
@@ -1701,7 +1636,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JLT': class extends OpInfo {
+        'JLT': class extends OpDef {
             get op() {                          return "JLT"; }
             get shortdesc() {                   return "Jump if Less Than"; }
             get opcode() {                      return 4352; } // 1100
@@ -1727,7 +1662,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JMP': class extends OpInfo {
+        'JMP': class extends OpDef {
             get op() {                          return "JMP"; }
             get shortdesc() {                   return "Unconditional Jump"; }
             get opcode() {                      return 4096; } // 1000
@@ -1753,7 +1688,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JNC': class extends OpInfo {
+        'JNC': class extends OpDef {
             get op() {                          return "JNC"; }
             get shortdesc() {                   return "Jump if No Carry"; }
             get opcode() {                      return 5888; } // 1700
@@ -1779,7 +1714,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JNE': class extends OpInfo {
+        'JNE': class extends OpDef {
             get op() {                          return "JNE"; }
             get shortdesc() {                   return "Jump if Not Equal"; }
             get opcode() {                      return 5632; } // 1600
@@ -1805,7 +1740,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JNO': class extends OpInfo {
+        'JNO': class extends OpDef {
             get op() {                          return "JNO"; }
             get shortdesc() {                   return "Jump if No Overflow"; }
             get opcode() {                      return 6400; } // 1900
@@ -1831,7 +1766,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JOC': class extends OpInfo {
+        'JOC': class extends OpDef {
             get op() {                          return "JOC"; }
             get shortdesc() {                   return "Jump if Carry"; }
             get opcode() {                      return 6144; } // 1800
@@ -1857,7 +1792,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'JOP': class extends OpInfo {
+        'JOP': class extends OpDef {
             get op() {                          return "JOP"; }
             get shortdesc() {                   return "Jump if Odd Parity"; }
             get opcode() {                      return 7168; } // 1C00
@@ -1883,7 +1818,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'LCS': class extends OpInfo {
+        'LCS': class extends OpDef {
             get op() {                          return "LCS"; }
             get shortdesc() {                   return "Load Microcode Data (???)"; }
             get opcode() {                      return 160; } // 00A0
@@ -1909,7 +1844,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'LD': class extends OpInfo {
+        'LD': class extends OpDef {
             get op() {                          return "LD"; }
             get shortdesc() {                   return "Load float64 into R0-3"; }
             get opcode() {                      return 3968; } // 0F80
@@ -1935,7 +1870,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'LDCR': class extends OpInfo {
+        'LDCR': class extends OpDef {
             get op() {                          return "LDCR"; }
             get shortdesc() {                   return "Send bits from a word to the CRU"; }
             get opcode() {                      return 12288; } // 3000
@@ -1961,7 +1896,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Par']; }
         },
 
-        'LDD': class extends OpInfo {
+        'LDD': class extends OpDef {
             get op() {                          return "LDD"; }
             get shortdesc() {                   return "Next instruction dest gets mapped mem"; }
             get opcode() {                      return 1984; } // 07C0
@@ -1987,7 +1922,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'LDS': class extends OpInfo {
+        'LDS': class extends OpDef {
             get op() {                          return "LDS"; }
             get shortdesc() {                   return "Next instruction src gets mapped mem"; }
             get opcode() {                      return 1920; } // 0780
@@ -2013,7 +1948,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'LI': class extends OpInfo {
+        'LI': class extends OpDef {
             get op() {                          return "LI"; }
             get shortdesc() {                   return "Load immediate"; }
             get opcode() {                      return 512; } // 0200
@@ -2039,7 +1974,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'LIM': class extends OpInfo {
+        'LIM': class extends OpDef {
             get op() {                          return "LIM"; }
             get shortdesc() {                   return "Load interrupt mask"; }
             get opcode() {                      return 112; } // 0070
@@ -2065,7 +2000,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['IntMask']; }
         },
 
-        'LIMI': class extends OpInfo {
+        'LIMI': class extends OpDef {
             get op() {                          return "LIMI"; }
             get shortdesc() {                   return "Load interrupt mask immediate"; }
             get opcode() {                      return 768; } // 0300
@@ -2091,7 +2026,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['IntMask']; }
         },
 
-        'LMF': class extends OpInfo {
+        'LMF': class extends OpDef {
             get op() {                          return "LMF"; }
             get shortdesc() {                   return "Map memory"; }
             get opcode() {                      return 800; } // 0320
@@ -2117,7 +2052,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'LR': class extends OpInfo {
+        'LR': class extends OpDef {
             get op() {                          return "LR"; }
             get shortdesc() {                   return "Load float32 into R0-1"; }
             get opcode() {                      return 3456; } // 0D80
@@ -2143,7 +2078,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'LREX': class extends OpInfo {
+        'LREX': class extends OpDef {
             get op() {                          return "LREX"; }
             get shortdesc() {                   return "Restart from 0xFFC0, context switch"; }
             get opcode() {                      return 992; } // 03E0
@@ -2169,7 +2104,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Priv', 'Mf', 'IntMask']; }
         },
 
-        'LST': class extends OpInfo {
+        'LST': class extends OpDef {
             get op() {                          return "LST"; }
             get shortdesc() {                   return "Load Reg into Status Register"; }
             get opcode() {                      return 128; } // 0080
@@ -2195,7 +2130,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov', 'Par', 'XOP', 'Priv', 'Mf', 'MM', 'Oint', 'WCS', 'IntMask']; }
         },
 
-        'LTO': class extends OpInfo {
+        'LTO': class extends OpDef {
             get op() {                          return "LTO"; }
             get shortdesc() {                   return "Find the 1 nearest to the left bytewise"; }
             get opcode() {                      return 31; } // 001F
@@ -2221,7 +2156,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'LWP': class extends OpInfo {
+        'LWP': class extends OpDef {
             get op() {                          return "LWP"; }
             get shortdesc() {                   return "Load Reg into Workspace Register"; }
             get opcode() {                      return 144; } // 0090
@@ -2247,7 +2182,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'LWPI': class extends OpInfo {
+        'LWPI': class extends OpDef {
             get op() {                          return "LWPI"; }
             get shortdesc() {                   return "Load Immediate into Workplace Register"; }
             get opcode() {                      return 736; } // 02E0
@@ -2273,7 +2208,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'MD': class extends OpInfo {
+        'MD': class extends OpDef {
             get op() {                          return "MD"; }
             get shortdesc() {                   return "Multiply float64"; }
             get opcode() {                      return 3840; } // 0F00
@@ -2299,7 +2234,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'MM': class extends OpInfo {
+        'MM': class extends OpDef {
             get op() {                          return "MM"; }
             get shortdesc() {                   return "Multiply int32 into bigint (3 words)"; }
             get opcode() {                      return 770; } // 0302
@@ -2325,7 +2260,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'MOV': class extends OpInfo {
+        'MOV': class extends OpDef {
             get op() {                          return "MOV"; }
             get shortdesc() {                   return "Copy word"; }
             get opcode() {                      return 49152; } // C000
@@ -2351,7 +2286,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'MOVA': class extends OpInfo {
+        'MOVA': class extends OpDef {
             get op() {                          return "MOVA"; }
             get shortdesc() {                   return "Copy address"; }
             get opcode() {                      return 43; } // 002B
@@ -2377,7 +2312,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'MOVB': class extends OpInfo {
+        'MOVB': class extends OpDef {
             get op() {                          return "MOVB"; }
             get shortdesc() {                   return "Copy byte"; }
             get opcode() {                      return 53248; } // D000
@@ -2403,7 +2338,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Par']; }
         },
 
-        'MOVS': class extends OpInfo {
+        'MOVS': class extends OpDef {
             get op() {                          return "MOVS"; }
             get shortdesc() {                   return "Copy string bytewise"; }
             get opcode() {                      return 96; } // 0060
@@ -2429,7 +2364,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'MPY': class extends OpInfo {
+        'MPY': class extends OpDef {
             get op() {                          return "MPY"; }
             get shortdesc() {                   return "Multiply uint16 into uint32"; }
             get opcode() {                      return 14336; } // 3800
@@ -2455,7 +2390,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'MPYS': class extends OpInfo {
+        'MPYS': class extends OpDef {
             get op() {                          return "MPYS"; }
             get shortdesc() {                   return "Multiply int16 into int32"; }
             get opcode() {                      return 448; } // 01C0
@@ -2481,7 +2416,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'MR': class extends OpInfo {
+        'MR': class extends OpDef {
             get op() {                          return "MR"; }
             get shortdesc() {                   return "Multiply float32"; }
             get opcode() {                      return 3328; } // 0D00
@@ -2507,7 +2442,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'MVSK': class extends OpInfo {
+        'MVSK': class extends OpDef {
             get op() {                          return "MVSK"; }
             get shortdesc() {                   return "Copy string from stack bytewise"; }
             get opcode() {                      return 208; } // 00D0
@@ -2533,7 +2468,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'MVSR': class extends OpInfo {
+        'MVSR': class extends OpDef {
             get op() {                          return "MVSR"; }
             get shortdesc() {                   return "Copy string in reverse bytewise"; }
             get opcode() {                      return 192; } // 00C0
@@ -2559,7 +2494,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'NEG': class extends OpInfo {
+        'NEG': class extends OpDef {
             get op() {                          return "NEG"; }
             get shortdesc() {                   return "Negate word"; }
             get opcode() {                      return 1280; } // 0500
@@ -2585,7 +2520,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Ov']; }
         },
 
-        'NEGD': class extends OpInfo {
+        'NEGD': class extends OpDef {
             get op() {                          return "NEGD"; }
             get shortdesc() {                   return "Negate float64"; }
             get opcode() {                      return 3075; } // 0C03
@@ -2611,7 +2546,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'NEGR': class extends OpInfo {
+        'NEGR': class extends OpDef {
             get op() {                          return "NEGR"; }
             get shortdesc() {                   return "Negate float32"; }
             get opcode() {                      return 3074; } // 0C02
@@ -2637,7 +2572,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'NRM': class extends OpInfo {
+        'NRM': class extends OpDef {
             get op() {                          return "NRM"; }
             get shortdesc() {                   return "Normalize a bigint by bit shifting left"; }
             get opcode() {                      return 3080; } // 0C08
@@ -2663,7 +2598,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car']; }
         },
 
-        'ORI': class extends OpInfo {
+        'ORI': class extends OpDef {
             get op() {                          return "ORI"; }
             get shortdesc() {                   return "Logic OR a word"; }
             get opcode() {                      return 608; } // 0260
@@ -2689,7 +2624,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'ORM': class extends OpInfo {
+        'ORM': class extends OpDef {
             get op() {                          return "ORM"; }
             get shortdesc() {                   return "Bitwise bigint OR (yes, signed int!)"; }
             get opcode() {                      return 39; } // 0027
@@ -2715,7 +2650,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'POPS': class extends OpInfo {
+        'POPS': class extends OpDef {
             get op() {                          return "POPS"; }
             get shortdesc() {                   return "Pop byte string from stack"; }
             get opcode() {                      return 224; } // 00E0
@@ -2741,7 +2676,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'PSHS': class extends OpInfo {
+        'PSHS': class extends OpDef {
             get op() {                          return "PSHS"; }
             get shortdesc() {                   return "Push byte string to stack"; }
             get opcode() {                      return 240; } // 00F0
@@ -2767,7 +2702,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'RSET': class extends OpInfo {
+        'RSET': class extends OpDef {
             get op() {                          return "RSET"; }
             get shortdesc() {                   return "System reset"; }
             get opcode() {                      return 864; } // 0360
@@ -2793,7 +2728,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov', 'Par', 'XOP', 'Priv', 'Mf', 'IntMask']; }
         },
 
-        'RTO': class extends OpInfo {
+        'RTO': class extends OpDef {
             get op() {                          return "RTO"; }
             get shortdesc() {                   return "Find the 1 nearest to the right of a bigbits"; }
             get opcode() {                      return 30; } // 001E
@@ -2819,7 +2754,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'RTWP': class extends OpInfo {
+        'RTWP': class extends OpDef {
             get op() {                          return "RTWP"; }
             get shortdesc() {                   return "Return with Workspace Pointer"; }
             get opcode() {                      return 896; } // 0380
@@ -2845,7 +2780,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov', 'Par', 'XOP', 'Priv', 'Mf', 'IntMask']; }
         },
 
-        'S': class extends OpInfo {
+        'S': class extends OpDef {
             get op() {                          return "S"; }
             get shortdesc() {                   return "Subtract int16"; }
             get opcode() {                      return 24576; } // 6000
@@ -2871,7 +2806,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'SB': class extends OpInfo {
+        'SB': class extends OpDef {
             get op() {                          return "SB"; }
             get shortdesc() {                   return "Subtract int8"; }
             get opcode() {                      return 28672; } // 7000
@@ -2897,7 +2832,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov', 'Par']; }
         },
 
-        'SBO': class extends OpInfo {
+        'SBO': class extends OpDef {
             get op() {                          return "SBO"; }
             get shortdesc() {                   return "Set given CRU bit to 1"; }
             get opcode() {                      return 7424; } // 1D00
@@ -2923,7 +2858,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'SBZ': class extends OpInfo {
+        'SBZ': class extends OpDef {
             get op() {                          return "SBZ"; }
             get shortdesc() {                   return "Set given CRU bit to 0"; }
             get opcode() {                      return 7680; } // 1E00
@@ -2949,7 +2884,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'SD': class extends OpInfo {
+        'SD': class extends OpDef {
             get op() {                          return "SD"; }
             get shortdesc() {                   return "Subtract float64"; }
             get opcode() {                      return 3776; } // 0EC0
@@ -2975,7 +2910,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'SEQB': class extends OpInfo {
+        'SEQB': class extends OpDef {
             get op() {                          return "SEQB"; }
             get shortdesc() {                   return "Search for byte in a string"; }
             get opcode() {                      return 80; } // 0050
@@ -3001,7 +2936,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'SETO': class extends OpInfo {
+        'SETO': class extends OpDef {
             get op() {                          return "SETO"; }
             get shortdesc() {                   return "Set word to ones (FFFF)"; }
             get opcode() {                      return 1792; } // 0700
@@ -3027,7 +2962,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'SLA': class extends OpInfo {
+        'SLA': class extends OpDef {
             get op() {                          return "SLA"; }
             get shortdesc() {                   return "Shift left, fill with zero"; }
             get opcode() {                      return 2560; } // 0A00
@@ -3053,7 +2988,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'SLAM': class extends OpInfo {
+        'SLAM': class extends OpDef {
             get op() {                          return "SLAM"; }
             get shortdesc() {                   return "Shift bigbits left, fill with zero"; }
             get opcode() {                      return 29; } // 001D
@@ -3079,7 +3014,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car']; }
         },
 
-        'SLSL': class extends OpInfo {
+        'SLSL': class extends OpDef {
             get op() {                          return "SLSL"; }
             get shortdesc() {                   return "Search list for matching bits"; }
             get opcode() {                      return 33; } // 0021
@@ -3105,7 +3040,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'SLSP': class extends OpInfo {
+        'SLSP': class extends OpDef {
             get op() {                          return "SLSP"; }
             get shortdesc() {                   return "Search list for matching bits, mapped"; }
             get opcode() {                      return 34; } // 0022
@@ -3131,7 +3066,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'SM': class extends OpInfo {
+        'SM': class extends OpDef {
             get op() {                          return "SM"; }
             get shortdesc() {                   return "Subtract bigint"; }
             get opcode() {                      return 41; } // 0029
@@ -3157,7 +3092,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car']; }
         },
 
-        'SNEB': class extends OpInfo {
+        'SNEB': class extends OpDef {
             get op() {                          return "SNEB"; }
             get shortdesc() {                   return "Search for not equal byte in a string"; }
             get opcode() {                      return 3600; } // 0E10
@@ -3183,7 +3118,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'SOC': class extends OpInfo {
+        'SOC': class extends OpDef {
             get op() {                          return "SOC"; }
             get shortdesc() {                   return "Logic OR: Copy 1s between words"; }
             get opcode() {                      return 57344; } // E000
@@ -3209,7 +3144,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'SOCB': class extends OpInfo {
+        'SOCB': class extends OpDef {
             get op() {                          return "SOCB"; }
             get shortdesc() {                   return "Logic OR: Copy 1s between bytes"; }
             get opcode() {                      return 61440; } // F000
@@ -3235,7 +3170,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Par']; }
         },
 
-        'SR': class extends OpInfo {
+        'SR': class extends OpDef {
             get op() {                          return "SR"; }
             get shortdesc() {                   return "Subtract float32"; }
             get opcode() {                      return 3264; } // 0CC0
@@ -3261,7 +3196,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'SRA': class extends OpInfo {
+        'SRA': class extends OpDef {
             get op() {                          return "SRA"; }
             get shortdesc() {                   return "Shift right filling with the sign bit"; }
             get opcode() {                      return 2048; } // 0800
@@ -3287,7 +3222,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car']; }
         },
 
-        'SRAM': class extends OpInfo {
+        'SRAM': class extends OpDef {
             get op() {                          return "SRAM"; }
             get shortdesc() {                   return "Shift right filling with the sign bit, bigint"; }
             get opcode() {                      return 28; } // 001C
@@ -3313,7 +3248,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car']; }
         },
 
-        'SRC': class extends OpInfo {
+        'SRC': class extends OpDef {
             get op() {                          return "SRC"; }
             get shortdesc() {                   return "Shift right, circular"; }
             get opcode() {                      return 2816; } // 0B00
@@ -3339,7 +3274,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car']; }
         },
 
-        'SRJ': class extends OpInfo {
+        'SRJ': class extends OpDef {
             get op() {                          return "SRJ"; }
             get shortdesc() {                   return "Subtract and jump"; }
             get opcode() {                      return 3084; } // 0C0C
@@ -3365,7 +3300,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'SRL': class extends OpInfo {
+        'SRL': class extends OpDef {
             get op() {                          return "SRL"; }
             get shortdesc() {                   return "Shift right filling with zero"; }
             get opcode() {                      return 2304; } // 0900
@@ -3391,7 +3326,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car']; }
         },
 
-        'STCR': class extends OpInfo {
+        'STCR': class extends OpDef {
             get op() {                          return "STCR"; }
             get shortdesc() {                   return "Read up to 16 bits from the CRU"; }
             get opcode() {                      return 13312; } // 3400
@@ -3417,7 +3352,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Par']; }
         },
 
-        'STD': class extends OpInfo {
+        'STD': class extends OpDef {
             get op() {                          return "STD"; }
             get shortdesc() {                   return "Store float64"; }
             get opcode() {                      return 4032; } // 0FC0
@@ -3443,7 +3378,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'STPC': class extends OpInfo {
+        'STPC': class extends OpDef {
             get op() {                          return "STPC"; }
             get shortdesc() {                   return "Store Program Counter"; }
             get opcode() {                      return 48; } // 0030
@@ -3469,7 +3404,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'STR': class extends OpInfo {
+        'STR': class extends OpDef {
             get op() {                          return "STR"; }
             get shortdesc() {                   return "Store float32"; }
             get opcode() {                      return 3520; } // 0DC0
@@ -3495,7 +3430,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'STST': class extends OpInfo {
+        'STST': class extends OpDef {
             get op() {                          return "STST"; }
             get shortdesc() {                   return "Store Status Register"; }
             get opcode() {                      return 704; } // 02C0
@@ -3521,7 +3456,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'STWP': class extends OpInfo {
+        'STWP': class extends OpDef {
             get op() {                          return "STWP"; }
             get shortdesc() {                   return "Store Workspace Pointer"; }
             get opcode() {                      return 672; } // 02A0
@@ -3547,7 +3482,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'SWPB': class extends OpInfo {
+        'SWPB': class extends OpDef {
             get op() {                          return "SWPB"; }
             get shortdesc() {                   return "Swap Bytes"; }
             get opcode() {                      return 1728; } // 06C0
@@ -3573,7 +3508,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'SWPM': class extends OpInfo {
+        'SWPM': class extends OpDef {
             get op() {                          return "SWPM"; }
             get shortdesc() {                   return "Swap Bytes in a bigbits"; }
             get opcode() {                      return 37; } // 0025
@@ -3599,7 +3534,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'SZC': class extends OpInfo {
+        'SZC': class extends OpDef {
             get op() {                          return "SZC"; }
             get shortdesc() {                   return "Logic AND masked words"; }
             get opcode() {                      return 16384; } // 4000
@@ -3625,7 +3560,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'SZCB': class extends OpInfo {
+        'SZCB': class extends OpDef {
             get op() {                          return "SZCB"; }
             get shortdesc() {                   return "Logic AND masked bytes"; }
             get opcode() {                      return 20480; } // 5000
@@ -3651,7 +3586,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Par']; }
         },
 
-        'TB': class extends OpInfo {
+        'TB': class extends OpDef {
             get op() {                          return "TB"; }
             get shortdesc() {                   return "Test bit"; }
             get opcode() {                      return 7936; } // 1F00
@@ -3677,7 +3612,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'TCMB': class extends OpInfo {
+        'TCMB': class extends OpDef {
             get op() {                          return "TCMB"; }
             get shortdesc() {                   return "Test & reset bit in word"; }
             get opcode() {                      return 3082; } // 0C0A
@@ -3703,7 +3638,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'TMB': class extends OpInfo {
+        'TMB': class extends OpDef {
             get op() {                          return "TMB"; }
             get shortdesc() {                   return "Test bit in word"; }
             get opcode() {                      return 3081; } // 0C09
@@ -3729,7 +3664,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'TS': class extends OpInfo {
+        'TS': class extends OpDef {
             get op() {                          return "TS"; }
             get shortdesc() {                   return "Translate words in a string from a table"; }
             get opcode() {                      return 3632; } // 0E30
@@ -3755,7 +3690,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'TSMB': class extends OpInfo {
+        'TSMB': class extends OpDef {
             get op() {                          return "TSMB"; }
             get shortdesc() {                   return "Test & set bit in word"; }
             get opcode() {                      return 3083; } // 0C0B
@@ -3781,7 +3716,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Eq']; }
         },
 
-        'X': class extends OpInfo {
+        'X': class extends OpDef {
             get op() {                          return "X"; }
             get shortdesc() {                   return "Execute"; }
             get opcode() {                      return 1152; } // 0480
@@ -3807,7 +3742,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'XF': class extends OpInfo {
+        'XF': class extends OpDef {
             get op() {                          return "XF"; }
             get shortdesc() {                   return "Extract bits from word"; }
             get opcode() {                      return 3120; } // 0C30
@@ -3833,7 +3768,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'XIT': class extends OpInfo {
+        'XIT': class extends OpDef {
             get op() {                          return "XIT"; }
             get shortdesc() {                   return "No-OP"; }
             get opcode() {                      return 3086; } // 0C0E
@@ -3859,7 +3794,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'XOP': class extends OpInfo {
+        'XOP': class extends OpDef {
             get op() {                          return "XOP"; }
             get shortdesc() {                   return "Extended Operation Call"; }
             get opcode() {                      return 11264; } // 2C00
@@ -3885,7 +3820,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['XOP', 'Priv', 'Mf']; }
         },
 
-        'XOR': class extends OpInfo {
+        'XOR': class extends OpDef {
             get op() {                          return "XOR"; }
             get shortdesc() {                   return "Logic XOR a word"; }
             get opcode() {                      return 10240; } // 2800
@@ -3911,7 +3846,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'XORM': class extends OpInfo {
+        'XORM': class extends OpDef {
             get op() {                          return "XORM"; }
             get shortdesc() {                   return "Logic XOR a bigbits"; }
             get opcode() {                      return 38; } // 0026
@@ -3937,7 +3872,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
         },
 
-        'XV': class extends OpInfo {
+        'XV': class extends OpDef {
             get op() {                          return "XV"; }
             get shortdesc() {                   return "Extract bits into a new word"; }
             get opcode() {                      return 3104; } // 0C20

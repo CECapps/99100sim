@@ -3,6 +3,7 @@
 /*global insert_binary,extract_binary */
 
 import { OpInfo } from "./OpInfo.js";
+import { OpDef } from "./OpDef.js";
 
 /**
  * Instruction: An Op with defined Parameters.
@@ -42,8 +43,8 @@ export class Instruction {
     #has_immediate_dest_operand = false;
     #immediate_dest_operand = 0;
 
-    /** @type {OpInfo} */
-    opcode_info;
+    /** @type {OpDef} */
+    opcode_def;
 
     #is_finalized = false;
 
@@ -66,9 +67,9 @@ export class Instruction {
         return inst;
     }
 
-    /** @param {OpInfo} op */
+    /** @param {OpDef} op */
     constructor(op) {
-        this.opcode_info = op;
+        this.opcode_def = op;
         this.#base_opcode = op.opcode;
         this.#working_opcode = op.opcode;
     }
@@ -87,7 +88,7 @@ export class Instruction {
             console.error('setEffectiveOpcode: Instruction is Finalized.  The call is bugged!');
             return;
         }
-        if (opcode < this.opcode_info.opcode || opcode > this.opcode_info.opcode_legal_max) {
+        if (opcode < this.opcode_def.opcode || opcode > this.opcode_def.opcode_legal_max) {
             console.error('Op out of range (HOW!?)');
             return;
         }
@@ -105,7 +106,7 @@ export class Instruction {
     }
 
     getParamList() {
-        return Object.keys(this.opcode_info.args);
+        return Object.keys(this.opcode_def.args);
     }
 
     /**
@@ -116,7 +117,7 @@ export class Instruction {
         if (this.#working_opcode == 0) {
             throw new Error('getParam called before known good state: probable bug');
         }
-        const opcode_params = this.opcode_info.format_info.opcode_params;
+        const opcode_params = this.opcode_def.format_info.opcode_params;
         if (!Object.hasOwn(opcode_params, param_name)) {
             throw new Error(`getParam with invalid param: "${param_name}" probable bug`);
         }
@@ -143,7 +144,7 @@ export class Instruction {
             return;
         }
 
-        const opcode_params = this.opcode_info.format_info.opcode_params;
+        const opcode_params = this.opcode_def.format_info.opcode_params;
         if (!Object.hasOwn(opcode_params, param_name)) {
             throw new Error(`setParam with invalid param: "${param_name}" probable bug`);
         }
@@ -178,8 +179,8 @@ export class Instruction {
      * @returns {number}
      **/
     #paramBitOffsetHelper(param) {
-        let running_offset = this.opcode_info.format_info.opcode_param_start_bit;
-        const opcode_params = this.opcode_info.format_info.opcode_params;
+        let running_offset = this.opcode_def.format_info.opcode_param_start_bit;
+        const opcode_params = this.opcode_def.format_info.opcode_params;
         for (const p in opcode_params) {
             if (param !== p) {
                 running_offset += opcode_params[p];
@@ -192,10 +193,10 @@ export class Instruction {
     }
 
     #refreshImmediateOperandState() {
-        if (this.opcode_info.has_possible_immediate_source && this.getParam('Ts') == 2) {
+        if (this.opcode_def.has_possible_immediate_source && this.getParam('Ts') == 2) {
             this.#has_immediate_source_operand = true;
         }
-        if (this.opcode_info.has_possible_immediate_dest && this.getParam('Td') == 2) {
+        if (this.opcode_def.has_possible_immediate_dest && this.getParam('Td') == 2) {
             this.#has_immediate_dest_operand = true;
         }
     }
@@ -210,7 +211,7 @@ export class Instruction {
 
     //#region Second Word
     hasSecondOpcodeWord() {
-        return this.opcode_info.has_second_opcode_word;
+        return this.opcode_def.has_second_opcode_word;
     }
 
     /** @param {number} word */
@@ -225,7 +226,7 @@ export class Instruction {
 
     //#region Immediate Value
     hasImmediateValue() {
-        return this.opcode_info.has_immediate_operand;
+        return this.opcode_def.has_immediate_operand;
     }
 
     /** @param {number} word */
@@ -276,9 +277,9 @@ export class Instruction {
      **/
     isLegal() {
         // an empty Op object will have opcode=0 and op=NOP
-        const op_name_is_empty = this.opcode_info.name == '';
-        const op_name_is_NOP = this.opcode_info.name == 'NOP';
-        const op_code_is_zero = this.opcode_info.opcode == 0;
+        const op_name_is_empty = this.opcode_def.name == '';
+        const op_name_is_NOP = this.opcode_def.name == 'NOP';
+        const op_code_is_zero = this.opcode_def.opcode == 0;
         const is_illegal = op_name_is_empty || op_name_is_NOP || op_code_is_zero;
         return !is_illegal;
     }

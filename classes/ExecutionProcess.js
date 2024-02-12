@@ -1,7 +1,9 @@
 // @ts-check
 
 import { OpInfo } from "./OpInfo.js";
+import { OpDef } from "./OpDef.js";
 import { ExecutionUnit } from "./ExecutionUnit.js";
+import { ExecutionUnitMap } from "./ExecutionUnitMap.js";
 import { Instruction } from "./Instruction.js";
 import { SimulationState } from "./SimulationState.js";
 
@@ -28,9 +30,9 @@ export class ExecutionProcess {
     #simstate;
 
     #ni_pc = 0;
-    #ni = new Instruction(new OpInfo());
+    #ni = new Instruction(new OpDef());
     #ci_pc = 0;
-    #ci = new Instruction(new OpInfo());
+    #ci = new Instruction(new OpDef());
     /** @type {ExecutionUnit|null} */
     #eu = null;
 
@@ -50,9 +52,9 @@ export class ExecutionProcess {
 
     reset() {
         this.#ni_pc = 0;
-        this.#ni = new Instruction(new OpInfo());
+        this.#ni = new Instruction(new OpDef());
         this.#ci_pc = 0;
-        this.#ci = new Instruction(new OpInfo());
+        this.#ci = new Instruction(new OpDef());
         this.#eu = null;
     }
 
@@ -77,11 +79,16 @@ export class ExecutionProcess {
     promoteNextInstructionToCurrentInstruction() {
         this.#ci_pc = this.#ni_pc;
         this.#ci = this.#ni;
-        //console.debug('Current Instruction is now ', this.#ci.opcode_info.name, this.#ci);
+        //console.debug('Current Instruction is now ', this.#ci.opcode_def.name, this.#ci);
 
-        this.#eu = ExecutionUnit.newFromInstruction(this.#ci, this.#simstate);
+        const eu_class = ExecutionUnitMap.getClassForOpName(this.#ci.opcode_def.name);
+        if (eu_class == false) {
+            throw new Error('Missing EU class for name = ' + this.#ci.opcode_def.name);
+        }
 
-        this.#ni = new Instruction(new OpInfo());
+        this.#eu = new eu_class(this.#ci, this.#simstate);
+
+        this.#ni = new Instruction(new OpDef());
         this.#ni_pc = 0;
 
         this.#finished_begin = false;
@@ -104,7 +111,7 @@ export class ExecutionProcess {
      * @returns {boolean} True if Instruction is a Jump
      **/
     currentInstructionIsJump() {
-        return this.#ci.opcode_info.format == 2 && (this.#ci.opcode_info.name.startsWith('J'));
+        return this.#ci.opcode_def.format == 2 && (this.#ci.opcode_def.name.startsWith('J'));
     }
 
     begin() {

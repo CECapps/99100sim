@@ -1,6 +1,7 @@
 // @ts-check
 
 import { OpInfo } from "./OpInfo.js";
+import { OpDef } from "./OpDef.js";
 import { Instruction } from "./Instruction.js";
 
 export { InstructionDecode, EncodedInstruction };
@@ -37,7 +38,7 @@ class InstructionDecode {
 
         /** @TODO This should be unnecessary, make sure of that and then nuke it. */
         const params = new ParamsList();
-        for (const key of Object.keys(inst.opcode_info.format_info.opcode_params)) {
+        for (const key of Object.keys(inst.opcode_def.format_info.opcode_params)) {
             params.set(key, inst.getParam(key));
         }
         enc.opcode_params = params;
@@ -107,8 +108,8 @@ class ImmediateWord {
 
 class EncodedInstruction {
 
-    /** @type {OpInfo} */
-    opcode_info;
+    /** @type {OpDef} */
+    opcode_def;
 
     opcode = 0;
     second_word = new ImmediateWord(false);
@@ -138,7 +139,7 @@ class EncodedInstruction {
     /** @param {number} opcode */
     constructor(opcode) {
         this.opcode = opcode;
-        this.opcode_info = OpInfo.getFromOpcode(opcode);
+        this.opcode_def = OpInfo.getFromOpcode(opcode);
     }
 
 }

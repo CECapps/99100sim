@@ -98,8 +98,8 @@ function update_simui() {
     /** @type {ExecutionProcess} */
     const ep = sim.flow.ep;
     const inst = ep.getCurrentInstruction();
-    if (inst.opcode_info.name != 'NOP') {
-        const op_name = inst.opcode_info.name;
+    if (inst.opcode_def.name != 'NOP') {
+        const op_name = inst.opcode_def.name;
         const op_code = number_to_hex(inst.getEffectiveOpcode());
         gebid_stfu('epci_el').innerText = `${op_name} >${op_code}`;
         gebid_stfu('epci_el').style.color = color_for_word(inst.getEffectiveOpcode());
