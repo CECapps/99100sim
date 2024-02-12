@@ -4,6 +4,16 @@ import { ExecutionUnit, Format1Unit, Format2Unit } from "./ExecutionUnit.js";
 import { StatusRegister } from "./StatusRegister.js";
 
 import { ExecutionUnit_A } from "./instructions/A.js";
+import { ExecutionUnit_C } from "./instructions/C.js";
+import { ExecutionUnit_JEQ } from "./instructions/JEQ.js";
+import { ExecutionUnit_JGT } from "./instructions/JGT.js";
+import { ExecutionUnit_JH } from "./instructions/JH.js";
+import { ExecutionUnit_JHE } from "./instructions/JHE.js";
+import { ExecutionUnit_JL } from "./instructions/JL.js";
+import { ExecutionUnit_JLE } from "./instructions/JLE.js";
+import { ExecutionUnit_JLT } from "./instructions/JLT.js";
+import { ExecutionUnit_S } from "./instructions/S.js";
+
 
 export class ExecutionUnitMap {
 
@@ -11,28 +21,11 @@ export class ExecutionUnitMap {
     /** @type Object<string,AnonymousExecutionUnit> */
     static #units = {
         'A': ExecutionUnit_A,
-        'C': class extends Format1Unit {
-            doTheThing() {
-                const td = this.inst.getParam('Td');
-                const d = this.inst.getParam('D');
-                //console.debug([td, d]);
-                this.target_value = this.resolveAddressingModeAndGet(td, d);
-                this.updateEq(this.source_value, this.target_value);
-                this.updateGt(this.source_value, this.target_value);
-            }
-        },
-        'S': class extends Format1Unit {
-            doTheThing() {
-                const td = this.inst.getParam('Td');
-                const d = this.inst.getParam('D');
-                //console.debug([td, d]);
-                const current_value = this.resolveAddressingModeAndGet(td, d);
-                this.target_value = this.clampAndUpdateCarryAndOverflow(current_value - this.source_value);
-                this.updateEq(this.target_value, 0);
-                this.updateGt(this.target_value, 0);
-            }
-        },
+        'C': ExecutionUnit_C,
+        'S': ExecutionUnit_S,
         'NOP': class extends ExecutionUnit {
+            // This is not a real instruction and thus it has no external OpDef.
+            // Reaching this code is actually an error and Should Never Happen(tm).
             fetchOperands() { return false; }
             execute() {
                 console.warn('NOP execute()');
@@ -41,119 +34,13 @@ export class ExecutionUnitMap {
 
             writeResults() { return false; }
         },
-        'JEQ': class extends Format2Unit {
-            fetchOperands() {
-                if (this.simstate.status_register.getBit(StatusRegister.EQUAL)) {
-                    this.run = true;
-                }
-                return true;
-            }
-
-            writeResults() {
-                /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
-                return false;
-            }
-        },
-        'JGT': class extends Format2Unit {
-            fetchOperands() {
-                if (this.simstate.status_register.getBit(StatusRegister.AGT)) {
-                    this.run = true;
-                }
-                return true;
-            }
-
-            writeResults() {
-                /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.AGT);
-                return false;
-            }
-        },
-        'JH': class extends Format2Unit {
-            fetchOperands() {
-                const is_lgt = this.simstate.status_register.getBit(StatusRegister.LGT);
-                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
-                if (is_lgt && !is_eq) {
-                    this.run = true;
-                }
-                return true;
-            }
-
-            writeResults() {
-                /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.LGT);
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
-                return false;
-            }
-        },
-        'JHE': class extends Format2Unit {
-            fetchOperands() {
-                const is_lgt = this.simstate.status_register.getBit(StatusRegister.LGT);
-                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
-                if (is_lgt || is_eq) {
-                    this.run = true;
-                }
-                return true;
-            }
-
-            writeResults() {
-                /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.LGT);
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
-                return false;
-            }
-        },
-        'JL': class extends Format2Unit {
-            fetchOperands() {
-                const is_lgt = this.simstate.status_register.getBit(StatusRegister.LGT);
-                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
-                if (!is_lgt && !is_eq) {
-                    this.run = true;
-                }
-                return true;
-            }
-
-            writeResults() {
-                /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.LGT);
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
-                return false;
-            }
-        },
-        'JLE': class extends Format2Unit {
-            fetchOperands() {
-                const is_lgt = this.simstate.status_register.getBit(StatusRegister.LGT);
-                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
-                if (!is_lgt || is_eq) {
-                    this.run = true;
-                }
-                return true;
-            }
-
-            writeResults() {
-                /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.LGT);
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
-                return false;
-            }
-        },
-        'JLT': class extends Format2Unit {
-            fetchOperands() {
-                const is_agt = this.simstate.status_register.getBit(StatusRegister.AGT);
-                const is_eq = this.simstate.status_register.getBit(StatusRegister.EQUAL);
-                if (!is_agt && !is_eq) {
-                    this.run = true;
-                }
-                return true;
-            }
-
-            writeResults() {
-                /** @FIXME This op does not actually clear the flag.  This is a hack. */
-                this.simstate.status_register.resetBit(StatusRegister.AGT);
-                this.simstate.status_register.resetBit(StatusRegister.EQUAL);
-                return false;
-            }
-        },
+        'JEQ': ExecutionUnit_JEQ,
+        'JGT': ExecutionUnit_JGT,
+        'JH': ExecutionUnit_JH,
+        'JHE': ExecutionUnit_JHE,
+        'JL': ExecutionUnit_JL,
+        'JLE': ExecutionUnit_JLE,
+        'JLT': ExecutionUnit_JLT,
         'JMP': class extends Format2Unit {
             displacement = 0;
             fetchOperands() {
