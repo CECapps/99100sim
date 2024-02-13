@@ -4,6 +4,10 @@ import { OpDef } from "./OpDef.js";
 
 import { OpDef_A } from "./instructions/A.js";
 import { OpDef_C } from "./instructions/C.js";
+import { OpDef_DEC } from "./instructions/DEC.js";
+import { OpDef_DECT } from "./instructions/DECT.js";
+import { OpDef_INC } from "./instructions/INC.js";
+import { OpDef_INCT } from "./instructions/INCT.js";
 import { OpDef_JEQ } from "./instructions/JEQ.js";
 import { OpDef_JGT } from "./instructions/JGT.js";
 import { OpDef_JH } from "./instructions/JH.js";
@@ -11,6 +15,13 @@ import { OpDef_JHE } from "./instructions/JHE.js";
 import { OpDef_JL } from "./instructions/JL.js";
 import { OpDef_JLE } from "./instructions/JLE.js";
 import { OpDef_JLT } from "./instructions/JLT.js";
+import { OpDef_JMP } from "./instructions/JMP.js";
+import { OpDef_JNC } from "./instructions/JNC.js";
+import { OpDef_JNE } from "./instructions/JNE.js";
+import { OpDef_JNO } from "./instructions/JNO.js";
+import { OpDef_JOC } from "./instructions/JOC.js";
+import { OpDef_LI } from "./instructions/LI.js";
+import { OpDef_MOV } from "./instructions/MOV.js";
 import { OpDef_S } from "./instructions/S.js";
 
 
@@ -1078,57 +1089,9 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'DEC': class extends OpDef {
-            get op() {                          return "DEC"; }
-            get shortdesc() {                   return "Decrement"; }
-            get opcode() {                      return 1536; } // 0600
-            get opcode_legal_max() {            return 1599; } // 063F
-            get arg_start_bit() {               return 10; }
-            get args() {                        return { 'Ts': 2, 'S': 4 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
+        'DEC': OpDef_DEC,
 
-            get format() {                      return 6; }
-            get format_var() {                  return 2; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
-        },
-
-        'DECT': class extends OpDef {
-            get op() {                          return "DECT"; }
-            get shortdesc() {                   return "Decrement by two"; }
-            get opcode() {                      return 1600; } // 0640
-            get opcode_legal_max() {            return 1663; } // 067F
-            get arg_start_bit() {               return 10; }
-            get args() {                        return { 'Ts': 2, 'S': 4 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
-
-            get format() {                      return 6; }
-            get format_var() {                  return 2; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
-        },
+        'DECT': OpDef_DECT,
 
         'DINT': class extends OpDef {
             get op() {                          return "DINT"; }
@@ -1338,57 +1301,9 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'INC': class extends OpDef {
-            get op() {                          return "INC"; }
-            get shortdesc() {                   return "Increment"; }
-            get opcode() {                      return 1408; } // 0580
-            get opcode_legal_max() {            return 1471; } // 05BF
-            get arg_start_bit() {               return 10; }
-            get args() {                        return { 'Ts': 2, 'S': 4 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
+        'INC': OpDef_INC,
 
-            get format() {                      return 6; }
-            get format_var() {                  return 2; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
-        },
-
-        'INCT': class extends OpDef {
-            get op() {                          return "INCT"; }
-            get shortdesc() {                   return "Increment by two"; }
-            get opcode() {                      return 1472; } // 05C0
-            get opcode_legal_max() {            return 1535; } // 05FF
-            get arg_start_bit() {               return 10; }
-            get args() {                        return { 'Ts': 2, 'S': 4 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
-
-            get format() {                      return 6; }
-            get format_var() {                  return 2; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
-        },
+        'INCT': OpDef_INCT,
 
         'INSF': class extends OpDef {
             get op() {                          return "INSF"; }
@@ -1482,135 +1397,15 @@ export class OpInfo {
 
         'JLT': OpDef_JLT,
 
-        'JMP': class extends OpDef {
-            get op() {                          return "JMP"; }
-            get shortdesc() {                   return "Unconditional Jump"; }
-            get opcode() {                      return 4096; } // 1000
-            get opcode_legal_max() {            return 4351; } // 10FF
-            get arg_start_bit() {               return 8; }
-            get args() {                        return { 'disp': 8 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
+        'JMP': OpDef_JMP,
 
-            get format() {                      return 2; }
-            get format_var() {                  return 1; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return []; }
-        },
+        'JNC': OpDef_JNC,
 
-        'JNC': class extends OpDef {
-            get op() {                          return "JNC"; }
-            get shortdesc() {                   return "Jump if No Carry"; }
-            get opcode() {                      return 5888; } // 1700
-            get opcode_legal_max() {            return 6143; } // 17FF
-            get arg_start_bit() {               return 8; }
-            get args() {                        return { 'disp': 8 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
+        'JNE': OpDef_JNE,
 
-            get format() {                      return 2; }
-            get format_var() {                  return 1; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return []; }
-        },
+        'JNO': OpDef_JNO,
 
-        'JNE': class extends OpDef {
-            get op() {                          return "JNE"; }
-            get shortdesc() {                   return "Jump if Not Equal"; }
-            get opcode() {                      return 5632; } // 1600
-            get opcode_legal_max() {            return 5887; } // 16FF
-            get arg_start_bit() {               return 8; }
-            get args() {                        return { 'disp': 8 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
-
-            get format() {                      return 2; }
-            get format_var() {                  return 1; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return []; }
-        },
-
-        'JNO': class extends OpDef {
-            get op() {                          return "JNO"; }
-            get shortdesc() {                   return "Jump if No Overflow"; }
-            get opcode() {                      return 6400; } // 1900
-            get opcode_legal_max() {            return 6655; } // 19FF
-            get arg_start_bit() {               return 8; }
-            get args() {                        return { 'disp': 8 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
-
-            get format() {                      return 2; }
-            get format_var() {                  return 1; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return []; }
-        },
-
-        'JOC': class extends OpDef {
-            get op() {                          return "JOC"; }
-            get shortdesc() {                   return "Jump if Carry"; }
-            get opcode() {                      return 6144; } // 1800
-            get opcode_legal_max() {            return 6399; } // 18FF
-            get arg_start_bit() {               return 8; }
-            get args() {                        return { 'disp': 8 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
-
-            get format() {                      return 2; }
-            get format_var() {                  return 1; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return []; }
-        },
+        'JOC': OpDef_JOC,
 
         'JOP': class extends OpDef {
             get op() {                          return "JOP"; }
@@ -1768,31 +1563,7 @@ export class OpInfo {
             get touches_status_bits() {         return []; }
         },
 
-        'LI': class extends OpDef {
-            get op() {                          return "LI"; }
-            get shortdesc() {                   return "Load immediate"; }
-            get opcode() {                      return 512; } // 0200
-            get opcode_legal_max() {            return 527; } // 020F
-            get arg_start_bit() {               return 12; }
-            get args() {                        return { 'reg': 4 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
-
-            get format() {                      return 8; }
-            get format_var() {                  return 2; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
-        },
+        'LI': OpDef_LI,
 
         'LIM': class extends OpDef {
             get op() {                          return "LIM"; }
@@ -2080,31 +1851,7 @@ export class OpInfo {
             get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq', 'Car', 'Ov']; }
         },
 
-        'MOV': class extends OpDef {
-            get op() {                          return "MOV"; }
-            get shortdesc() {                   return "Copy word"; }
-            get opcode() {                      return 49152; } // C000
-            get opcode_legal_max() {            return 53247; } // CFFF
-            get arg_start_bit() {               return 4; }
-            get args() {                        return { 'Td': 2, 'D': 4, 'Ts': 2, 'S': 4 }; }
-            get platforms() {
-                return { // Platform base (Base instruction set, all platforms)
-                    '990/10'  :  true,
-                    '9900'    :  true,
-                    '990/4'   :  true,
-                    '990/12'  :  true,
-                    '9995'    :  true,
-                    '99000'   :  true,
-                    '99110A'  :  true,
-                    '990/10A' :  true,
-                };
-            }
-
-            get format() {                      return 1; }
-            get format_var() {                  return 1; }
-            get performs_privilege_check() {    return false; }
-            get touches_status_bits() {         return ['Lgt', 'Agt', 'Eq']; }
-        },
+        'MOV': OpDef_MOV,
 
         'MOVA': class extends OpDef {
             get op() {                          return "MOVA"; }
