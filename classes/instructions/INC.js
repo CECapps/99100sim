@@ -42,14 +42,9 @@ class ExecutionUnit_INC extends ExecutionUnit {
     }
 
     execute() {
-        //console.debug('INCT execute()');
-        this.nv += 1;
-        this.simstate.status_register.resetBit(StatusRegister.OVERFLOW);
-        if (this.nv > 0xFFFF) {
-            this.nv -= 0xFFFF;
-            //console.warn('INC: Overflow!');
-            this.simstate.status_register.setBit(StatusRegister.OVERFLOW);
-        }
+        this.nv = this.clampAndUpdateCarryAndOverflow(this.nv + 1);
+        this.updateEq(this.nv, 0);
+        this.updateGt(this.nv, 0);
         return true;
     }
 

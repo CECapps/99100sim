@@ -42,14 +42,9 @@ class ExecutionUnit_DECT extends ExecutionUnit {
     }
 
     execute() {
-        //console.debug('DECT execute()');
-        this.nv -= 2;
-        this.simstate.status_register.resetBit(StatusRegister.CARRY);
-        if (this.nv < 0) {
-            this.nv += 0xFFFF;
-            //console.warn('DECT: Underflow!');
-            this.simstate.status_register.setBit(StatusRegister.CARRY);
-        }
+        this.nv = this.clampAndUpdateCarryAndOverflow(this.nv - 2);
+        this.updateEq(this.nv, 0);
+        this.updateGt(this.nv, 0);
         return true;
     }
 

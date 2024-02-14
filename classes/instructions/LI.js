@@ -41,7 +41,8 @@ class ExecutionUnit_LI extends ExecutionUnit {
     }
 
     execute() {
-        //console.debug('LI execute()');
+        this.updateEq(this.#next_word, 0);
+        this.updateGt(this.#next_word, 0);
         return true;
     }
 

@@ -33,10 +33,14 @@ class OpDef_S extends OpDef {
 
 class ExecutionUnit_S extends Format1Unit {
     doTheThing() {
+        // "Subtract a copy of the source operand from the destination operand
+        // and place the difference in the destination operand."
+        // Format 1 doesn't load the destination operand by default, so we'll
+        // have to go ahead and do that now.
         const td = this.inst.getParam('Td');
         const d = this.inst.getParam('D');
-        //console.debug([td, d]);
         const current_value = this.resolveAddressingModeAndGet(td, d);
+
         this.target_value = this.clampAndUpdateCarryAndOverflow(current_value - this.source_value);
         this.updateEq(this.target_value, 0);
         this.updateGt(this.target_value, 0);
