@@ -1671,3 +1671,28 @@ function looks_like_register(string) {
 function looks_like_number(string) {
     return !!string.match(/^-?(0b[01]+|(>|0x)[0-9a-fA-F]+|\d+)$/);
 }
+
+/**
+ * Given a 16-bit word in big-endian format, return the high / first / MSB 8-bit byte.
+ * @param {number} value    An unsigned 16-bit integer in big-endian format.
+ * @returns {number}        The high byte (MSB) of the given integer.
+ **/
+function word_high_byte(value) {
+    return (value >> 8) & 0xff;
+}
+/**
+ * Given a 16-bit word in big-endian format, return the second / low / LSB 8-bit byte.
+ * @param {number} value    An unsigned 16-bit integer in big-endian format.
+ * @returns {number}        The low byte (LSB) of the given integer.
+ **/
+function word_low_byte(value) {
+    return value & 0xff;
+}
+/**
+ * @param {number} num
+ * @param {number} padding
+ * @return {string}
+ **/
+function number_to_hex(num, padding = 4) {
+    return num.toString(16).toUpperCase().padStart(padding, '0');
+}
