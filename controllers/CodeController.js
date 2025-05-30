@@ -7,6 +7,39 @@
  * - Assembly results and error reporting
  * - Available file list management
  * - Source code loading/saving operations
+
+*   **`CodeController` Events Emitted:**
+    *   `sourceCodeChanged`: `detail: { code: string, filename: string | null, oldCode: string, isDirty: boolean }`
+        *   *Purpose:* Signals the source code content or filename has changed.
+        *   *Expected Listener(s):* `CodeEditorUIComponent` (to update the text area, filename display, dirty status).
+    *   `sourceStateChanged`: `detail: { isDirty: boolean }`
+        *   *Purpose:* Signals a change in the dirty status of the source code.
+        *   *Expected Listener(s):* `CodeEditorUIComponent` (to update dirty indicator).
+    *   `assemblyCompleted`: `detail: { success: boolean, result: any | null, errors: Array<{message: string, line: number}>, isEmpty?: boolean, sourceCode: string }`
+        *   *Purpose:* Signals the assembly process has finished.
+        *   *Expected Listener(s):* `CodeEditorUIComponent` (to display errors or the assembled output). app.js (to trigger loading of assembled bytes into the simulation memory if successful).
+    *   `assemblyError`: `detail: { error: Error, sourceCode?: string }`
+        *   *Purpose:* Signals an error occurred during the assembly process itself (not just assembly language errors).
+        *   *Expected Listener(s):* app.js or `CodeEditorUIComponent` (for error display).
+    *   `availableFilesLoaded`: `detail: { files: string[] }`
+        *   *Purpose:* Signals the list of available assembly files has been fetched.
+        *   *Expected Listener(s):* `CodeEditorUIComponent` (to populate the file picker).
+    *   `fileLoadError`: `detail: { error: Error, operation: string, filename?: string }`
+        *   *Purpose:* Signals an error occurred while trying to load a file list or a specific file.
+        *   *Expected Listener(s):* app.js or `CodeEditorUIComponent` (for error display).
+    *   `fileLoaded`: `detail: { filename: string, content: string }`
+        *   *Purpose:* Signals a specific assembly file has been successfully loaded.
+        *   *Expected Listener(s):* `CodeEditorUIComponent` (to update codebox and filename display; implicitly triggers `sourceCodeChanged`).
+    *   `fileSaved`: `detail: { filename: string | null, content: string }`
+        *   *Purpose:* Signals the current source code has been "saved" (currently a placeholder).
+        *   *Expected Listener(s):* `CodeEditorUIComponent` (to update dirty status; implicitly triggers `sourceStateChanged`).
+    *   `autoAssembleChanged`: `detail: { enabled: boolean }`
+        *   *Purpose:* Signals the auto-assembly setting has changed.
+        *   *Expected Listener(s):* `CodeEditorUIComponent` (if there's a UI control for this).
+    *   `assemblyOptionsChanged`: `detail: { options: Object }`
+        *   *Purpose:* Signals assembly configuration options have changed.
+        *   *Expected Listener(s):* (Currently none, but could be a future settings UI).
+
  */
 export class CodeController extends EventTarget {
     /**

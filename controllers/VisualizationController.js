@@ -8,6 +8,36 @@
  * - Visualization parameter management
  *
  * Works with existing create_memory_visualizer function but manages when and how it's invoked.
+
+*   **`VisualizationController` Events Emitted:**
+    *   `visualizationInitialized`: `detail: { hasCanvas: boolean, hasVisualizer: boolean, hasSimulation: boolean }`
+        *   *Purpose:* Signals the visualization components (canvas, renderer, data source) are set up.
+        *   *Expected Listener(s):* app.js or `VisualizationUIComponent` (for logging or UI status update).
+    *   `redrawRequested`: `detail: { timestamp: number }`
+        *   *Purpose:* Signals a redraw has been internally requested (often for throttling).
+        *   *Expected Listener(s):* Primarily for internal controller logic or debugging.
+    *   `visualizationUpdated`: `detail: { timestamp: number, frameCount: number, config: Object }`
+        *   *Purpose:* Signals the visualization has been redrawn on the canvas.
+        *   *Expected Listener(s):* `VisualizationUIComponent` (if it needs to display any metadata like rendering FPS or current config).
+    *   `visualizationError`: `detail: { error: Error }`
+        *   *Purpose:* Signals an error occurred during visualization rendering.
+        *   *Expected Listener(s):* app.js or `VisualizationUIComponent` (for error display).
+    *   `configurationChanged`: `detail: { newConfig: Object, oldConfig: Object, changedKeys: string[] }`
+        *   *Purpose:* Signals one or more visualization configuration parameters have changed.
+        *   *Expected Listener(s):* `VisualizationUIComponent` (if it displays or allows editing of these configurations).
+    *   `memoryDataUpdated`: `detail: { hasData: boolean }`
+        *   *Purpose:* Signals the internal reference to memory data has been updated.
+        *   *Expected Listener(s):* Primarily for internal controller logic.
+    *   `canvasUpdated`: `detail: { hasCanvas: boolean }`
+        *   *Purpose:* Signals the canvas element reference has been updated.
+        *   *Expected Listener(s):* Primarily for internal controller logic.
+    *   `canvasResized`: `detail: { width: number, height: number }`
+        *   *Purpose:* Signals the canvas element has been resized.
+        *   *Expected Listener(s):* Primarily for internal controller logic (triggers redraw).
+    *   `visualizationDisposed`: (no detail)
+        *   *Purpose:* Signals the visualization controller has been cleaned up.
+        *   *Expected Listener(s):* app.js (for any further cleanup if needed).
+
  */
 
 // Import Simulation type for JSDoc references

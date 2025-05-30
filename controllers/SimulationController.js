@@ -8,6 +8,34 @@
  * - Execution statistics
  *
  * Works with existing Simulation and SimulationState classes rather than replacing them.
+ *
+
+*   **`SimulationController` Events Emitted:**
+    *   `executionStarted`: `detail: { timestamp: number }`
+        *   *Purpose:* Signals the simulation's continuous execution has begun.
+        *   *Expected Listener(s):* app.js or `SimulationUIComponent` (to update UI state, e.g., "Running" status, disable run button, enable stop button).
+    *   `executionStopped`: `detail: { totalInstructions: number, totalFrames: number }`
+        *   *Purpose:* Signals continuous execution has stopped.
+        *   *Expected Listener(s):* app.js or `SimulationUIComponent` (update UI state, e.g., "Stopped" status, enable run/step, disable stop).
+    *   `instructionExecuted`: `detail: { instructionCount: number, result: string }` (where `result` is flow state)
+        *   *Purpose:* Signals a single instruction has been executed (typically via manual step).
+        *   *Expected Listener(s):* app.js or `SimulationUIComponent` (update relevant UI like instruction count, register display). `VisualizationController` (to potentially trigger a redraw if memory changed).
+    *   `simulationReset`: (no detail)
+        *   *Purpose:* Signals the simulation and its metrics have been reset.
+        *   *Expected Listener(s):* app.js (to potentially re-load assembled code into memory), `SimulationUIComponent` (to reset all simulation-related displays), `VisualizationController` (to redraw with cleared/reset memory).
+    *   `executionModeChanged`: `detail: { slowMode: boolean, fastMode: boolean }`
+        *   *Purpose:* Signals a change in execution speed mode.
+        *   *Expected Listener(s):* `SimulationUIComponent` (to update UI indicators for the current mode).
+    *   `fastModeStepsChanged`: `detail: { steps: number }`
+        *   *Purpose:* Signals the number of steps for fast mode has changed.
+        *   *Expected Listener(s):* `SimulationUIComponent` (if this value is displayed or configurable via UI).
+    *   `frameExecuted`: `detail: { running: boolean, slowMode: boolean, fastMode: boolean, totalInstructions: number, totalFrames: number, fps: number, ips: number, instructionsExecutedThisFrame: number, flowState: string | null }`
+        *   *Purpose:* Signals a single animation frame has completed during continuous execution, containing comprehensive state and metrics.
+        *   *Expected Listener(s):* `SimulationUIComponent` (for wholesale update of all simulation-related displays). `VisualizationController` (to trigger redraw due to potential memory changes).
+    *   `executionError`: `detail: { error: Error }`
+        *   *Purpose:* Signals an error occurred during simulation execution.
+        *   *Expected Listener(s):* app.js or a dedicated error display UI component.
+
  */
 
 // Import Simulation type for JSDoc references
