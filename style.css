@@ -1,0 +1,97 @@
+/* https://paletton.com/#uid=53u0I0kgX6j8zeBb67ClS4Srx3b */
+:root {
+    --main-bg-color: #101A20;
+    --main-bg-color-lighter-1: #1A2227;
+    --main-bg-color-lighter-2: #37434A;
+    --main-bg-color-darker-1: #091319;
+    --main-bg-color-darker-2: #030B10;
+
+    --secondary-color-1: #161323;
+    --secondary-color-2: #172A14;
+
+    --text-color: #f0f0f0;
+}
+
+html {
+    color: var(--text-color);
+    background-color: var(--main-bg-color);
+    /* font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif; */
+    font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+    font-weight: 100;
+    font-size: 0.15in;
+}
+input, textarea, select {
+    color: var(--text-color);
+    background-color: var(--main-bg-color);
+    font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+    font-weight: normal;
+    font-size: 1rem;
+    line-height: 1rem;
+}
+button {
+    color: var(--text-color);
+    background-color: var(--main-bg-color-lighter-1);
+    font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+    font-weight: normal;
+    font-size: 1rem;
+    padding: 2px 1em;
+
+    border: 2px outset var(--main-bg-color-lighter-2);
+    border-radius: 5px;
+}
+button:hover {
+    background-color: var(--main-bg-color-lighter-2);
+}
+button:active {
+    background-color: var(--main-bg-color-darker-2);
+    border: 2px inset var(--main-bg-color);
+}
+button:focus {
+    outline: 2px dotted var(--main-bg-color-lighter-2);
+}
+select {
+    padding: 2px;
+    border: 2px solid var(--main-bg-color-lighter-2);
+    border-radius: 5px;
+}
+
+.plaid {
+    /* https://codepen.io/weirdvector/pen/YzJZZb */
+    background-color: var(--main-bg-color-lighter-2);
+    background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, var(--secondary-color-1) 4px, var(--secondary-color-1) 7px),
+                      repeating-linear-gradient(-45deg, transparent, transparent 5px, var(--secondary-color-2) 5px, var(--secondary-color-2) 10px);
+}
+.plaid:hover {
+    background-color: var(--main-bg-color-darker-2);
+}
+
+table#status_bits td {
+    border: 2px solid transparent;
+    color: var(--main-bg-color-lighter-2);
+    text-align: center;
+    min-width: 3.5em;
+}
+table#status_bits td.on {
+    color: var(--text-color);
+    border-color: var(--text-color);
+}
+
+table#registers th {
+    min-width: 3.5em;
+}
+
+table#status_bits td, table#registers td {
+    text-shadow: -1px   -1px    0px  var(--main-bg-color-lighter-2), /* top left */
+                    1px    -1px    0px  var(--main-bg-color-darker-1), /* top right */
+                    -1px   1px     0px  var(--main-bg-color-lighter-1), /* bottom left */
+                    1px    1px     0px  var(--main-bg-color-darker-2); /* bottom right */
+}
+
+section#simcontrol fieldset {
+    border: 1px solid var(--main-bg-color-lighter-2);
+    border-radius: 5px;
+    background-color: var(--main-bg-color-lighter-1);
+    display: inline-block;
+    margin: 5px;
+    padding: 5px;
+}

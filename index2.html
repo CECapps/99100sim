@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>99100 Sim</title>
+        <link rel="icon" href="favicon.png" sizes="100x100" type="image/png">
+        <link rel="stylesheet" href="style.css" type="text/css">
+    </head>
+    <body>
+
+        <section id="simstate">
+            <header><h2>Simulation State</h2></header>
+            <dl>
+                <dt>Running:</dt>
+                <dd id="running">No</dd>
+                <dt>Prev State:</dt>
+                <dd id="prev_state">Crash</dd>
+                <dt>Next State:</dt>
+                <dd id="next_state">Crash</dd>
+                <dt>FPS:</dt>
+                <dd id="fps">--</dd>
+                <dt>IPS:</dt>
+                <dd id="ips">--</dd>
+            </dl>
+        </section>
+        <section id="error">
+            <header><h2>Error State</h2></header>
+            <div>No errors, boss.</div>
+        </section>
+        <section id="machine_state">
+            <header><h2>Machine State</h2></header>
+            <table id="registers">
+                <caption>General Purpose Registers</caption>
+                <thead>
+                    <tr>
+                        <th>0</th><th>1</th><th>2</th><th>3</th>
+                        <th>4</th><th>5</th><th>6</th><th>7</th>
+                        <th>8</th><th>9</th><th>10</th><th>11</th>
+                        <th>12</th><th>13</th><th>14</th><th>15</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="register_row">
+                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                    </tr>
+                </tbody>
+            </table>
+            <table id="status_bits">
+                <caption>Status Register Bits</caption>
+                <tbody>
+                    <tr>
+                        <td id="bit_lgt">Lgt</td>
+                        <td id="bit_agt">Agt</td>
+                        <td id="bit_eq">EQ</td>
+                        <td id="bit_carry">Carry</td>
+                        <td id="bit_over">Over</td>
+                        <td id="bit_parity">Parity</td>
+                        <td id="bit_xop">XOP</td>
+                        <td id="bit_priv">Priv</td>
+                        <td id="bit_map">Mapfile</td>
+                        <td id="bit_mm">MM</td>
+                        <td id="bit_ovint">OvInt</td>
+                        <td id="bit_wcs">WCS</td>
+                    </tr>
+                </tbody>
+            </table>
+            <dl>
+                <dt>WP:</dt>
+                <dd id="wp">0x0000</dd>
+                <dt>PC:</dt>
+                <dd id="pc">0x0000</dd>
+                <dt>Instruction:</dt>
+                <dd id="instruction">--</dd>
+            </dl>
+        </section>
+        <section id="simcontrol">
+            <header><h2>Simulation Controls</h2></header>
+            <nav aria-label="Simulation Controls">
+                <fieldset>
+                    <button id="reset">Reset</button>
+                    <button id="stop">Stop</button>
+                </fieldset>
+                <fieldset>
+                    <button id="run_slow">Run Slow</button>
+                    <button id="run">Run Standard</button>
+                    <button id="run_fast" class="plaid">Run <i>Plaid</i></button>
+                </fieldset>
+                <fieldset>
+                    <button id="step_instruction">Instruction Step</button>
+                    <button id="step_state">State Step</button>
+                </fieldset>
+            </nav>
+        </section>
+        <section id="code_input">
+            <header><h2>Assembly Source</h2></header>
+            <form>
+                <label for="file_picker">File:</label>
+                <select id="file_picker"></select>
+                <button id="load_file" type="button">Load</button>
+            </form>
+            <div id="editor_container">
+                <label for="editor">Source Code:</label>
+                <textarea id="editor" cols="80" spellcheck="false"></textarea>
+                <button id="assemble">Assemble &amp; Load</button>
+            </div>
+        </section>
+        <section id="code_output">
+            <header><h2>Assembly Output</h2></header>
+            <pre id="output"></pre>
+        </section>
+        <section id="memory_viz">
+            <header><h2>Memory Visualization</h2></header>
+            <div id="viz"></div>
+        </section>
+
+    </body>
+</html>
