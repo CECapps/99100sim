@@ -254,6 +254,69 @@ The existing utility functions in `utils.js` will be:
 
 This architecture ensures that simulation logic, application logic, and UI presentation are cleanly separated, enabling multiple interface implementations while maintaining a single source of truth for application state.
 
+---
+
+# State at Interruption
+
+Time has passed, and it's time to continue with this project here is a summary
+of where we last were, according to an LLM assistant:
+
+> **Overall Goal:** Transform the existing TMS99105 simulator codebase into a modular, maintainable application with a clear separation of concerns, driven by a central coordinator (app.js) and leveraging ES modules.
+>
+> **1. Establish Core Application Structure (app.js):**
+>
+> *   **What:** Implement the `TMS99105App` class in app.js to serve as the central control point.
+> *   **Why:** To consolidate application logic, manage controllers, and orchestrate UI updates, replacing scattered global state and direct DOM manipulation.
+>
+> **2. Convert Existing Code to ES Modules:**
+>
+> *   **What:** Refactor utils.js, viz.js, and txt2asm.js to use ES module syntax (`import`/`export`).
+> *   **Why:** To eliminate global variables and dependencies, enabling modularity and reusability.
+>
+> **3. Define UI Component Contracts:**
+>
+> *   **What:** Create basic UI component classes (`SimulationUIComponent`, `CodeEditorUIComponent`, `VisualizationUIComponent`) that define the interface for UI updates and event handling.
+> *   **Why:** To abstract UI-specific logic and enable a clear separation between the application core and the presentation layer.
+>
+> **4. Wire Up the Application:**
+>
+> *   **What:** Implement methods in app.js to:
+>     *   Acquire references to DOM elements.
+>     *   Instantiate controllers and UI components, passing necessary dependencies.
+>     *   Bind UI events to controller methods.
+>     *   Subscribe UI components to controller events for state updates.
+> *   **Why:** To establish the data flow and interaction patterns between the UI, controllers, and the simulation core.
+>
+> **5. Migrate Functionality and Decommission Old Files:**
+>
+> *   **What:** Systematically move functionality from simui.js, viz.js, and txt2asm.js into the new controller-based architecture.
+> *   **Why:** To eliminate reliance on the old global state and direct DOM manipulation, fully embracing the new modular design.
+>
+> **6. Finalize the HTML Structure:**
+>
+> *   **What:** Modify index.html to load app.js as a module and remove all inline scripts and direct script includes for the old files.
+> *   **Why:** To ensure the application is driven by the new architecture and to eliminate any remnants of the old implementation.
+>
+> **7. Ensure Feature Parity and Polish:**
+>
+> *   **What:** Verify that all features of the original application are replicated in the new architecture, and then clean up, optimize, and document the code.
+> *   **Why:** To maintain the existing functionality while improving the codebase's structure, maintainability, and testability.
+>
+> **8. Implement Memory Loading Post-Assembly:**
+>
+> *   **What:** Establish a mechanism for transferring the assembled code from the `CodeController` to the `Simulation`'s memory.
+> *   **Why:** To complete the assembly and execution pipeline.
+>
+> This high-level plan outlines the key steps and their rationale, providing a roadmap for the refactoring process without specifying the detailed implementation steps.
+
+# Going Forward
+
+We are going to deviate from the specifics of the plan.  We're going to wire it
+up backwards.  That is, we're first going to create a new HTML file, then we're
+going to pull together the logic to make each individual interface element work,
+one group at a time.
+
+
 */
 
 // ============================================================================
