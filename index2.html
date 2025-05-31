@@ -4,6 +4,7 @@
         <title>99100 Sim</title>
         <link rel="icon" href="favicon.png" sizes="100x100" type="image/png">
         <link rel="stylesheet" href="style.css" type="text/css">
+        <script type="module" src="./app.js"></script>
     </head>
     <body>
 
@@ -98,12 +99,12 @@
             <form>
                 <label for="file_picker">File:</label>
                 <select id="file_picker"></select>
-                <button id="load_file" type="button">Load</button>
+                <button id="load_file" type="button">Load File</button>
             </form>
             <div id="editor_container">
                 <label for="editor">Source Code:</label>
                 <textarea id="editor" cols="80" spellcheck="false"></textarea>
-                <button id="assemble">Assemble &amp; Load</button>
+                <button id="assemble">Assemble</button>
             </div>
         </section>
         <section id="code_output">

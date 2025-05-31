@@ -194,11 +194,11 @@ export class CodeController extends EventTarget {
 
     /**
      * Get assembly result as ASM format
-     * @returns {string|null} The assembled ASM format string or null if not available
+     * @returns {string[]} The assembled ASM format as an array of lines (empty if not available)
      */
     getAssemblyAsm() {
         if (!this.isAssembled || !this.assemblyResult) {
-            return null;
+            return [];
         }
 
         try {
@@ -207,7 +207,7 @@ export class CodeController extends EventTarget {
             this.dispatchEvent(new CustomEvent('assemblyError', {
                 detail: { error }
             }));
-            return null;
+            return [];
         }
     }
 
@@ -254,7 +254,7 @@ export class CodeController extends EventTarget {
      */
     async loadFile(filename) {
         try {
-            const response = await fetch(`./asm/${filename}`);
+            const response = await fetch(`./${filename}`); // @FIXME security lol
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
