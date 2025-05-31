@@ -26,9 +26,6 @@
     *   `executionModeChanged`: `detail: { slowMode: boolean, fastMode: boolean }`
         *   *Purpose:* Signals a change in execution speed mode.
         *   *Expected Listener(s):* `SimulationUIComponent` (to update UI indicators for the current mode).
-    *   `fastModeStepsChanged`: `detail: { steps: number }`
-        *   *Purpose:* Signals the number of steps for fast mode has changed.
-        *   *Expected Listener(s):* `SimulationUIComponent` (if this value is displayed or configurable via UI).
     *   `frameExecuted`: `detail: { running: boolean, slowMode: boolean, fastMode: boolean, totalInstructions: number, totalFrames: number, fps: number, ips: number, instructionsExecutedThisFrame: number, flowState: string | null }`
         *   *Purpose:* Signals a single animation frame has completed during continuous execution, containing comprehensive state and metrics.
         *   *Expected Listener(s):* `SimulationUIComponent` (for wholesale update of all simulation-related displays). `VisualizationController` (to trigger redraw due to potential memory changes).
@@ -118,23 +115,47 @@ export class SimulationController extends EventTarget {
     }
 
     /**
-     * Execute a single instruction step
+     * Execute a single flow state step (slow mode)
      * @returns {string} The flow state result from the simulation
      */
     step() {
-        if (this.running) return ''; // Don't step while running
-
+        if (this.running) return '';
         try {
-            const result = this.simulation.stepInstruction();
-            this.instExecutionCount++;
-
+            const result = this.simulation.step();
+            // Only increment if an instruction was actually executed (legacy: 'B' state)
+            if (result === 'B') {
+                this.instExecutionCount++;
+            }
             this.dispatchEvent(new CustomEvent('instructionExecuted', {
                 detail: {
                     instructionCount: this.instExecutionCount,
                     result
                 }
             }));
+            return result || '';
+        } catch (error) {
+            this.dispatchEvent(new CustomEvent('executionError', {
+                detail: { error }
+            }));
+            throw error;
+        }
+    }
 
+    /**
+     * Execute a single instruction step (normal mode)
+     * @returns {string} The flow state result from the simulation
+     */
+    stepInstruction() {
+        if (this.running) return '';
+        try {
+            const result = this.simulation.stepInstruction();
+            this.instExecutionCount++;
+            this.dispatchEvent(new CustomEvent('instructionExecuted', {
+                detail: {
+                    instructionCount: this.instExecutionCount,
+                    result
+                }
+            }));
             return result || '';
         } catch (error) {
             this.dispatchEvent(new CustomEvent('executionError', {
@@ -197,19 +218,6 @@ export class SimulationController extends EventTarget {
         }));
     }
 
-    /**
-     * Set number of instructions per frame in fast mode
-     * @param {number} steps - Number of instructions to execute per frame
-     * @returns {void}
-     */
-    setFastModeSteps(steps) {
-        this.fastModeSteps = Math.max(1, Math.floor(steps));
-
-        this.dispatchEvent(new CustomEvent('fastModeStepsChanged', {
-            detail: { steps: this.fastModeSteps }
-        }));
-    }
-
     // === Internal Execution Loop ===
 
     /**
@@ -236,8 +244,7 @@ export class SimulationController extends EventTarget {
         try {
             if (this.slowMode) {
                 currentFlowState = this.simulation.step();
-                // Assuming 'B' state in Flow.js indicates an instruction completed,
-                // based on legacy simui.js behavior.
+                // 'B' state in Flow indicates an instruction completed
                 if (currentFlowState === 'B') {
                     instructionsExecutedThisFrame = 1;
                     this.instExecutionCount++;
