@@ -1,3 +1,5 @@
+import { Asm } from '../classes/Asm.js';
+
 /**
  * CodeController - Manages assembly source code and compilation process
  *
@@ -6,15 +8,12 @@
  * - Assembly process orchestration using the existing Asm class
  * - Assembly results and error reporting
  * - Available file list management
- * - Source code loading/saving operations
+ * - Source code loading operations
 
 *   **`CodeController` Events Emitted:**
-    *   `sourceCodeChanged`: `detail: { code: string, filename: string | null, oldCode: string, isDirty: boolean }`
+    *   `sourceCodeChanged`: `detail: { code: string, filename: string | null, oldCode: string }`
         *   *Purpose:* Signals the source code content or filename has changed.
-        *   *Expected Listener(s):* `CodeEditorUIComponent` (to update the text area, filename display, dirty status).
-    *   `sourceStateChanged`: `detail: { isDirty: boolean }`
-        *   *Purpose:* Signals a change in the dirty status of the source code.
-        *   *Expected Listener(s):* `CodeEditorUIComponent` (to update dirty indicator).
+        *   *Expected Listener(s):* `CodeEditorUIComponent` (to update the text area, filename display).
     *   `assemblyCompleted`: `detail: { success: boolean, result: any | null, errors: Array<{message: string, line: number}>, isEmpty?: boolean, sourceCode: string }`
         *   *Purpose:* Signals the assembly process has finished.
         *   *Expected Listener(s):* `CodeEditorUIComponent` (to display errors or the assembled output). app.js (to trigger loading of assembled bytes into the simulation memory if successful).
@@ -30,32 +29,21 @@
     *   `fileLoaded`: `detail: { filename: string, content: string }`
         *   *Purpose:* Signals a specific assembly file has been successfully loaded.
         *   *Expected Listener(s):* `CodeEditorUIComponent` (to update codebox and filename display; implicitly triggers `sourceCodeChanged`).
-    *   `fileSaved`: `detail: { filename: string | null, content: string }`
-        *   *Purpose:* Signals the current source code has been "saved" (currently a placeholder).
-        *   *Expected Listener(s):* `CodeEditorUIComponent` (to update dirty status; implicitly triggers `sourceStateChanged`).
-    *   `autoAssembleChanged`: `detail: { enabled: boolean }`
-        *   *Purpose:* Signals the auto-assembly setting has changed.
-        *   *Expected Listener(s):* `CodeEditorUIComponent` (if there's a UI control for this).
-    *   `assemblyOptionsChanged`: `detail: { options: Object }`
-        *   *Purpose:* Signals assembly configuration options have changed.
-        *   *Expected Listener(s):* (Currently none, but could be a future settings UI).
 
  */
 export class CodeController extends EventTarget {
     /**
-     * @param {new() => any} asmClass - The Asm class constructor
+     * @constructor
      */
-    constructor(asmClass) {
+    constructor() {
         super();
-
         // Assembly processor instance
-        this.asm = new asmClass();
+        this.asm = new Asm();
 
         // Source code state
         this.sourceCode = '';
         /** @type {string|null} */
         this.filename = null;
-        this.isDirty = false;
 
         // Assembly state
         this.assemblyResult = null;
@@ -68,9 +56,6 @@ export class CodeController extends EventTarget {
         this.availableFiles = [];
         this.filesLoaded = false;
 
-        // Assembly configuration
-        this.autoAssemble = true;
-        this.assemblyOptions = {};
     }
 
     // === Source Code Management ===
@@ -85,32 +70,27 @@ export class CodeController extends EventTarget {
         const oldCode = this.sourceCode;
         this.sourceCode = code;
         this.filename = filename;
-        this.isDirty = true;
 
         this.dispatchEvent(new CustomEvent('sourceCodeChanged', {
             detail: {
                 code: this.sourceCode,
                 filename: this.filename,
-                oldCode,
-                isDirty: this.isDirty
+                oldCode
             }
         }));
 
-        // Auto-assemble if enabled
-        if (this.autoAssemble) {
-            this.assemble();
-        }
+        // Auto-assemble
+        this.assemble();
     }
 
     /**
      * Get current source code
-     * @returns {Object} Object containing code, filename, and isDirty properties
+     * @returns {Object} Object containing code and filename properties
      */
     getSourceCode() {
         return {
             code: this.sourceCode,
-            filename: this.filename,
-            isDirty: this.isDirty
+            filename: this.filename
         };
     }
 
@@ -120,18 +100,6 @@ export class CodeController extends EventTarget {
      */
     clearSourceCode() {
         this.setSourceCode('', null);
-    }
-
-    /**
-     * Mark source as clean (saved)
-     * @returns {void}
-     */
-    markClean() {
-        this.isDirty = false;
-
-        this.dispatchEvent(new CustomEvent('sourceStateChanged', {
-            detail: { isDirty: this.isDirty }
-        }));
     }
 
     // === Assembly Operations ===
@@ -250,28 +218,33 @@ export class CodeController extends EventTarget {
      * @returns {Promise<string[]>} Promise that resolves to array of available filenames
      */
     async loadAvailableFiles() {
+        const DEFAULT_LIST = ["asm/default.asm"];
+        let files = null;
+        let error = null;
         try {
             const response = await fetch('./asmfiles.php');
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
-
-            const files = await response.json();
-            this.availableFiles = Array.isArray(files) ? files : [];
-            this.filesLoaded = true;
-
-            this.dispatchEvent(new CustomEvent('availableFilesLoaded', {
-                detail: { files: this.availableFiles }
-            }));
-
-            return this.availableFiles;
-
-        } catch (error) {
+            files = await response.json();
+            if (!Array.isArray(files) || !files.includes("asm/default.asm")) {
+                throw new Error("asmfiles.php did not return a valid file list including asm/default.asm");
+            }
+        } catch (err) {
+            error = err;
+            files = DEFAULT_LIST;
+        }
+        this.availableFiles = files;
+        this.filesLoaded = true;
+        this.dispatchEvent(new CustomEvent('availableFilesLoaded', {
+            detail: { files: this.availableFiles }
+        }));
+        if (error) {
             this.dispatchEvent(new CustomEvent('fileLoadError', {
                 detail: { error, operation: 'loadAvailableFiles' }
             }));
-            throw error;
         }
+        return this.availableFiles;
     }
 
     /**
@@ -288,7 +261,6 @@ export class CodeController extends EventTarget {
 
             const content = await response.text();
             this.setSourceCode(content, filename);
-            this.markClean(); // File just loaded, not dirty
 
             this.dispatchEvent(new CustomEvent('fileLoaded', {
                 detail: { filename, content }
@@ -304,68 +276,7 @@ export class CodeController extends EventTarget {
         }
     }
 
-    /**
-     * Save current source code to a file (placeholder for future implementation)
-     * @param {string|null} filename - Optional filename to save as
-     * @returns {Promise<void>} Promise that resolves when save is complete
-     */
-    async saveFile(filename = null) {
-        // This would require server-side implementation
-        // For now, just mark as clean and dispatch event
-        /** @type {string|null} */
-        const saveFilename = filename || this.filename;
-
-        // TODO: Implement actual file saving when server endpoint exists
-        this.filename = saveFilename;
-        this.markClean();
-
-        this.dispatchEvent(new CustomEvent('fileSaved', {
-            detail: { filename: saveFilename, content: this.sourceCode }
-        }));
-    }
-
-    // === Configuration ===
-
-    /**
-     * Set auto-assembly mode
-     * @param {boolean} enabled - Whether to enable auto-assembly
-     * @returns {void}
-     */
-    setAutoAssemble(enabled) {
-        this.autoAssemble = enabled;
-
-        this.dispatchEvent(new CustomEvent('autoAssembleChanged', {
-            detail: { enabled: this.autoAssemble }
-        }));
-    }
-
-    /**
-     * Set assembly options
-     * @param {Object} options - Assembly configuration options
-     * @returns {void}
-     */
-    setAssemblyOptions(options) {
-        this.assemblyOptions = { ...this.assemblyOptions, ...options };
-
-        this.dispatchEvent(new CustomEvent('assemblyOptionsChanged', {
-            detail: { options: this.assemblyOptions }
-        }));
-    }
-
     // === State Query Methods ===
-
-    /**
-     * Get current assembly state
-     * @returns {Object} Object containing isAssembled, hasErrors, errors, and result properties
-     */
-    getAssemblyState() {
-        return {
-            isAssembled: this.isAssembled,
-            hasErrors: this.assemblyErrors.length > 0,
-            errors: [...this.assemblyErrors],
-            result: this.assemblyResult
-        };
-    }
 
     /**
      * Get available files list
@@ -375,18 +286,6 @@ export class CodeController extends EventTarget {
         return {
             files: [...this.availableFiles],
             loaded: this.filesLoaded
-        };
-    }
-
-    /**
-     * Get file state
-     * @returns {Object} Object containing filename, isDirty, and hasContent properties
-     */
-    getFileState() {
-        return {
-            filename: this.filename,
-            isDirty: this.isDirty,
-            hasContent: this.sourceCode.length > 0
         };
     }
 
@@ -416,20 +315,4 @@ export class CodeController extends EventTarget {
         return this.assemblyErrors.length;
     }
 
-    /**
-     * Get assembly size in bytes
-     * @returns {number} Size of assembled code in bytes, or 0 if not available
-     */
-    getAssemblySize() {
-        if (!this.hasValidAssembly()) {
-            return 0;
-        }
-
-        try {
-            const bytes = this.getAssemblyBytes();
-            return bytes ? bytes.byteLength : 0;
-        } catch {
-            return 0;
-        }
-    }
 }
