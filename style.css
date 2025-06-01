@@ -71,7 +71,7 @@ table#status_bits td {
     text-align: center;
     min-width: 3.5em;
 }
-table#status_bits td.on {
+table#status_bits td.status-bit-set {
     color: var(--text-color);
     border-color: var(--text-color);
 }

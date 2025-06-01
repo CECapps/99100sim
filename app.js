@@ -447,7 +447,6 @@ export class App {
                     if (!element) return;
                     const bitIndex = bitMappings[bitName];
                     const bitValue = statusRegister.getBit(bitIndex);
-                    element.textContent = bitValue ? '1' : '0';
                     element.classList.toggle('status-bit-set', bitValue === 1);
                     element.classList.toggle('status-bit-clear', bitValue === 0);
                 });
