@@ -95,13 +95,13 @@ export class App {
             const canvas = document.createElement('canvas');
             canvas.id = 'memory_canvas';
             // Default dimensions, can be made configurable later
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = 2000;
+            canvas.height = canvas.width;
             vizContainer.appendChild(canvas);
 
             // Initialize CanvasMemoryVizController
             try {
-                this.memoryVizController = new CanvasMemoryVizController(this.simulation, canvas);
+                this.memoryVizController = new CanvasMemoryVizController(this.simulation, canvas, canvas.width, canvas.height);
                 // Initial render after controller is ready
                 // this.memoryVizController.render(); // Moved to updateAllSimulationDisplays via init
             } catch (error) {
