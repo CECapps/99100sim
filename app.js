@@ -95,7 +95,7 @@ export class App {
             const canvas = document.createElement('canvas');
             canvas.id = 'memory_canvas';
             // Default dimensions, can be made configurable later
-            canvas.width = 2000;
+            canvas.width = 1000;
             canvas.height = canvas.width;
             vizContainer.appendChild(canvas);
 

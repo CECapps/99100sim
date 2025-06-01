@@ -95,3 +95,32 @@ section#simcontrol fieldset {
     margin: 5px;
     padding: 5px;
 }
+
+
+main {
+    display: inline-grid;
+
+    grid-template:
+        "a a a a a" auto
+        "b b b b b" auto
+        "c c c d d" auto
+        "e e e d d" auto
+        "f f f g g" auto;
+    grid-template-columns: repeat(5, auto);
+    grid-template-rows:
+        auto        /* simcontrol (a) */
+        auto        /* error (b) */
+        min-content /* simstate (c) and memory_viz (d) */
+        1fr         /* machine_state (e) and memory_viz (d) */
+        auto;       /* code_input (f) and code_output (g) */
+    grid-column-gap: 5px;
+    grid-row-gap: 5px;
+}
+
+section#simcontrol { grid-area: a; }
+section#error { grid-area: b; }
+section#simstate { grid-area: c; }
+section#memory_viz { grid-area: d; }
+section#machine_state { grid-area: e; }
+section#code_input { grid-area: f; }
+section#code_output { grid-area: g; }

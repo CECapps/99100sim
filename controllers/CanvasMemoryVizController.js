@@ -150,7 +150,7 @@ export class CanvasMemoryVizController {
         this.canvas.height = canvasHeight;
 
         this.memoryStartWord = 0x0000;
-        this.memoryEndWord = 0x11FF;
+        this.memoryEndWord = 0x08ff;
         this.wordsPerRow = 32; // Default, must be a multiple of 16
 
         this._validateAndRecalculateConfiguration();
