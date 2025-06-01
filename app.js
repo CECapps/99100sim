@@ -49,7 +49,9 @@ export class App {
             ['bitMapEl', document.getElementById('bit_map')],
             ['bitMmEl', document.getElementById('bit_mm')],
             ['bitOvintEl', document.getElementById('bit_ovint')],
-            ['bitWcsEl', document.getElementById('bit_wcs')]
+            ['bitWcsEl', document.getElementById('bit_wcs')],
+            ['errorList', document.getElementById('error_list')],
+            ['clearErrorsBtn', document.getElementById('clear_errors')]
         ]));
 
         // Verify all elements exist - after this check, all elements are guaranteed non-null
@@ -93,6 +95,17 @@ export class App {
             OVERFLOW_INTERRUPT_ENABLED: StatusRegister.OVERFLOW_INTERRUPT_ENABLED,
             WCS_ENABLED: StatusRegister.WCS_ENABLED
         };
+
+        // Wire up error clear button
+        const clearBtn = this.elements.get('clearErrorsBtn');
+        const errorList = this.elements.get('errorList');
+        if (clearBtn && errorList) {
+            clearBtn.addEventListener('click', () => {
+                while (errorList.firstChild) {
+                    errorList.removeChild(errorList.firstChild);
+                }
+            });
+        }
     }
 
     /**
@@ -109,12 +122,18 @@ export class App {
     }
 
     async init() {
-        // Load available files (triggers availableFilesLoaded event)
-        await this.codeController.loadAvailableFiles();
+        try {
+            // Load available files (triggers availableFilesLoaded event)
+            await this.codeController.loadAvailableFiles();
 
-        // Initialize simulation state and update UI
-        this.simulationController.reset();
-        this.updateAllSimulationDisplays(); // This will call render for the first time
+            // Initialize simulation state and update UI
+            this.simulationController.reset();
+            this.updateAllSimulationDisplays(); // This will call render for the first time
+        } catch (error) {
+            console.error('App initialization error:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.showError(`Failed to initialize application: ${errorMessage}`);
+        }
     }
 
 
@@ -133,6 +152,25 @@ export class App {
             // Initialize CanvasMemoryVizController
             try {
                 this.memoryVizController = new CanvasMemoryVizController(this.simulation, canvas, canvas.width, canvas.height);
+
+                // Add error event listeners for memory visualization
+                this.memoryVizController.addEventListener('vizConfigurationError', (event) => {
+                    const customEvent = /** @type {CustomEvent} */ (event);
+                    console.warn('Memory visualization configuration error:', customEvent.detail.error);
+                    // These are typically developer debugging errors, not user-facing
+                    // But if fallbackUsed is false, it might affect user experience
+                    if (!customEvent.detail.fallbackUsed) {
+                        this.showError(`Memory visualization configuration error: ${customEvent.detail.error.message || customEvent.detail.error}`);
+                    }
+                });
+
+                this.memoryVizController.addEventListener('vizRenderError', (event) => {
+                    const customEvent = /** @type {CustomEvent} */ (event);
+                    console.error('Memory visualization render error:', customEvent.detail.error);
+                    // Render errors are typically not user-facing unless they indicate a fundamental problem
+                    // For now, we'll log them but not show to user since visualization is non-critical
+                });
+
                 // Initial render after controller is ready
                 // this.memoryVizController.render(); // Moved to updateAllSimulationDisplays via init
             } catch (error) {
@@ -155,7 +193,11 @@ export class App {
         this.getElement('loadFileBtn').addEventListener('click', () => {
             const picker = /** @type {HTMLSelectElement} */ (this.getElement('filePicker'));
             if (picker.value) {
-                this.codeController.loadFile(picker.value);
+                // File loading errors will be handled by the fileLoadError event listener
+                this.codeController.loadFile(picker.value).catch(/** @param {any} error */ error => {
+                    // Additional logging for debugging - error will also be emitted via event
+                    console.error('File load failed in DOM handler:', error);
+                });
             }
         });
 
@@ -283,7 +325,25 @@ export class App {
             // Load assembled code into simulation memory if assembly was successful
             if (customEvent.detail && customEvent.detail.success) {
                 this.loadAssemblyIntoMemory();
+            } else if (customEvent.detail && customEvent.detail.errors && customEvent.detail.errors.length > 0) {
+                // Show user assembly errors via showError
+                const errorMessages = customEvent.detail.errors.map(/** @param {any} err */ err => err.message || err);
+                this.showError(`Assembly failed: ${errorMessages.join('; ')}`);
             }
+        });
+
+        // Listen for CodeController error events (user-facing errors)
+        this.codeController.addEventListener('assemblyError', (event) => {
+            const customEvent = /** @type {CustomEvent} */ (event);
+            console.error('Assembly internal error:', customEvent.detail.error);
+            this.showError(`Assembly system error: ${customEvent.detail.error.message || customEvent.detail.error}`);
+        });
+
+        this.codeController.addEventListener('fileLoadError', (event) => {
+            const customEvent = /** @type {CustomEvent} */ (event);
+            console.error('File load error:', customEvent.detail.error);
+            const filename = customEvent.detail.filename ? ` (${customEvent.detail.filename})` : '';
+            this.showError(`Failed to load file${filename}: ${customEvent.detail.error.message || customEvent.detail.error}`);
         });
 
         // Listen for simulation controller events to update UI
@@ -477,17 +537,27 @@ export class App {
      * Load assembled code into simulation memory
      */
     loadAssemblyIntoMemory() {
-        if (this.codeController.hasValidAssembly()) {
-            const bytes = this.codeController.getAssemblyBytes();
-            if (bytes) {
-                this.simulation.loadBytes(bytes);
-                this.updateAllSimulationDisplays(); // Update UI after loading memory
-                if (this.memoryVizController) {
-                    this.memoryVizController.render();
+        try {
+            if (this.codeController.hasValidAssembly()) {
+                const bytes = this.codeController.getAssemblyBytes();
+                if (bytes) {
+                    this.simulation.loadBytes(bytes);
+                    this.updateAllSimulationDisplays(); // Update UI after loading memory
+                    if (this.memoryVizController) {
+                        this.memoryVizController.render();
+                    }
+                    // Optionally, reset PC to start of loaded code or a default address
+                    // this.simulationController.resetPC(); // Assuming such a method exists or is added
+                } else {
+                    this.showError('Failed to get assembled bytes for loading into memory');
                 }
-                // Optionally, reset PC to start of loaded code or a default address
-                // this.simulationController.resetPC(); // Assuming such a method exists or is added
+            } else {
+                console.warn('loadAssemblyIntoMemory called but no valid assembly available');
             }
+        } catch (error) {
+            console.error('Error loading assembly into memory:', error);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            this.showError(`Failed to load assembled code into memory: ${errorMessage}`);
         }
     }
 
@@ -530,10 +600,14 @@ export class App {
      * @param {string} message
      */
     showError(message) {
-        // Display error in output area and console
+        const errorList = this.elements.get('errorList');
+        if (errorList) {
+            const li = document.createElement('li');
+            li.textContent = message;
+            errorList.appendChild(li);
+        }
+        // Optionally, also log to console for developer visibility
         console.error('App Error:', message);
-        const output = this.getElement('output');
-        output.textContent = `Error: ${message}`;
     }
 
     /**

@@ -164,11 +164,18 @@ export class CodeController extends EventTarget {
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.assemblyErrors = [{ message: errorMessage, line: 0 }];
 
-            this.dispatchEvent(new CustomEvent('assemblyError', {
-                detail: { error, sourceCode: this.sourceCode }
+            // For assembly syntax errors from user code, emit assemblyCompleted with errors
+            // rather than assemblyError (which is for internal failures)
+            this.dispatchEvent(new CustomEvent('assemblyCompleted', {
+                detail: {
+                    success: false,
+                    result: null,
+                    errors: this.assemblyErrors,
+                    sourceCode: this.sourceCode
+                }
             }));
 
-            throw error;
+            return null; // Don't re-throw, as this is a user error, not an internal error
         }
     }
 

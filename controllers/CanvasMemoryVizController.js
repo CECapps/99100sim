@@ -98,7 +98,7 @@ A simplified memory visualization controller that renders a configurable region 
 // @ts-check
 /** @typedef {import('../classes/Simulation.js').Simulation} Simulation */
 
-export class CanvasMemoryVizController {
+export class CanvasMemoryVizController extends EventTarget {
     /** @type {Simulation} */
     simulation;
     /** @type {HTMLCanvasElement} */
@@ -116,13 +116,13 @@ export class CanvasMemoryVizController {
 
     // Calculated rendering parameters
     /** @type {number} */
-    totalWordsToDisplay;
+    totalWordsToDisplay = 0;
     /** @type {number} */
-    pixelSize; // Size of each "word" block in pixels
+    pixelSize = 1; // Size of each "word" block in pixels
     /** @type {number} */
-    numCols;
+    numCols = 0;
     /** @type {number} */
-    numRows;
+    numRows = 0;
 
     /**
      * @param {Simulation} simulation
@@ -131,6 +131,8 @@ export class CanvasMemoryVizController {
      * @param {number} [canvasHeight=512]
      */
     constructor(simulation, canvas, canvasWidth = 512, canvasHeight = 512) {
+        super();
+
         if (!simulation) {
             throw new Error("CanvasMemoryVizController: Simulation instance is required.");
         }
@@ -173,7 +175,15 @@ export class CanvasMemoryVizController {
 
         // Validate wordsPerRow
         if (this.wordsPerRow <= 0 || this.wordsPerRow % 16 !== 0) {
-            console.warn(`CanvasMemoryVizController: wordsPerRow (${this.wordsPerRow}) must be a positive multiple of 16. Defaulting to 64.`);
+            const errorMsg = `CanvasMemoryVizController: wordsPerRow (${this.wordsPerRow}) must be a positive multiple of 16. Defaulting to 64.`;
+            console.warn(errorMsg);
+            this.dispatchEvent(new CustomEvent('vizConfigurationError', {
+                detail: {
+                    error: new Error(errorMsg),
+                    operation: 'validateWordsPerRow',
+                    fallbackUsed: true
+                }
+            }));
             this.wordsPerRow = 64;
         }
         this.wordsPerRow = Math.max(16, this.wordsPerRow); // Ensure at least 16
@@ -231,7 +241,14 @@ export class CanvasMemoryVizController {
 
     render() {
         if (!this.simulation || !this.simulation.state || !this.simulation.state.getMemoryDataView()) {
-            console.error("CanvasMemoryVizController: Simulation or memory not available for rendering.");
+            const errorMsg = "CanvasMemoryVizController: Simulation or memory not available for rendering.";
+            console.error(errorMsg);
+            this.dispatchEvent(new CustomEvent('vizRenderError', {
+                detail: {
+                    error: new Error(errorMsg),
+                    operation: 'render'
+                }
+            }));
             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); // Clear canvas
             return;
         }
@@ -329,7 +346,15 @@ export class CanvasMemoryVizController {
             return; // No change
         }
         if (newWordsPerRow % 16 !== 0) {
-            console.warn(`CanvasMemoryVizController: setWordsPerRow attempted with ${newWordsPerRow}, which is not a multiple of 16. Operation aborted.`);
+            const errorMsg = `CanvasMemoryVizController: setWordsPerRow attempted with ${newWordsPerRow}, which is not a multiple of 16. Operation aborted.`;
+            console.warn(errorMsg);
+            this.dispatchEvent(new CustomEvent('vizConfigurationError', {
+                detail: {
+                    error: new Error(errorMsg),
+                    operation: 'setWordsPerRow',
+                    fallbackUsed: false
+                }
+            }));
             return;
         }
         this.wordsPerRow = newWordsPerRow;
