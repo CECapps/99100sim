@@ -54,7 +54,7 @@ export class SimulationController extends EventTarget {
         this.running = false;
         this.slowMode = false;
         this.fastMode = false;
-        this.fastModeSteps = 797; // A prime number, chosen with intent
+        this.fastModeSteps = 1619; // A prime number, chosen with intent
 
         // Performance metrics state
         this.instExecutionCount = 0;
