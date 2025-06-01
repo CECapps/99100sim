@@ -5,6 +5,7 @@ import { Simulation } from './classes/Simulation.js';
 import { SimulationController } from './controllers/SimulationController.js';
 import { CodeController } from './controllers/CodeController.js';
 import { CanvasMemoryVizController } from './controllers/CanvasMemoryVizController.js';
+import { StatusRegister } from './classes/StatusRegister.js';
 
 export class App {
     constructor() {
@@ -62,6 +63,36 @@ export class App {
         this.setupMemoryVisualization();
         this.setupDOMEventListeners();
         this.setupControllerEventListeners();
+
+        // Setup status bit element and index maps for efficient per-frame update
+        this.statusBitElementsMap = new Map([
+            ['LGT', this.elements.get('bitLgtEl')],
+            ['AGT', this.elements.get('bitAgtEl')],
+            ['EQUAL', this.elements.get('bitEqEl')],
+            ['CARRY', this.elements.get('bitCarryEl')],
+            ['OVERFLOW', this.elements.get('bitOverEl')],
+            ['PARITY', this.elements.get('bitParityEl')],
+            ['XOP', this.elements.get('bitXopEl')],
+            ['PRIVILEGED', this.elements.get('bitPrivEl')],
+            ['MAPFILE_ENABLED', this.elements.get('bitMapEl')],
+            ['MEMORY_MAPPED', this.elements.get('bitMmEl')],
+            ['OVERFLOW_INTERRUPT_ENABLED', this.elements.get('bitOvintEl')],
+            ['WCS_ENABLED', this.elements.get('bitWcsEl')]
+        ]);
+        this.statusBitIndexMap = {
+            LGT: StatusRegister.LGT,
+            AGT: StatusRegister.AGT,
+            EQUAL: StatusRegister.EQUAL,
+            CARRY: StatusRegister.CARRY,
+            OVERFLOW: StatusRegister.OVERFLOW,
+            PARITY: StatusRegister.PARITY,
+            XOP: StatusRegister.XOP,
+            PRIVILEGED: StatusRegister.PRIVILEGED,
+            MAPFILE_ENABLED: StatusRegister.MAPFILE_ENABLED,
+            MEMORY_MAPPED: StatusRegister.MEMORY_MAPPED,
+            OVERFLOW_INTERRUPT_ENABLED: StatusRegister.OVERFLOW_INTERRUPT_ENABLED,
+            WCS_ENABLED: StatusRegister.WCS_ENABLED
+        };
     }
 
     /**
@@ -408,76 +439,23 @@ export class App {
             const simulation = this.simulationController.getSimulation();
             const statusRegister = simulation.state.status_register;
 
-            // Update each status bit with proper styling
-            const bitElements = {
-                bit_lgt: this.elements.get('bitLgtEl'),
-                bit_agt: this.elements.get('bitAgtEl'),
-                bit_eq: this.elements.get('bitEqEl'),
-                bit_carry: this.elements.get('bitCarryEl'),
-                bit_over: this.elements.get('bitOverEl'),
-                bit_parity: this.elements.get('bitParityEl'),
-                bit_xop: this.elements.get('bitXopEl'),
-                bit_priv: this.elements.get('bitPrivEl'),
-                bit_map: this.elements.get('bitMapEl'),
-                bit_mm: this.elements.get('bitMmEl'),
-                bit_ovint: this.elements.get('bitOvintEl'),
-                bit_wcs: this.elements.get('bitWcsEl')
-            };
-
-            // Import StatusRegister constants
-            import('./classes/StatusRegister.js').then(({ StatusRegister }) => {
-                /** @type {{ [key: string]: number }} */
-                const bitMappings = {
-                    bit_lgt: StatusRegister.LGT,
-                    bit_agt: StatusRegister.AGT,
-                    bit_eq: StatusRegister.EQUAL,
-                    bit_carry: StatusRegister.CARRY,
-                    bit_over: StatusRegister.OVERFLOW,
-                    bit_parity: StatusRegister.PARITY,
-                    bit_xop: StatusRegister.XOP,
-                    bit_priv: StatusRegister.PRIVILEGED,
-                    bit_map: StatusRegister.MAPFILE_ENABLED,
-                    bit_mm: StatusRegister.MEMORY_MAPPED,
-                    bit_ovint: StatusRegister.OVERFLOW_INTERRUPT_ENABLED,
-                    bit_wcs: StatusRegister.WCS_ENABLED
-                };
-
-                // Update each bit display
-                Object.entries(bitElements).forEach(([bitName, element]) => {
-                    if (!element) return;
-                    const bitIndex = bitMappings[bitName];
-                    const bitValue = statusRegister.getBit(bitIndex);
-                    element.classList.toggle('status-bit-set', bitValue === 1);
-                    element.classList.toggle('status-bit-clear', bitValue === 0);
-                });
-            }).catch(error => {
-                console.error('Error importing StatusRegister:', error);
-            });
-
+            // Efficiently update each status bit using prebuilt maps
+            for (const [bitKey, bitIndex] of Object.entries(this.statusBitIndexMap)) {
+                const element = this.statusBitElementsMap.get(bitKey);
+                if (!element) continue;
+                const bitValue = statusRegister.getBit(bitIndex);
+                element.classList.toggle('status-bit-set', bitValue === 1);
+                element.classList.toggle('status-bit-clear', bitValue === 0);
+            }
         } catch (error) {
             console.error('Error updating status bits:', error);
             // Clear all status bit displays on error
-            const bitElements = {
-                lgt: this.elements.get('bitLgtEl'),
-                agt: this.elements.get('bitAgtEl'),
-                eq: this.elements.get('bitEqEl'),
-                car: this.elements.get('bitCarryEl'),
-                ov: this.elements.get('bitOverEl'),
-                par: this.elements.get('bitParityEl'),
-                xop: this.elements.get('bitXopEl'),
-                priv: this.elements.get('bitPrivEl'),
-                mf: this.elements.get('bitMapEl'),
-                mm: this.elements.get('bitMmEl'),
-                oint: this.elements.get('bitOvintEl'),
-                wcs: this.elements.get('bitWcsEl')
-            };
-
-            Object.values(bitElements).forEach(element => {
+            for (const element of this.statusBitElementsMap.values()) {
                 if (element) {
                     element.textContent = '?';
                     element.classList.remove('status-bit-set', 'status-bit-clear');
                 }
-            });
+            }
         }
     }
 
