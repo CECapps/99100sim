@@ -124,13 +124,8 @@ how source code translates to executable instructions.
 */
 
 // @ts-check
-/**
- * App.js - Main application skeleton
- *
- * This is the SKELETON - structure only, no implementation
- * Shows how controllers connect to DOM elements in index2.html
- */
 
+// Import required classes
 import { Simulation } from './classes/Simulation.js';
 import { SimulationController } from './controllers/SimulationController.js';
 import { CodeController } from './controllers/CodeController.js';
@@ -158,7 +153,28 @@ export class App {
          *   runBtn: HTMLButtonElement|null,
          *   runFastBtn: HTMLButtonElement|null,
          *   stepInstructionBtn: HTMLButtonElement|null,
-         *   stepStateBtn: HTMLButtonElement|null
+         *   stepStateBtn: HTMLButtonElement|null,
+         *   runningEl: HTMLElement|null,
+         *   prevStateEl: HTMLElement|null,
+         *   nextStateEl: HTMLElement|null,
+         *   fpsEl: HTMLElement|null,
+         *   ipsEl: HTMLElement|null,
+         *   registerRow: HTMLElement|null,
+         *   wpEl: HTMLElement|null,
+         *   pcEl: HTMLElement|null,
+         *   instructionEl: HTMLElement|null,
+         *   bitLgtEl: HTMLElement|null,
+         *   bitAgtEl: HTMLElement|null,
+         *   bitEqEl: HTMLElement|null,
+         *   bitCarryEl: HTMLElement|null,
+         *   bitOverEl: HTMLElement|null,
+         *   bitParityEl: HTMLElement|null,
+         *   bitXopEl: HTMLElement|null,
+         *   bitPrivEl: HTMLElement|null,
+         *   bitMapEl: HTMLElement|null,
+         *   bitMmEl: HTMLElement|null,
+         *   bitOvintEl: HTMLElement|null,
+         *   bitWcsEl: HTMLElement|null
          * }}
          */
         this.elements = {
@@ -173,7 +189,28 @@ export class App {
             runBtn: null,
             runFastBtn: null,
             stepInstructionBtn: null,
-            stepStateBtn: null
+            stepStateBtn: null,
+            runningEl: null,
+            prevStateEl: null,
+            nextStateEl: null,
+            fpsEl: null,
+            ipsEl: null,
+            registerRow: null,
+            wpEl: null,
+            pcEl: null,
+            instructionEl: null,
+            bitLgtEl: null,
+            bitAgtEl: null,
+            bitEqEl: null,
+            bitCarryEl: null,
+            bitOverEl: null,
+            bitParityEl: null,
+            bitXopEl: null,
+            bitPrivEl: null,
+            bitMapEl: null,
+            bitMmEl: null,
+            bitOvintEl: null,
+            bitWcsEl: null
         };
 
         this.isInitialized = false;
@@ -183,13 +220,17 @@ export class App {
         // Setup DOM references
         this.setupDOMReferences();
         // Setup memory visualization
-        this.setupMemoryVisualization();
+        this.setupMemoryVisualization(); // Controller is created here
         // Setup DOM event listeners
         this.setupDOMEventListeners();
         // Setup controller event listeners
         this.setupControllerEventListeners();
         // Load available files (triggers availableFilesLoaded event)
         await this.codeController.loadAvailableFiles();
+
+        // Initialize simulation state and update UI
+        this.simulationController.reset();
+        this.updateAllSimulationDisplays(); // This will call render for the first time
     }
 
     // === DOM Setup ===
@@ -207,20 +248,68 @@ export class App {
         this.elements.runFastBtn = /** @type {HTMLButtonElement} */ (document.getElementById('run_fast'));
         this.elements.stepInstructionBtn = /** @type {HTMLButtonElement} */ (document.getElementById('step_instruction'));
         this.elements.stepStateBtn = /** @type {HTMLButtonElement} */ (document.getElementById('step_state'));
-        // ...add other elements as needed for the rest of the app...
+
+        // Simulation state elements
+        this.elements.runningEl = document.getElementById('running');
+        this.elements.prevStateEl = document.getElementById('prev_state');
+        this.elements.nextStateEl = document.getElementById('next_state');
+        this.elements.fpsEl = document.getElementById('fps');
+        this.elements.ipsEl = document.getElementById('ips');
+
+        // Machine state elements
+        this.elements.registerRow = document.getElementById('register_row');
+        this.elements.wpEl = document.getElementById('wp');
+        this.elements.pcEl = document.getElementById('pc');
+        this.elements.instructionEl = document.getElementById('instruction');
+
+        // Status bit elements
+        this.elements.bitLgtEl = document.getElementById('bit_lgt');
+        this.elements.bitAgtEl = document.getElementById('bit_agt');
+        this.elements.bitEqEl = document.getElementById('bit_eq');
+        this.elements.bitCarryEl = document.getElementById('bit_carry');
+        this.elements.bitOverEl = document.getElementById('bit_over');
+        this.elements.bitParityEl = document.getElementById('bit_parity');
+        this.elements.bitXopEl = document.getElementById('bit_xop');
+        this.elements.bitPrivEl = document.getElementById('bit_priv');
+        this.elements.bitMapEl = document.getElementById('bit_map');
+        this.elements.bitMmEl = document.getElementById('bit_mm');
+        this.elements.bitOvintEl = document.getElementById('bit_ovint');
+        this.elements.bitWcsEl = document.getElementById('bit_wcs');
     }
 
     setupMemoryVisualization() {
-        // TODO: Create canvas, add to viz container
-        // TODO: Initialize CanvasMemoryVizController
+        // Create canvas and add to viz container
+        const vizContainer = document.getElementById('viz');
+        if (vizContainer) {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'memory_canvas';
+            // Default dimensions, can be made configurable later
+            canvas.width = 512;
+            canvas.height = 512;
+            vizContainer.appendChild(canvas);
+
+            // Initialize CanvasMemoryVizController
+            try {
+                this.memoryVizController = new CanvasMemoryVizController(this.simulation, canvas);
+                // Initial render after controller is ready
+                // this.memoryVizController.render(); // Moved to updateAllSimulationDisplays via init
+            } catch (error) {
+                console.warn('Memory visualization controller failed to initialize:', error);
+                // Create a placeholder if the controller fails
+                canvas.remove();
+                const placeholder = document.createElement('div');
+                placeholder.textContent = 'Memory visualization not available';
+                placeholder.style.padding = '20px';
+                placeholder.style.textAlign = 'center';
+                placeholder.style.border = '1px solid #ccc';
+                vizContainer.appendChild(placeholder);
+            }
+        }
     }
 
     // === Event Listener Setup ===
     setupDOMEventListeners() {
-        // TODO: Button clicks -> controller methods
-        // this.elements.resetBtn.addEventListener('click', () => this.simulationController.reset());
-        // this.elements.stepBtn.addEventListener('click', () => this.simulationController.step());
-        // etc.
+        // File management controls
         if(this.elements.loadFileBtn) {
             this.elements.loadFileBtn.addEventListener('click', () => {
                 const picker = this.elements.filePicker;
@@ -234,6 +323,75 @@ export class App {
                 if (this.elements.editor) {
                     this.codeController.setSourceCode(this.elements.editor.value, this.codeController.filename);
                 }
+            });
+        }
+
+        // Simulation control buttons
+        if (this.elements.resetBtn) {
+            this.elements.resetBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.simulationController.reset();
+                // Load assembled code into simulation memory after reset
+                this.loadAssemblyIntoMemory();
+                // Update UI immediately after manual reset
+                this.updateAllSimulationDisplays();
+            });
+        }
+
+        if (this.elements.stopBtn) {
+            this.elements.stopBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.simulationController.stop();
+            });
+        }
+
+        if (this.elements.runBtn) {
+            this.elements.runBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.simulationController.setSlowMode(false);
+                this.simulationController.setFastMode(false);
+                this.simulationController.start();
+            });
+        }
+
+        if (this.elements.runSlowBtn) {
+            this.elements.runSlowBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.simulationController.setSlowMode(true);
+                this.simulationController.start();
+            });
+        }
+
+        if (this.elements.runFastBtn) {
+            this.elements.runFastBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.simulationController.setFastMode(true);
+                this.simulationController.start();
+            });
+        }
+
+        if (this.elements.stepInstructionBtn) {
+            this.elements.stepInstructionBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.simulationController.stepInstruction();
+                // Update UI immediately after manual step
+                this.updateAllSimulationDisplays();
+            });
+        }
+
+        if (this.elements.stepStateBtn) {
+            this.elements.stepStateBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.simulationController.step();
+                // Update UI immediately after manual step
+                this.updateAllSimulationDisplays();
             });
         }
         if (this.elements.editor) {
@@ -279,39 +437,252 @@ export class App {
     }
 
     setupControllerEventListeners() {
-        // TODO: Controller events -> UI updates
-        // this.simulationController.addEventListener('frameExecuted', (event) => this.updateUI(event.detail));
-        // this.codeController.addEventListener('assemblyCompleted', (event) => this.loadIntoMemory(event.detail));
         // Listen for availableFilesLoaded from CodeController
         this.codeController.addEventListener('availableFilesLoaded', (event) => {
             const customEvent = /** @type {CustomEvent} */ (event);
             this.populateFilePicker(customEvent.detail.files);
         });
+
         this.codeController.addEventListener('fileLoaded', (event) => {
             const customEvent = /** @type {CustomEvent} */ (event);
             if (this.elements.editor && customEvent.detail && customEvent.detail.content) {
                 this.elements.editor.value = customEvent.detail.content;
             }
         });
+
         this.codeController.addEventListener('assemblyCompleted', (event) => {
+            const customEvent = /** @type {CustomEvent} */ (event);
             if (this.elements.output) {
                 const lines = this.codeController.getAssemblyAsm();
                 this.elements.output.textContent = lines.join("\n");
             }
+
+            // Load assembled code into simulation memory if assembly was successful
+            if (customEvent.detail && customEvent.detail.success) {
+                this.loadAssemblyIntoMemory();
+            }
         });
+
+        // Listen for simulation controller events to update UI
+        const updateEvents = [
+            'frameExecuted',
+            'instructionExecuted',
+            'executionStarted',
+            'executionStopped',
+            'simulationReset',
+            'executionModeChanged'
+        ];
+        updateEvents.forEach(eventName => {
+            this.simulationController.addEventListener(eventName, () => {
+                this.updateAllSimulationDisplays();
+            });
+        });
+
+        this.simulationController.addEventListener('executionError', (event) => {
+            const customEvent = /** @type {CustomEvent} */ (event);
+            console.error('Simulation execution error:', customEvent.detail.error);
+            this.showError(`Execution error: ${customEvent.detail.error.message || customEvent.detail.error}`);
+            this.updateAllSimulationDisplays();
+        });
+
+        // Removed setupPeriodicUpdates as updates are now centralized
+        // in the frameCompleted event.
+    }
+
+    /**
+     * Update all simulation-related displays
+     */
+    updateAllSimulationDisplays() {
+        this.updateSimulationState();
+        this.updateMachineState();
+        this.updateStatusBits();
+        // Update performance metrics with latest from controller
+        const metrics = this.simulationController.getPerformanceMetrics();
+        this.updatePerformanceMetrics(metrics.fps, metrics.ips, metrics.instructionCount);
+
+        if (this.memoryVizController) {
+            this.memoryVizController.render();
+        }
     }
 
     // === UI Update Methods ===
     updateSimulationState() {
-        // TODO: Update running/stopped status, flow states
+        // Update running/stopped status, flow states
+        const executionState = /** @type {{running: boolean, slowMode: boolean, fastMode: boolean, fastModeSteps: number}} */ (this.simulationController.getExecutionState());
+        const simulation = this.simulationController.getSimulation();
+
+        // Update running status
+        if (this.elements.runningEl) {
+            let runningText = 'No';
+            if (executionState.running) {
+                if (executionState.fastMode) {
+                    runningText = 'Yes (fast)';
+                } else if (executionState.slowMode) {
+                    runningText = 'Yes (slow)';
+                } else {
+                    runningText = 'Yes';
+                }
+            }
+            this.elements.runningEl.textContent = runningText;
+        }
+
+        // Update flow states
+        if (this.elements.prevStateEl) {
+            this.elements.prevStateEl.textContent = simulation.flow.prev_flow_state || '--';
+        }
+        if (this.elements.nextStateEl) {
+            this.elements.nextStateEl.textContent = simulation.flow.flow_state || '--';
+        }
+
+        // Update performance metrics
+        const metrics = /** @type {{instructionCount: number, frameCount: number, fps: number, ips: number, runStartTime: number, elapsedTime: number}} */ (this.simulationController.getPerformanceMetrics());
+        if (this.elements.fpsEl) {
+            this.elements.fpsEl.textContent = metrics.fps ? metrics.fps.toFixed(1) : '--';
+        }
+        if (this.elements.ipsEl) {
+            this.elements.ipsEl.textContent = metrics.ips ? metrics.ips.toFixed(0) : '--';
+        }
     }
 
+    /**
+     * Update machine state including registers, PC, WP, and instruction display
+     */
     updateMachineState() {
-        // TODO: Update registers, PC, WP, instruction display
+        if (!this.simulationController || !this.elements) return;
+
+        try {
+            const simulation = this.simulationController.getSimulation();
+            const state = simulation.state;
+
+            // Update all 16 general purpose registers by referencing the static <td>s
+            if (this.elements.registerRow) {
+                const cells = this.elements.registerRow.children;
+                for (let i = 0; i < 16 && i < cells.length; i++) {
+                    const registerValue = state.getRegisterWord(i);
+                    cells[i].textContent = this.formatHex(registerValue);
+                }
+            }
+
+            // Update workspace pointer
+            if (this.elements.wpEl) {
+                this.elements.wpEl.textContent = '0x' + this.formatHex(state.workspace_pointer);
+            }
+
+            // Update program counter
+            if (this.elements.pcEl) {
+                this.elements.pcEl.textContent = '0x' + this.formatHex(state.getPc());
+            }
+
+            // Update current instruction display
+            if (this.elements.instructionEl) {
+                try {
+                    const instruction = simulation.ep.getCurrentInstruction();
+                    if (instruction && instruction.opcode_def && instruction.opcode_def.name) {
+                        this.elements.instructionEl.textContent = instruction.opcode_def.name;
+                    } else {
+                        this.elements.instructionEl.textContent = '--';
+                    }
+                } catch (e) {
+                    this.elements.instructionEl.textContent = '--';
+                }
+            }
+        } catch (error) {
+            console.error('Error updating machine state:', error);
+            // Clear displays on error
+            if (this.elements.registerRow) {
+                const cells = this.elements.registerRow.children;
+                for (let i = 0; i < cells.length; i++) {
+                    cells[i].textContent = '----';
+                }
+            }
+            if (this.elements.wpEl) this.elements.wpEl.textContent = '----';
+            if (this.elements.pcEl) this.elements.pcEl.textContent = '----';
+            if (this.elements.instructionEl) this.elements.instructionEl.textContent = '--';
+        }
     }
 
+    /**
+     * Update status register bit display
+     */
     updateStatusBits() {
-        // TODO: Update status register bit display
+        if (!this.simulationController || !this.elements) return;
+
+        try {
+            const simulation = this.simulationController.getSimulation();
+            const statusRegister = simulation.state.status_register;
+
+            // Update each status bit with proper styling
+            const bitElements = {
+                bit_lgt: this.elements.bitLgtEl,
+                bit_agt: this.elements.bitAgtEl,
+                bit_eq: this.elements.bitEqEl,
+                bit_carry: this.elements.bitCarryEl,
+                bit_over: this.elements.bitOverEl,
+                bit_parity: this.elements.bitParityEl,
+                bit_xop: this.elements.bitXopEl,
+                bit_priv: this.elements.bitPrivEl,
+                bit_map: this.elements.bitMapEl,
+                bit_mm: this.elements.bitMmEl,
+                bit_ovint: this.elements.bitOvintEl,
+                bit_wcs: this.elements.bitWcsEl
+            };
+
+            // Import StatusRegister constants
+            import('./classes/StatusRegister.js').then(({ StatusRegister }) => {
+                /** @type {{ [key: string]: number }} */
+                const bitMappings = {
+                    bit_lgt: StatusRegister.LGT,
+                    bit_agt: StatusRegister.AGT,
+                    bit_eq: StatusRegister.EQUAL,
+                    bit_carry: StatusRegister.CARRY,
+                    bit_over: StatusRegister.OVERFLOW,
+                    bit_parity: StatusRegister.PARITY,
+                    bit_xop: StatusRegister.XOP,
+                    bit_priv: StatusRegister.PRIVILEGED,
+                    bit_map: StatusRegister.MAPFILE_ENABLED,
+                    bit_mm: StatusRegister.MEMORY_MAPPED,
+                    bit_ovint: StatusRegister.OVERFLOW_INTERRUPT_ENABLED,
+                    bit_wcs: StatusRegister.WCS_ENABLED
+                };
+
+                // Update each bit display
+                Object.entries(bitElements).forEach(([bitName, element]) => {
+                    if (!element) return;
+                    const bitIndex = bitMappings[bitName];
+                    const bitValue = statusRegister.getBit(bitIndex);
+                    element.textContent = bitValue ? '1' : '0';
+                    element.classList.toggle('status-bit-set', bitValue === 1);
+                    element.classList.toggle('status-bit-clear', bitValue === 0);
+                });
+            }).catch(error => {
+                console.error('Error importing StatusRegister:', error);
+            });
+
+        } catch (error) {
+            console.error('Error updating status bits:', error);
+            // Clear all status bit displays on error
+            const bitElements = {
+                lgt: this.elements.bitLgtEl,
+                agt: this.elements.bitAgtEl,
+                eq: this.elements.bitEqEl,
+                car: this.elements.bitCarryEl,
+                ov: this.elements.bitOverEl,
+                par: this.elements.bitParityEl,
+                xop: this.elements.bitXopEl,
+                priv: this.elements.bitPrivEl,
+                mf: this.elements.bitMapEl,
+                mm: this.elements.bitMmEl,
+                oint: this.elements.bitOvintEl,
+                wcs: this.elements.bitWcsEl
+            };
+
+            Object.values(bitElements).forEach(element => {
+                if (element) {
+                    element.textContent = '?';
+                    element.classList.remove('status-bit-set', 'status-bit-clear');
+                }
+            });
+        }
     }
 
     /**
@@ -321,7 +692,30 @@ export class App {
      * @param {number} instructionCount
      */
     updatePerformanceMetrics(fps, ips, instructionCount) {
-        // TODO: Update FPS/IPS display
+        if (this.elements.fpsEl) {
+            this.elements.fpsEl.textContent = fps ? fps.toFixed(1) : '--';
+        }
+        if (this.elements.ipsEl) {
+            this.elements.ipsEl.textContent = ips ? ips.toFixed(0) : '--';
+        }
+    }
+
+    /**
+     * Load assembled code into simulation memory
+     */
+    loadAssemblyIntoMemory() {
+        if (this.codeController.hasValidAssembly()) {
+            const bytes = this.codeController.getAssemblyBytes();
+            if (bytes) {
+                this.simulation.loadMemory(bytes);
+                this.updateAllSimulationDisplays(); // Update UI after loading memory
+                if (this.memoryVizController) {
+                    this.memoryVizController.render();
+                }
+                // Optionally, reset PC to start of loaded code or a default address
+                // this.simulationController.resetPC(); // Assuming such a method exists or is added
+            }
+        }
     }
 
     /**
@@ -352,7 +746,12 @@ export class App {
      * @param {string[]} errors
      */
     displayAssemblyErrors(errors) {
-        // TODO: Show errors in error area
+        if (this.elements.output) {
+            const errorText = errors.length > 0 ?
+                `Assembly errors:\n${errors.join('\n')}` :
+                'Assembly completed successfully';
+            this.elements.output.textContent = errorText;
+        }
     }
 
     /**
@@ -360,7 +759,11 @@ export class App {
      * @param {string} message
      */
     showError(message) {
-        // TODO: Show error message in error area
+        // Display error in output area and console
+        console.error('App Error:', message);
+        if (this.elements.output) {
+            this.elements.output.textContent = `Error: ${message}`;
+        }
     }
 
     /**
@@ -370,8 +773,7 @@ export class App {
      * @returns {string}
      */
     formatHex(value, digits = 4) {
-        // TODO: Format value as hex string
-        return value.toString(16).padStart(digits, '0');
+        return value.toString(16).padStart(digits, '0').toUpperCase();
     }
 
     /**

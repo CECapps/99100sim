@@ -133,8 +133,7 @@ export class CodeController extends EventTarget {
             // Process assembly
             const result = this.asm.process();
 
-            // Get any errors
-            this.assemblyErrors = this.asm.getErrors ? this.asm.getErrors() : [];
+            // No getErrors() call; rely on process() throwing on error
 
             if (this.assemblyErrors.length === 0) {
                 this.assemblyResult = result;
@@ -183,7 +182,13 @@ export class CodeController extends EventTarget {
         }
 
         try {
-            return this.asm.toBytes();
+            const bytes = this.asm.toBytes();
+            if (bytes instanceof Uint8Array) {
+                const ab = new ArrayBuffer(bytes.byteLength);
+                new Uint8Array(ab).set(bytes);
+                return ab;
+            }
+            return null;
         } catch (error) {
             this.dispatchEvent(new CustomEvent('assemblyError', {
                 detail: { error }
