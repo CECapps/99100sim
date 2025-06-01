@@ -64,4 +64,26 @@ export class Simulation {
         return this.flow.prev_flow_state;
     }
 
+    /**
+     * Load a byte array or ArrayBuffer into simulation memory, starting at address 0
+     * @param {ArrayBuffer|Uint8Array} bytes
+     */
+    loadBytes(bytes) {
+        let arr;
+        if (bytes instanceof Uint8Array) {
+            arr = bytes;
+        } else if (bytes instanceof ArrayBuffer) {
+            arr = new Uint8Array(bytes);
+        } else {
+            throw new Error('Simulation.loadBytes: input must be ArrayBuffer or Uint8Array');
+        }
+        for (let i = 0; i < arr.length; i++) {
+            this.state.setByte(i, arr[i]);
+        }
+        // Optionally, fire a memory update event
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('memory_updated'));
+        }
+    }
+
 }

@@ -138,10 +138,10 @@ export class App {
             event.preventDefault();
             event.stopPropagation();
             this.simulationController.reset();
-            // Load assembled code into simulation memory after reset
-            this.loadAssemblyIntoMemory();
-            // Update UI immediately after manual reset
-            this.updateAllSimulationDisplays();
+            // Assemble the current editor content and load into memory (triggers assemblyCompleted event)
+            const editor = /** @type {HTMLTextAreaElement} */ (this.getElement('editor'));
+            this.codeController.setSourceCode(editor.value, this.codeController.filename);
+            // UI will update via assemblyCompleted event
         });
 
         this.getElement('stopBtn').addEventListener('click', (event) => {
@@ -503,7 +503,7 @@ export class App {
         if (this.codeController.hasValidAssembly()) {
             const bytes = this.codeController.getAssemblyBytes();
             if (bytes) {
-                this.simulation.loadMemory(bytes);
+                this.simulation.loadBytes(bytes);
                 this.updateAllSimulationDisplays(); // Update UI after loading memory
                 if (this.memoryVizController) {
                     this.memoryVizController.render();
