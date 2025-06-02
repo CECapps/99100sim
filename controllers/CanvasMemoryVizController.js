@@ -240,8 +240,6 @@ export class CanvasMemoryVizController extends EventTarget {
     }
 
     render() {
-        console.debug('here');
-
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         const memoryView = this.simulation.state.getMemoryDataView();
 

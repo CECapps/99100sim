@@ -25,6 +25,12 @@ export class App {
      */
     appAnimationFrameId = null; // For requestAnimationFrame management
 
+    /**
+     * Tracks the last animation frame in which updateAllSimulationDisplays was called
+     * @type {number|null}
+     */
+    lastUpdateFrameTimestamp = null;
+
     constructor() {
         // Core instances
         this.simulation = new Simulation();
@@ -211,6 +217,7 @@ export class App {
         this.getElement('runBtn').addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
+            this.simulationController.stop();
             this.simulationController.setSlowMode(false);
             this.simulationController.setFastMode(false);
             this.simulationController.start();
@@ -222,6 +229,7 @@ export class App {
         this.getElement('runSlowBtn').addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
+            this.simulationController.stop();
             this.simulationController.setSlowMode(true);
             this.simulationController.setFastMode(false);
             this.simulationController.start();
@@ -233,6 +241,7 @@ export class App {
         this.getElement('runFastBtn').addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
+            this.simulationController.stop();
             this.simulationController.setSlowMode(false);
             this.simulationController.setFastMode(true);
             this.simulationController.start();
@@ -378,14 +387,29 @@ export class App {
             return;
         }
         this.simulationController.processSimulationTick(timestamp);
-        this.updateAllSimulationDisplays(); // Ensure UI (including memory viz) updates every frame
+        this.updateAllSimulationDisplays(timestamp);
         this.appAnimationFrameId = requestAnimationFrame(this.applicationLoop.bind(this));
     }
 
     /**
      * Update all simulation-related displays
+     * @param {number|null} [timestamp] - The animation frame timestamp, if available
      */
-    updateAllSimulationDisplays() {
+    updateAllSimulationDisplays(timestamp) {
+        // If called from requestAnimationFrame, timestamp is provided and should be used for deduplication
+        if (typeof timestamp !== 'number') {
+            timestamp = this.appAnimationFrameId;
+            if (typeof timestamp !== 'number') {
+                console.error('no number should mean no rendering, but');
+                timestamp = 0;
+            }
+        }
+        if (this.lastUpdateFrameTimestamp === timestamp) {
+            // Already updated this frame, skip
+            return;
+        }
+        this.lastUpdateFrameTimestamp = timestamp;
+
         this.updateSimulationState();
         this.updateMachineState();
         this.updateStatusBits();
