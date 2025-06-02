@@ -240,23 +240,7 @@ export class CanvasMemoryVizController extends EventTarget {
     }
 
     render() {
-        if (!this.simulation || !this.simulation.state || !this.simulation.state.getMemoryDataView()) {
-            const errorMsg = "CanvasMemoryVizController: Simulation or memory not available for rendering.";
-            console.error(errorMsg);
-            this.dispatchEvent(new CustomEvent('vizRenderError', {
-                detail: {
-                    error: new Error(errorMsg),
-                    operation: 'render'
-                }
-            }));
-            this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); // Clear canvas
-            return;
-        }
-
-        if (this.numCols === 0 || this.numRows === 0 || this.pixelSize === 0) {
-             this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); // Clear canvas
-            return; // Nothing to render
-        }
+        console.debug('here');
 
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         const memoryView = this.simulation.state.getMemoryDataView();
@@ -277,21 +261,12 @@ export class CanvasMemoryVizController extends EventTarget {
                     break; // Stop if we've rendered all requested words
                 }
 
-                let wordValue = 0;
                 const byteAddress = currentWordAddress * 2;
+                let wordValue = 0;
 
-                if (byteAddress < 0 || byteAddress + 1 >= memoryView.byteLength) {
-                    // Address out of bounds for the actual DataView
-                    wordValue = 0x0000; // Default to black or some error color
-                } else {
-                    try {
-                        wordValue = memoryView.getUint16(byteAddress, false); // false for big-endian
-                    } catch (e) {
-                        // This can happen if memoryStartWord/memoryEndWord are valid 16-bit addresses
-                        // but the underlying ArrayBuffer is smaller (e.g. less than 64KB RAM)
-                        // console.warn(`Error reading memory at word address ${currentWordAddress}: ${e}`);
-                        wordValue = 0x0000; // Default to black
-                    }
+                // Read the actual word value from memory
+                if (byteAddress >= 0 && byteAddress + 1 < memoryView.byteLength) {
+                    wordValue = memoryView.getUint16(byteAddress, false); // Big-endian
                 }
 
                 const [r, g, b] = this._rgb565ToRgb888(wordValue);
@@ -301,14 +276,11 @@ export class CanvasMemoryVizController extends EventTarget {
                     for (let xOffset = 0; xOffset < this.pixelSize; xOffset++) {
                         const pixelX = col * this.pixelSize + xOffset;
                         const pixelY = row * this.pixelSize + yOffset;
-
-                        if (pixelX < drawingWidth && pixelY < drawingHeight) { // Boundary check for imageData
-                            const index = (pixelY * drawingWidth + pixelX) * 4;
-                            data[index] = r;
-                            data[index + 1] = g;
-                            data[index + 2] = b;
-                            data[index + 3] = 255; // Alpha
-                        }
+                        const index = (pixelY * drawingWidth + pixelX) * 4;
+                        data[index] = r;
+                        data[index + 1] = g;
+                        data[index + 2] = b;
+                        data[index + 3] = 255; // Alpha
                     }
                 }
                 currentWordAddress++;

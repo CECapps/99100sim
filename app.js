@@ -378,7 +378,7 @@ export class App {
             return;
         }
         this.simulationController.processSimulationTick(timestamp);
-        // updateAllSimulationDisplays will be called by frameExecuted event
+        this.updateAllSimulationDisplays(); // Ensure UI (including memory viz) updates every frame
         this.appAnimationFrameId = requestAnimationFrame(this.applicationLoop.bind(this));
     }
 
