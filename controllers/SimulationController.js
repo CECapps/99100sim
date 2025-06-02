@@ -67,12 +67,6 @@ export class SimulationController extends EventTarget {
         this.lastFrameCount = 0;
         this.runningFpsAvg = 0;
         this.runningIpsAvg = 0;
-
-        // Animation frame management
-        this.animationFrameId = null;
-
-        // Bind methods to maintain 'this' context
-        this.runFrameCallback = this.runFrameCallback.bind(this);
     }
 
     // === Execution Control Methods ===
@@ -86,7 +80,6 @@ export class SimulationController extends EventTarget {
 
         this.running = true;
         this.runStartTime = performance.now();
-        this.scheduleFrame();
 
         this.dispatchEvent(new CustomEvent('executionStarted', {
             detail: { timestamp: this.runStartTime }
@@ -101,10 +94,6 @@ export class SimulationController extends EventTarget {
         if (!this.running) return;
 
         this.running = false;
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
-        }
 
         this.dispatchEvent(new CustomEvent('executionStopped', {
             detail: {
@@ -218,24 +207,12 @@ export class SimulationController extends EventTarget {
         }));
     }
 
-    // === Internal Execution Loop ===
-
     /**
-     * Schedule next animation frame
-     * @returns {void}
-     */
-    scheduleFrame() {
-        if (this.running) {
-            this.animationFrameId = requestAnimationFrame(this.runFrameCallback);
-        }
-    }
-
-    /**
-     * Main execution loop callback
+     * Main simulation tick logic, to be called externally (e.g., by App.js per animation frame)
      * @param {number} timestamp - High resolution timestamp from requestAnimationFrame
      * @returns {void}
      */
-    runFrameCallback(timestamp) {
+    processSimulationTick(timestamp) {
         if (!this.running) return;
 
         let instructionsExecutedThisFrame = 0;
@@ -244,18 +221,15 @@ export class SimulationController extends EventTarget {
         try {
             if (this.slowMode) {
                 currentFlowState = this.simulation.step();
-                // 'B' state in Flow indicates an instruction completed
                 if (currentFlowState === 'B') {
                     instructionsExecutedThisFrame = 1;
                     this.instExecutionCount++;
                 }
             } else if (this.fastMode) {
-                // simulation.run() calls stepInstruction() 'this.fastModeSteps' times.
-                // Each call to stepInstruction() in Simulation.js implies one instruction.
                 this.simulation.run(this.fastModeSteps);
                 instructionsExecutedThisFrame = this.fastModeSteps;
                 this.instExecutionCount += this.fastModeSteps;
-            } else { // Normal mode
+            } else {
                 this.simulation.stepInstruction();
                 instructionsExecutedThisFrame = 1;
                 this.instExecutionCount++;
@@ -274,12 +248,9 @@ export class SimulationController extends EventTarget {
                     fps: this.runningFpsAvg,
                     ips: this.runningIpsAvg,
                     instructionsExecutedThisFrame: instructionsExecutedThisFrame,
-                    flowState: currentFlowState // Will be null if not in slowMode
+                    flowState: currentFlowState
                 }
             }));
-
-            this.scheduleFrame();
-
         } catch (error) {
             this.stop();
             this.dispatchEvent(new CustomEvent('executionError', {

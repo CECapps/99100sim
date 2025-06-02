@@ -20,6 +20,11 @@ export class App {
      */
     memoryVizController;
 
+    /**
+     * @type {number|null}
+     */
+    appAnimationFrameId = null; // For requestAnimationFrame management
+
     constructor() {
         // Core instances
         this.simulation = new Simulation();
@@ -209,20 +214,31 @@ export class App {
             this.simulationController.setSlowMode(false);
             this.simulationController.setFastMode(false);
             this.simulationController.start();
+            if (this.appAnimationFrameId === null) {
+                this.appAnimationFrameId = requestAnimationFrame(this.applicationLoop.bind(this));
+            }
         });
 
         this.getElement('runSlowBtn').addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
             this.simulationController.setSlowMode(true);
+            this.simulationController.setFastMode(false);
             this.simulationController.start();
+            if (this.appAnimationFrameId === null) {
+                this.appAnimationFrameId = requestAnimationFrame(this.applicationLoop.bind(this));
+            }
         });
 
         this.getElement('runFastBtn').addEventListener('click', (event) => {
             event.preventDefault();
             event.stopPropagation();
+            this.simulationController.setSlowMode(false);
             this.simulationController.setFastMode(true);
             this.simulationController.start();
+            if (this.appAnimationFrameId === null) {
+                this.appAnimationFrameId = requestAnimationFrame(this.applicationLoop.bind(this));
+            }
         });
 
         this.getElement('stepInstructionBtn').addEventListener('click', (event) => {
@@ -350,6 +366,20 @@ export class App {
 
         // Removed setupPeriodicUpdates as updates are now centralized
         // in the frameCompleted event.
+    }
+
+    /**
+     * Main application animation loop, called via requestAnimationFrame
+     * @param {number} timestamp
+     */
+    applicationLoop(timestamp) {
+        if (!this.simulationController.running) {
+            this.appAnimationFrameId = null;
+            return;
+        }
+        this.simulationController.processSimulationTick(timestamp);
+        // updateAllSimulationDisplays will be called by frameExecuted event
+        this.appAnimationFrameId = requestAnimationFrame(this.applicationLoop.bind(this));
     }
 
     /**
