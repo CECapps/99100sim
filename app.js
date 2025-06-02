@@ -8,6 +8,18 @@ import { CanvasMemoryVizController } from './controllers/CanvasMemoryVizControll
 import { StatusRegister } from './classes/StatusRegister.js';
 
 export class App {
+    /** @type {Simulation} */
+    simulation;
+    /** @type {SimulationController} */
+    simulationController;
+    /** @type {CodeController} */
+    codeController;
+    /**
+     * Memory visualization controller - always initialized in constructor
+     * @type {CanvasMemoryVizController}
+     */
+    memoryVizController;
+
     constructor() {
         // Core instances
         this.simulation = new Simulation();
@@ -51,7 +63,8 @@ export class App {
             ['bitOvintEl', document.getElementById('bit_ovint')],
             ['bitWcsEl', document.getElementById('bit_wcs')],
             ['errorList', document.getElementById('error_list')],
-            ['clearErrorsBtn', document.getElementById('clear_errors')]
+            ['clearErrorsBtn', document.getElementById('clear_errors')],
+            ['vizContainer', document.getElementById('viz')]
         ]));
 
         // Verify all elements exist - after this check, all elements are guaranteed non-null
@@ -61,8 +74,26 @@ export class App {
             }
         }
 
-        // Setup memory visualization and event listeners
-        this.setupMemoryVisualization();
+        // === Memory visualization setup (moved from setupMemoryVisualization) ===
+        const vizContainer = this.elements.get('vizContainer');
+        const canvas = document.createElement('canvas');
+        canvas.id = 'memory_canvas';
+        canvas.width = 1000;
+        canvas.height = canvas.width;
+        /** @type {HTMLElement} */ (vizContainer).appendChild(canvas); // vizContainer is guaranteed non-null by constructor check
+        this.memoryVizController = new CanvasMemoryVizController(this.simulation, canvas, canvas.width, canvas.height);
+        this.memoryVizController.addEventListener('vizConfigurationError', (event) => {
+            const customEvent = /** @type {CustomEvent} */ (event);
+            console.error('Memory visualization configuration error:', customEvent.detail.error);
+            throw new Error(`Memory visualization configuration error: ${customEvent.detail.error.message || customEvent.detail.error}`);
+        });
+        this.memoryVizController.addEventListener('vizRenderError', (event) => {
+            const customEvent = /** @type {CustomEvent} */ (event);
+            console.error('Memory visualization render error:', customEvent.detail.error);
+            throw new Error(`Memory visualization render error: ${customEvent.detail.error.message || customEvent.detail.error}`);
+        });
+        // === End memory visualization setup ===
+
         this.setupDOMEventListeners();
         this.setupControllerEventListeners();
 
@@ -133,57 +164,6 @@ export class App {
             console.error('App initialization error:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
             this.showError(`Failed to initialize application: ${errorMessage}`);
-        }
-    }
-
-
-
-    setupMemoryVisualization() {
-        // Create canvas and add to viz container
-        const vizContainer = document.getElementById('viz');
-        if (vizContainer) {
-            const canvas = document.createElement('canvas');
-            canvas.id = 'memory_canvas';
-            // Default dimensions, can be made configurable later
-            canvas.width = 1000;
-            canvas.height = canvas.width;
-            vizContainer.appendChild(canvas);
-
-            // Initialize CanvasMemoryVizController
-            try {
-                this.memoryVizController = new CanvasMemoryVizController(this.simulation, canvas, canvas.width, canvas.height);
-
-                // Add error event listeners for memory visualization
-                this.memoryVizController.addEventListener('vizConfigurationError', (event) => {
-                    const customEvent = /** @type {CustomEvent} */ (event);
-                    console.warn('Memory visualization configuration error:', customEvent.detail.error);
-                    // These are typically developer debugging errors, not user-facing
-                    // But if fallbackUsed is false, it might affect user experience
-                    if (!customEvent.detail.fallbackUsed) {
-                        this.showError(`Memory visualization configuration error: ${customEvent.detail.error.message || customEvent.detail.error}`);
-                    }
-                });
-
-                this.memoryVizController.addEventListener('vizRenderError', (event) => {
-                    const customEvent = /** @type {CustomEvent} */ (event);
-                    console.error('Memory visualization render error:', customEvent.detail.error);
-                    // Render errors are typically not user-facing unless they indicate a fundamental problem
-                    // For now, we'll log them but not show to user since visualization is non-critical
-                });
-
-                // Initial render after controller is ready
-                // this.memoryVizController.render(); // Moved to updateAllSimulationDisplays via init
-            } catch (error) {
-                console.warn('Memory visualization controller failed to initialize:', error);
-                // Create a placeholder if the controller fails
-                canvas.remove();
-                const placeholder = document.createElement('div');
-                placeholder.textContent = 'Memory visualization not available';
-                placeholder.style.padding = '20px';
-                placeholder.style.textAlign = 'center';
-                placeholder.style.border = '1px solid #ccc';
-                vizContainer.appendChild(placeholder);
-            }
         }
     }
 
@@ -383,9 +363,8 @@ export class App {
         const metrics = /** @type {{instructionCount: number, frameCount: number, fps: number, ips: number, runStartTime: number, elapsedTime: number}} */ (this.simulationController.getPerformanceMetrics());
         this.updatePerformanceMetrics(metrics.fps, metrics.ips, metrics.instructionCount);
 
-        if (this.memoryVizController) {
-            this.memoryVizController.render();
-        }
+        // Memory visualization is a required component, no null check needed
+        this.memoryVizController.render();
     }
 
     // === UI Update Methods ===
@@ -542,10 +521,7 @@ export class App {
                 const bytes = this.codeController.getAssemblyBytes();
                 if (bytes) {
                     this.simulation.loadBytes(bytes);
-                    this.updateAllSimulationDisplays(); // Update UI after loading memory
-                    if (this.memoryVizController) {
-                        this.memoryVizController.render();
-                    }
+                    this.updateAllSimulationDisplays(); // This will update all displays including memory viz
                     // Optionally, reset PC to start of loaded code or a default address
                     // this.simulationController.resetPC(); // Assuming such a method exists or is added
                 } else {
