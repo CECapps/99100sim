@@ -247,44 +247,81 @@ export class CanvasMemoryVizController extends EventTarget {
         const drawingWidth = this.numCols * this.pixelSize;
         const drawingHeight = this.numRows * this.pixelSize;
 
+        // If drawing area is zero, no need to proceed further.
+        // The canvas has already been cleared.
+        if (drawingWidth === 0 || drawingHeight === 0) {
+            return;
+        }
+
         // Create ImageData for the exact drawing area
         const imageData = this.ctx.createImageData(drawingWidth, drawingHeight);
         const data = imageData.data; // Uint8ClampedArray: R,G,B,A, R,G,B,A, ...
 
         let currentWordAddress = this.memoryStartWord;
+        const ps = this.pixelSize; // Cache pixelSize
 
-        for (let row = 0; row < this.numRows; row++) {
-            for (let col = 0; col < this.numCols; col++) {
-                if (currentWordAddress > this.memoryEndWord) {
-                    break; // Stop if we've rendered all requested words
-                }
+        if (ps === 1) {
+            // Optimized path for pixelSize = 1
+            // In this case, drawingWidth is equivalent to this.numCols
+            for (let row = 0; row < this.numRows; row++) {
+                // Calculate starting index in imageData for the current row of words
+                let pixelIndex = (row * drawingWidth) * 4; // drawingWidth is numCols here
 
-                const byteAddress = currentWordAddress * 2;
-                let wordValue = 0;
-
-                // Read the actual word value from memory
-                if (byteAddress >= 0 && byteAddress + 1 < memoryView.byteLength) {
-                    wordValue = memoryView.getUint16(byteAddress, false); // Big-endian
-                }
-
-                const [r, g, b] = this._rgb565ToRgb888(wordValue);
-
-                // Fill the pixelSize x pixelSize block for this word
-                for (let yOffset = 0; yOffset < this.pixelSize; yOffset++) {
-                    for (let xOffset = 0; xOffset < this.pixelSize; xOffset++) {
-                        const pixelX = col * this.pixelSize + xOffset;
-                        const pixelY = row * this.pixelSize + yOffset;
-                        const index = (pixelY * drawingWidth + pixelX) * 4;
-                        data[index] = r;
-                        data[index + 1] = g;
-                        data[index + 2] = b;
-                        data[index + 3] = 255; // Alpha
+                for (let col = 0; col < this.numCols; col++) {
+                    if (currentWordAddress > this.memoryEndWord) {
+                        break; // Stop if we've rendered all requested words
                     }
+
+                    const byteAddress = currentWordAddress * 2;
+                    const wordValue = memoryView.getUint16(byteAddress, false); // Big-endian
+                    const [r, g, b] = this._rgb565ToRgb888(wordValue);
+
+                    data[pixelIndex++] = r;
+                    data[pixelIndex++] = g;
+                    data[pixelIndex++] = b;
+                    data[pixelIndex++] = 255; // Alpha
+
+                    currentWordAddress++;
                 }
-                currentWordAddress++;
+                if (currentWordAddress > this.memoryEndWord) {
+                    break;
+                }
             }
-            if (currentWordAddress > this.memoryEndWord) {
-                break;
+        } else {
+            // Optimized path for pixelSize > 1
+            // Here, drawingWidth is this.numCols * ps
+            for (let row = 0; row < this.numRows; row++) { // Iterates over rows of "word blocks"
+                const blockTopActualPixelY = row * ps; // Top Y coordinate of the current block of words in imageData
+
+                for (let col = 0; col < this.numCols; col++) { // Iterates over columns of "word blocks"
+                    if (currentWordAddress > this.memoryEndWord) {
+                        break; // Stop if we've rendered all requested words
+                    }
+
+                    const byteAddress = currentWordAddress * 2;
+                    const wordValue = memoryView.getUint16(byteAddress, false); // Big-endian
+                    const [r, g, b] = this._rgb565ToRgb888(wordValue);
+
+                    const blockLeftActualPixelX = col * ps; // Left X coordinate of the current word block in imageData
+
+                    // Fill the ps x ps pixel block for this word
+                    for (let yOffset = 0; yOffset < ps; yOffset++) {
+                        const currentActualPixelY = blockTopActualPixelY + yOffset; // Actual Y scanline in imageData
+                        // Calculate starting byte index for the current scanline within the block
+                        let currentScanlineByteIndex = (currentActualPixelY * drawingWidth + blockLeftActualPixelX) * 4;
+
+                        for (let xOffset = 0; xOffset < ps; xOffset++) { // Fill ps pixels horizontally
+                            data[currentScanlineByteIndex++] = r;
+                            data[currentScanlineByteIndex++] = g;
+                            data[currentScanlineByteIndex++] = b;
+                            data[currentScanlineByteIndex++] = 255; // Alpha
+                        }
+                    }
+                    currentWordAddress++;
+                }
+                if (currentWordAddress > this.memoryEndWord) {
+                    break;
+                }
             }
         }
         this.ctx.putImageData(imageData, 0, 0);
