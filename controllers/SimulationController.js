@@ -186,7 +186,9 @@ export class SimulationController extends EventTarget {
      */
     setSlowMode(enabled) {
         this.slowMode = enabled;
-        this.fastMode = false; // Mutually exclusive
+        if (this.slowMode == true) {
+            this.fastMode = false;
+        }
 
         this.dispatchEvent(new CustomEvent('executionModeChanged', {
             detail: { slowMode: this.slowMode, fastMode: this.fastMode }
@@ -200,7 +202,9 @@ export class SimulationController extends EventTarget {
      */
     setFastMode(enabled) {
         this.fastMode = enabled;
-        this.slowMode = false; // Mutually exclusive
+        if (this.fastMode == true) {
+            this.slowMode = false;
+        }
 
         this.dispatchEvent(new CustomEvent('executionModeChanged', {
             detail: { slowMode: this.slowMode, fastMode: this.fastMode }
