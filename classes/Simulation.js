@@ -53,14 +53,11 @@ export class Simulation {
 
     step() {
         this.flow.run(1);
-        window.dispatchEvent(new CustomEvent('memory_updated'));
         return this.flow.prev_flow_state;
     }
 
     stepInstruction() {
         this.flow.runUntilExecutionState();
-        // This is a lie, but this lie makes us run faster
-        window.dispatchEvent(new CustomEvent('memory_updated'));
         return this.flow.prev_flow_state;
     }
 
@@ -79,10 +76,6 @@ export class Simulation {
         }
         for (let i = 0; i < arr.length; i++) {
             this.state.setByte(i, arr[i]);
-        }
-        // Optionally, fire a memory update event
-        if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('memory_updated'));
         }
     }
 

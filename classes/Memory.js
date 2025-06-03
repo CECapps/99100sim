@@ -41,7 +41,7 @@ export class Memory {
      **/
     setByte(offset, value) {
         this.#buffer.setUint8(offset, value);
-        //window.dispatchEvent(new CustomEvent('memory_updated'));
+        window.dispatchEvent(new CustomEvent('memory_updated'));
     }
 
     /**
@@ -74,6 +74,6 @@ export class Memory {
         }
 
         this.#buffer.setUint16(clamped_offset, clamped_value, /* force BE */ false);
-        //window.dispatchEvent(new CustomEvent('memory_updated'));
+        window.dispatchEvent(new CustomEvent('memory_updated'));
     }
 }

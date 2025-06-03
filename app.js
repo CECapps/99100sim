@@ -31,6 +31,12 @@ export class App {
      */
     lastUpdateFrameTimestamp = null;
 
+    /**
+     * Tracks whether memory has been modified this frame
+     * @type {boolean}
+     */
+    memoryChangedThisFrame = false;
+
     constructor() {
         // Core instances
         this.simulation = new Simulation();
@@ -102,6 +108,11 @@ export class App {
         this.setupDOMEventListeners();
         this.setupControllerEventListeners();
 
+        // Setup memory update event listener for optimization
+        window.addEventListener('memory_updated', () => {
+            this.memoryChangedThisFrame = true;
+        });
+
         // Setup status bit element and index maps for efficient per-frame update
         this.statusBitElementsMap = new Map([
             ['LGT', this.elements.get('bitLgtEl')],
@@ -164,7 +175,9 @@ export class App {
 
             // Initialize simulation state and update UI
             this.simulationController.reset();
-            this.updateAllSimulationDisplays(); // This will call render for the first time
+            // Force memory visualization to render on initial load
+            this.memoryChangedThisFrame = true;
+            this.updateAllSimulationDisplays(-1); // This will call render for the first time
         } catch (error) {
             console.error('App initialization error:', error);
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -419,6 +432,10 @@ export class App {
         }
         this.lastUpdateFrameTimestamp = timestamp;
 
+        // Reset memory change flag for this frame
+        const memoryChangedThisFrame = this.memoryChangedThisFrame;
+        this.memoryChangedThisFrame = false;
+
         this.updateSimulationState();
         this.updateMachineState();
         this.updateStatusBits();
@@ -426,8 +443,10 @@ export class App {
         const metrics = /** @type {{instructionCount: number, frameCount: number, fps: number, ips: number, runStartTime: number, elapsedTime: number}} */ (this.simulationController.getPerformanceMetrics());
         this.updatePerformanceMetrics(metrics.fps, metrics.ips, metrics.instructionCount);
 
-        // Memory visualization is a required component, no null check needed
-        this.memoryVizController.render();
+        // Only render memory visualization if memory has changed this frame
+        if (memoryChangedThisFrame) {
+            this.memoryVizController.render();
+        }
     }
 
     // === UI Update Methods ===
