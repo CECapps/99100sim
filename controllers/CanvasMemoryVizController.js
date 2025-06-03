@@ -3,32 +3,28 @@
 # CanvasMemoryVizController Specification
 
 ## Purpose
-A simplified memory visualization controller that renders a configurable region of 16-bit machine memory to a canvas using RGB565 color encoding. Designed for direct, synchronous rendering without internal scheduling or animation frame management.
+A simplified memory visualization controller that renders a caller-specified, fixed region of 16-bit machine memory to a canvas using RGB565 color encoding. The number of words displayed per row is fixed at 32. Canvas dimensions are determined automatically by the controller. Designed for direct, synchronous rendering without internal scheduling or animation frame management.
 
 ## Constructor Parameters
 - `simulation`: Reference to the Simulation instance for memory access
 - `canvas`: HTML Canvas element for rendering output
-- `canvasWidth`: Canvas width in pixels, 512 default
-- `canvasHeight`: Canvas height in pixels, 512 default
-
-## Configuration Properties
-- `memoryStartWord`: Starting 16-bit word address (inclusive), 0x0 default
-- `memoryEndWord`: Ending 16-bit word address (inclusive), 0xFFFF default
-- `wordsPerRow`: Number of 16-bit words to display per row (must be multiple of 16)
+- `memoryStartWord`: Starting 16-bit word address (inclusive) for the visualization
+- `memoryEndWord`: Ending 16-bit word address (inclusive) for the visualization
 
 ## Core Responsibilities
 
 ### Memory Access
 - Access simulation memory through the provided Simulation instance
-- Read 16-bit words from the configured memory region
-- Handle memory bounds checking and invalid addresses
+- Read 16-bit words from the memory region specified at construction
+- Handle memory bounds checking and invalid addresses (clamping and alignment during construction)
+  - Once constructed we don't need to worry about that
 
 ### Rendering Calculations
-- Calculate total words in the configured memory region
-- Determine optimal pixel size to fit the memory region within canvas dimensions
+- Calculate total words in the memory region specified at construction
+- Determine optimal pixel size to fit the memory region; the controller automatically sets canvas dimensions
 - Ensure pixels remain square (same width and height)
-- Calculate rows and columns needed for the memory layout
-- Maintain 16-bit word alignment for row breaks and memory wrapping
+- Calculate rows and columns needed for the memory layout (wordsPerRow is fixed at 32)
+- Maintain 16-bit word alignment for row breaks (wordsPerRow is fixed at 32, a multiple of 16)
 
 ### Color Conversion
 - Convert 16-bit memory words to RGB565 color values
@@ -40,13 +36,15 @@ A simplified memory visualization controller that renders a configurable region 
   - The most significant bit of the least significant byte is at position 8,
   - And the least significant bit of the least significant byte is at position 15.
   - Be sure our RGB565 algorithm considers how Javascript presents numbers to us
-    in bitwise operations.  We're running on a little-endian platform, does it matter?
+    in bitwise operations. We're running on a little-endian platform, does it matter?
 
 ### Canvas Operations
+- Set canvas dimensions (width and height) automatically during construction based on the memory region and pixel size.
 - Clear canvas before each render
 - Create and populate ImageData for efficient pixel manipulation
 - Write completed ImageData to canvas context
-- Handle canvas context errors and invalid states
+- Handle canvas context errors and invalid states context acquisition during construction
+  - Again assume it will work correctly post-construction.
 
 ## Public Methods
 
@@ -55,43 +53,91 @@ A simplified memory visualization controller that renders a configurable region 
 - Synchronous operation, no callbacks or promises
 - Assumes external scheduling for when to call
 
-### `setMemoryRegion(startWord, endWord)`
-- Update the memory region to visualize
-- Validate that region is properly aligned to 16-bit boundaries
-- Recalculate rendering parameters for new region
-
-### `setWordsPerRow(wordsPerRow)`
-- Update the number of words displayed per row
-- Enforce multiple-of-16 requirement
-- Recalculate rendering layout
-
-### `getConfiguration()`
-- Return current configuration parameters
-- Include calculated values like pixel size and total words
-
 ## Error Handling
-- Graceful handling of invalid memory addresses -> clamp to the 16-bit range
-- Canvas context unavailable scenarios -> on create, not on render; our Canvas never goes away
-- Configuration validation (word alignment, positive dimensions)
-- Simulation instance availability checks
+- Graceful handling of invalid memory addresses provided at construction (e.g., `memoryStartWord`, `memoryEndWord`) -> clamp to the 16-bit range and ensure 16-word alignment.
+- Canvas context unavailable scenarios -> checked during construction; may throw an error.
+- Validation of constructor parameters (`memoryStartWord`, `memoryEndWord` for range and 16-word alignment).
+- Simulation instance availability checks (during construction).
 
 ## Performance Considerations
 - Direct pixel manipulation using ImageData
 - Minimal object allocation during render operations
-- No internal state tracking beyond configuration
+- Minimal internal state (parameters set at construction are fixed)
 - No automatic redraw scheduling or throttling
 
 ## Memory Layout Requirements
 - All memory addressing in 16-bit words, not bytes
-- Row breaks must occur on 16-word boundaries
-- Memory region start/end must be 16-word aligned
-- Visualization wrapping respects 16-bit word boundaries
+- Row breaks occur on 16-word boundaries (as `wordsPerRow` is fixed at 32).
+- Memory region start/end (provided at construction) must be 16-word aligned.
+- Visualization wrapping respects 16-bit word boundaries.
 
 ## Integration Expectations
 - Controller instance created once and reused
 - External code responsible for calling `render()` at appropriate times
-- Configuration changes trigger immediate recalculation, not automatic redraw
-- No event emission or callback registration
+- Initial parameters are set at construction and cannot be changed thereafter.
+- No event emission or callback registration (Error handling during construction might throw exceptions).
+
+# Refactoring Plan for CanvasMemoryVizController
+
+### 1. Constructor Parameter Changes
+- **Remove**: `canvasWidth` and `canvasHeight` optional parameters
+- **Add**: `memoryStartWord` and `memoryEndWord` as required parameters
+- **Update**: Constructor signature to `constructor(simulation, canvas, memoryStartWord, memoryEndWord)`
+
+### 2. Canvas Sizing Logic Refactor
+- **Remove**: Manual canvas dimension setting from constructor parameters
+- **Add**: Automatic canvas dimension calculation during `_validateAndRecalculateConfiguration()`
+- **Update**: Canvas sizing to be based on memory region size and optimal pixel size
+- **Modify**: Pixel size calculation to determine canvas dimensions rather than fit within existing dimensions
+
+### 3. Configuration Management Cleanup
+- **Remove**: `setMemoryRegion()` method entirely
+- **Remove**: `setWordsPerRow()` method entirely
+- **Remove**: `getConfiguration()` method entirely
+- **Fix**: `wordsPerRow` to be constant at 32 (remove variable assignment)
+- **Remove**: Dynamic `wordsPerRow` validation and error handling
+
+### 4. Internal State Simplification
+- **Remove**: `wordsPerRow` as a configurable property (make it a constant)
+- **Remove**: Event emission and error handling for configuration changes
+- **Remove**: EventTarget inheritance (no longer needed without dynamic configuration)
+- **Simplify**: `_validateAndRecalculateConfiguration()` to only handle memory bounds and canvas sizing
+
+### 5. Validation Logic Updates
+- **Update**: Memory region validation to use constructor parameters instead of default values
+- **Remove**: `wordsPerRow` validation logic (since it's now fixed at 32)
+- **Remove**: Configuration change event dispatching
+- **Simplify**: Error handling to only cover construction-time validation
+
+### 6. Canvas Dimension Calculation Logic
+- **Reverse**: Current logic that fits content to canvas → Change to size canvas to fit content
+- **Add**: Logic to calculate optimal canvas dimensions based on:
+  - Total words to display
+  - Fixed 32 words per row
+  - Reasonable pixel size (likely starting with 1px and scaling up as needed)
+- **Update**: Pixel size calculation to prioritize content fit rather than canvas fit
+
+### 7. Method Cleanup
+- **Verify**: `render()` method remains unchanged (should work with new sizing approach)
+- **Remove**: All setter methods and their associated validation
+- **Remove**: Getter methods for configuration
+
+### 8. Documentation Updates
+- **Update**: JSDoc comments to reflect new constructor signature
+- **Remove**: Documentation for removed methods
+- **Update**: Internal comments that reference dynamic configuration
+
+### 9. Error Handling Simplification
+- **Remove**: Runtime configuration error handling
+- **Keep**: Construction-time validation errors
+- **Remove**: Custom event dispatching entirely
+
+### 10. Testing Considerations
+- **Update**: Constructor calls throughout codebase to include memory region parameters
+- **Remove**: Any code that calls removed setter/getter methods
+- **Verify**: Canvas sizing works correctly with automatic dimension calculation
+
+This refactoring will significantly simplify the class by removing all dynamic configuration capabilities and making it a pure construction-time configured, render-only controller.
 
 */
 
