@@ -114,7 +114,7 @@ A simplified memory visualization controller that renders a caller-specified, fi
 - **Add**: Logic to calculate optimal canvas dimensions based on:
   - Total words to display
   - Fixed 32 words per row
-  - Reasonable pixel size (likely starting with 1px and scaling up as needed)
+  - Reasonable pixel size (starting with 2px and adjusted later by hand)
 - **Update**: Pixel size calculation to prioritize content fit rather than canvas fit
 
 ### 7. Method Cleanup
@@ -135,16 +135,14 @@ A simplified memory visualization controller that renders a caller-specified, fi
 ### 10. Testing Considerations
 - **Update**: Constructor calls throughout codebase to include memory region parameters
 - **Remove**: Any code that calls removed setter/getter methods
-- **Verify**: Canvas sizing works correctly with automatic dimension calculation
 
-This refactoring will significantly simplify the class by removing all dynamic configuration capabilities and making it a pure construction-time configured, render-only controller.
 
 */
 
 // @ts-check
 /** @typedef {import('../classes/Simulation.js').Simulation} Simulation */
 
-export class CanvasMemoryVizController extends EventTarget {
+export class CanvasMemoryVizController {
     /** @type {Simulation} */
     simulation;
     /** @type {HTMLCanvasElement} */
@@ -152,32 +150,33 @@ export class CanvasMemoryVizController extends EventTarget {
     /** @type {CanvasRenderingContext2D} */
     ctx;
 
-    // Configuration
+    // Configuration (fixed at construction)
     /** @type {number} */
-    memoryStartWord;
+    memoryStartWord = 0;
     /** @type {number} */
-    memoryEndWord;
+    memoryEndWord = 0x11FF;
+
+    // Constants
     /** @type {number} */
-    wordsPerRow;
+    static WORDS_PER_ROW = 32;
 
     // Calculated rendering parameters
     /** @type {number} */
     totalWordsToDisplay = 0;
     /** @type {number} */
-    pixelSize = 1; // Size of each "word" block in pixels
+    pixelSize = 16; // Size of each "word" block in pixels
     /** @type {number} */
     numCols = 0;
     /** @type {number} */
     numRows = 0;
 
     /**
-     * @param {Simulation} simulation
-     * @param {HTMLCanvasElement} canvas
-     * @param {number} [canvasWidth=512]
-     * @param {number} [canvasHeight=512]
+     * @param {Simulation} simulation - Reference to the Simulation instance for memory access
+     * @param {HTMLCanvasElement} canvas - HTML Canvas element for rendering output
+     * @param {number} memoryStartWord - Starting 16-bit word address (inclusive) for the visualization
+     * @param {number} memoryEndWord - Ending 16-bit word address (inclusive) for the visualization
      */
-    constructor(simulation, canvas, canvasWidth = 512, canvasHeight = 512) {
-        super();
+    constructor(simulation, canvas, memoryStartWord, memoryEndWord) {
 
         if (!simulation) {
             throw new Error("CanvasMemoryVizController: Simulation instance is required.");
@@ -194,12 +193,8 @@ export class CanvasMemoryVizController extends EventTarget {
         this.canvas = canvas;
         this.ctx = ctx;
 
-        this.canvas.width = canvasWidth;
-        this.canvas.height = canvasHeight;
-
-        this.memoryStartWord = 0x0000;
-        this.memoryEndWord = 0x08ff;
-        this.wordsPerRow = 32; // Default, must be a multiple of 16
+        this.memoryStartWord = memoryStartWord;
+        this.memoryEndWord = memoryEndWord;
 
         this._validateAndRecalculateConfiguration();
     }
@@ -214,53 +209,35 @@ export class CanvasMemoryVizController extends EventTarget {
         this.memoryStartWord = Math.floor(this.memoryStartWord / 16) * 16;
         this.memoryEndWord = Math.ceil((this.memoryEndWord + 1) / 16) * 16 - 1;
         this.memoryEndWord = Math.min(0xFFFF, this.memoryEndWord); // Ensure it doesn't exceed max
-         if (this.memoryEndWord < this.memoryStartWord) { // Handle edge case if initial end was small
+        if (this.memoryEndWord < this.memoryStartWord) { // Handle edge case if initial end was small
             this.memoryEndWord = this.memoryStartWord + 15;
         }
 
-
-        // Validate wordsPerRow
-        if (this.wordsPerRow <= 0 || this.wordsPerRow % 16 !== 0) {
-            const errorMsg = `CanvasMemoryVizController: wordsPerRow (${this.wordsPerRow}) must be a positive multiple of 16. Defaulting to 64.`;
-            console.warn(errorMsg);
-            this.dispatchEvent(new CustomEvent('vizConfigurationError', {
-                detail: {
-                    error: new Error(errorMsg),
-                    operation: 'validateWordsPerRow',
-                    fallbackUsed: true
-                }
-            }));
-            this.wordsPerRow = 64;
-        }
-        this.wordsPerRow = Math.max(16, this.wordsPerRow); // Ensure at least 16
-
-        this.totalWordsToDisplay = (this.memoryEndWord - this.memoryStartWord) + 1;
+        // Calculate total words to display
+        // Constructor parameters are byte addresses, so we need to convert to word count
+        // Since each word is 2 bytes, divide the byte range by 2
+        this.totalWordsToDisplay = Math.floor((this.memoryEndWord - this.memoryStartWord) / 2) + 1;
 
         if (this.totalWordsToDisplay <= 0) {
-            this.pixelSize = 1;
+            this.pixelSize = 2;
             this.numCols = 0;
             this.numRows = 0;
+            // Set canvas to minimal size
+            this.canvas.width = 1;
+            this.canvas.height = 1;
             return;
         }
 
-        this.numCols = this.wordsPerRow;
-        this.numRows = Math.ceil(this.totalWordsToDisplay / this.wordsPerRow);
+        this.numCols = CanvasMemoryVizController.WORDS_PER_ROW;
+        this.numRows = Math.ceil(this.totalWordsToDisplay / CanvasMemoryVizController.WORDS_PER_ROW);
 
-        // Calculate optimal pixel size to fit within canvas dimensions
-        const availableWidth = this.canvas.width;
-        const availableHeight = this.canvas.height;
+        // Calculate canvas dimensions based on content and pixel size
+        // Start with reasonable pixel size and calculate canvas dimensions
+        const canvasWidth = this.numCols * this.pixelSize;
+        const canvasHeight = this.numRows * this.pixelSize;
 
-        let pixelSizeX = 1;
-        if (this.numCols > 0) {
-            pixelSizeX = Math.floor(availableWidth / this.numCols);
-        }
-
-        let pixelSizeY = 1;
-        if (this.numRows > 0) {
-            pixelSizeY = Math.floor(availableHeight / this.numRows);
-        }
-
-        this.pixelSize = Math.max(1, Math.min(pixelSizeX, pixelSizeY)); // Ensure square pixels and at least 1x1
+        this.canvas.width = canvasWidth;
+        this.canvas.height = canvasHeight;
     }
 
     /**
@@ -303,7 +280,7 @@ export class CanvasMemoryVizController extends EventTarget {
         const imageData = this.ctx.createImageData(drawingWidth, drawingHeight);
         const data = imageData.data; // Uint8ClampedArray: R,G,B,A, R,G,B,A, ...
 
-        let currentWordAddress = this.memoryStartWord;
+        let currentByteAddress = this.memoryStartWord;
         const ps = this.pixelSize; // Cache pixelSize
 
         if (ps === 1) {
@@ -314,12 +291,11 @@ export class CanvasMemoryVizController extends EventTarget {
                 let pixelIndex = (row * drawingWidth) * 4; // drawingWidth is numCols here
 
                 for (let col = 0; col < this.numCols; col++) {
-                    if (currentWordAddress > this.memoryEndWord) {
+                    if (currentByteAddress > this.memoryEndWord) {
                         break; // Stop if we've rendered all requested words
                     }
 
-                    const byteAddress = currentWordAddress * 2;
-                    const wordValue = memoryView.getUint16(byteAddress, false); // Big-endian
+                    const wordValue = memoryView.getUint16(currentByteAddress, false); // Big-endian
                     const [r, g, b] = this._rgb565ToRgb888(wordValue);
 
                     data[pixelIndex++] = r;
@@ -327,9 +303,9 @@ export class CanvasMemoryVizController extends EventTarget {
                     data[pixelIndex++] = b;
                     data[pixelIndex++] = 255; // Alpha
 
-                    currentWordAddress++;
+                    currentByteAddress += 2; // Move to next 16-bit word (2 bytes)
                 }
-                if (currentWordAddress > this.memoryEndWord) {
+                if (currentByteAddress > this.memoryEndWord) {
                     break;
                 }
             }
@@ -340,12 +316,11 @@ export class CanvasMemoryVizController extends EventTarget {
                 const blockTopActualPixelY = row * ps; // Top Y coordinate of the current block of words in imageData
 
                 for (let col = 0; col < this.numCols; col++) { // Iterates over columns of "word blocks"
-                    if (currentWordAddress > this.memoryEndWord) {
+                    if (currentByteAddress > this.memoryEndWord) {
                         break; // Stop if we've rendered all requested words
                     }
 
-                    const byteAddress = currentWordAddress * 2;
-                    const wordValue = memoryView.getUint16(byteAddress, false); // Big-endian
+                    const wordValue = memoryView.getUint16(currentByteAddress, false); // Big-endian
                     const [r, g, b] = this._rgb565ToRgb888(wordValue);
 
                     const blockLeftActualPixelX = col * ps; // Left X coordinate of the current word block in imageData
@@ -363,9 +338,9 @@ export class CanvasMemoryVizController extends EventTarget {
                             data[currentScanlineByteIndex++] = 255; // Alpha
                         }
                     }
-                    currentWordAddress++;
+                    currentByteAddress += 2;
                 }
-                if (currentWordAddress > this.memoryEndWord) {
+                if (currentByteAddress > this.memoryEndWord) {
                     break;
                 }
             }
@@ -373,58 +348,4 @@ export class CanvasMemoryVizController extends EventTarget {
         this.ctx.putImageData(imageData, 0, 0);
     }
 
-    /**
-     * @param {number} startWord
-     * @param {number} endWord
-     */
-    setMemoryRegion(startWord, endWord) {
-        const newStart = Math.max(0, Math.min(0xFFFF, Math.floor(startWord)));
-        const newEnd = Math.max(newStart, Math.min(0xFFFF, Math.floor(endWord)));
-
-        if (newStart === this.memoryStartWord && newEnd === this.memoryEndWord) {
-            return; // No change
-        }
-
-        this.memoryStartWord = newStart;
-        this.memoryEndWord = newEnd;
-        this._validateAndRecalculateConfiguration();
-    }
-
-    /**
-     * @param {number} wordsPerRow
-     */
-    setWordsPerRow(wordsPerRow) {
-        const newWordsPerRow = Math.max(1, Math.floor(wordsPerRow));
-        if (newWordsPerRow === this.wordsPerRow) {
-            return; // No change
-        }
-        if (newWordsPerRow % 16 !== 0) {
-            const errorMsg = `CanvasMemoryVizController: setWordsPerRow attempted with ${newWordsPerRow}, which is not a multiple of 16. Operation aborted.`;
-            console.warn(errorMsg);
-            this.dispatchEvent(new CustomEvent('vizConfigurationError', {
-                detail: {
-                    error: new Error(errorMsg),
-                    operation: 'setWordsPerRow',
-                    fallbackUsed: false
-                }
-            }));
-            return;
-        }
-        this.wordsPerRow = newWordsPerRow;
-        this._validateAndRecalculateConfiguration();
-    }
-
-    getConfiguration() {
-        return {
-            memoryStartWord: this.memoryStartWord,
-            memoryEndWord: this.memoryEndWord,
-            wordsPerRow: this.wordsPerRow,
-            totalWordsToDisplay: this.totalWordsToDisplay,
-            pixelSize: this.pixelSize,
-            numCols: this.numCols,
-            numRows: this.numRows,
-            canvasWidth: this.canvas.width,
-            canvasHeight: this.canvas.height,
-        };
-    }
 }

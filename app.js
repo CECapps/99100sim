@@ -75,7 +75,9 @@ export class App {
             ['bitWcsEl', document.getElementById('bit_wcs')],
             ['errorList', document.getElementById('error_list')],
             ['clearErrorsBtn', document.getElementById('clear_errors')],
-            ['vizContainer', document.getElementById('viz')]
+            ['vizContainer', document.getElementById('viz')],
+            ['fastModeStepsSlider', document.getElementById('fast_mode_steps')],
+            ['fastModeStepsDisplay', document.getElementById('fast_mode_steps_display')]
         ]));
 
         // Verify all elements exist - after this check, all elements are guaranteed non-null
@@ -89,20 +91,12 @@ export class App {
         const vizContainer = this.elements.get('vizContainer');
         const canvas = document.createElement('canvas');
         canvas.id = 'memory_canvas';
-        canvas.width = 1000;
-        canvas.height = canvas.width;
         /** @type {HTMLElement} */ (vizContainer).appendChild(canvas); // vizContainer is guaranteed non-null by constructor check
-        this.memoryVizController = new CanvasMemoryVizController(this.simulation, canvas, canvas.width, canvas.height);
-        this.memoryVizController.addEventListener('vizConfigurationError', (event) => {
-            const customEvent = /** @type {CustomEvent} */ (event);
-            console.error('Memory visualization configuration error:', customEvent.detail.error);
-            throw new Error(`Memory visualization configuration error: ${customEvent.detail.error.message || customEvent.detail.error}`);
-        });
-        this.memoryVizController.addEventListener('vizRenderError', (event) => {
-            const customEvent = /** @type {CustomEvent} */ (event);
-            console.error('Memory visualization render error:', customEvent.detail.error);
-            throw new Error(`Memory visualization render error: ${customEvent.detail.error.message || customEvent.detail.error}`);
-        });
+
+        // Use the default memory region from CanvasMemoryVizController
+        const memoryStartWord = 0;
+        const memoryEndWord = 0x11FF; // this is the memory address that it lives at, *not* an Nth word
+        this.memoryVizController = new CanvasMemoryVizController(this.simulation, canvas, memoryStartWord, memoryEndWord);
         // === End memory visualization setup ===
 
         this.setupDOMEventListeners();
@@ -304,6 +298,21 @@ export class App {
             el.setSelectionRange(start_point + insert_count, end_point + insert_count);
             // Also resize after tab insert
             this.resizeEditorTextarea(el);
+        });
+
+        // Fast mode steps slider
+        const fastModeStepsSlider = /** @type {HTMLInputElement} */ (this.getElement('fastModeStepsSlider'));
+        const fastModeStepsDisplay = this.getElement('fastModeStepsDisplay');
+
+        // Initialize slider with current value
+        fastModeStepsSlider.value = this.simulationController.fastModeSteps.toString();
+        fastModeStepsDisplay.textContent = this.simulationController.fastModeSteps.toString();
+
+        // Update on slider change
+        fastModeStepsSlider.addEventListener('input', () => {
+            const value = parseInt(fastModeStepsSlider.value, 10);
+            this.simulationController.fastModeSteps = value;
+            fastModeStepsDisplay.textContent = value.toString();
         });
     }
 
@@ -575,7 +584,7 @@ export class App {
                 const bytes = this.codeController.getAssemblyBytes();
                 if (bytes) {
                     this.simulation.loadBytes(bytes);
-                    this.updateAllSimulationDisplays(); // This will update all displays including memory viz
+                    this.updateAllSimulationDisplays(-1); // This will update all displays including memory viz
                     // Optionally, reset PC to start of loaded code or a default address
                     // this.simulationController.resetPC(); // Assuming such a method exists or is added
                 } else {
