@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>99100 Sim</title>
+        <link rel="icon" href="favicon.png" sizes="100x100" type="image/png">
+        <script src="./viz.js"></script>
+        <script src="./txt2asm.js"></script>
+        <script src="./simui.js"></script>
+        <script src="./utils.js"></script>
+        <script>
+            /** @type {Simulation} sim */
+            window.sim = '';
+        </script>
+<script type="module">
+// @ts-check
+/**
+ * For Very Important Reasons, you can only import modules if you yourself are
+ * a module.  But if you're a module, you can't actually do certain things.
+ * So, let's stash what we need in the global window object and switch back.
+ * @TODO I'm sure there's a better way to deal with this problem.
+ **/
+import { OpInfo } from "./classes/OpInfo.js";
+import { Simulation } from "./classes/Simulation.js";
+import { Instruction } from "./classes/Instruction.js";
+import { Asm } from "./classes/Asm.js";
+import { InstructionDecode } from "./classes/InstructionDecode.js";
+
+Reflect.set(window, 'OpInfo', OpInfo);
+Reflect.set(window, 'Simulation', Simulation);
+Reflect.set(window, 'Instruction', Instruction);
+Reflect.set(window, 'Asm', Asm);
+Reflect.set(window, 'InstructionDecode', InstructionDecode);
+
+/** @type {Simulation} sim */
+window.sim = new Simulation();
+
+/*
+console.debug( FormatParamConverter.fromAsmString('MOV', 'R1,@>1234') );
+const inst = Instruction.newFromString('MOV');
+inst.setParam('Td', 0);
+inst.setParam('D', 1);
+inst.setParam('Ts', 2);
+inst.setParam('S', 1701);
+inst.finalize();
+console.debug(inst);
+console.debug( FormatParamConverter.fromInstruction(inst) );
+*/
+
+//console.debug( FormatParamConverter.fromAsmString('LI', 'R1,>CAFE') );
+//const inst = Instruction.newFromOpcode(49152);
+//inst.finalize();
+
+</script>
+
+<!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
+
+<script>
+
+window.addEventListener('DOMContentLoaded', tab_fixer_onload);
+window.addEventListener('DOMContentLoaded', txt2asm_init);
+
+window.addEventListener('DOMContentLoaded', viz_redraw_init);
+window.addEventListener('memory_updated', viz_request_redraw);
+
+window.addEventListener('DOMContentLoaded', button_onclick_setup);
+window.addEventListener('DOMContentLoaded', function () {
+    fetch('./asmfiles.php').then(function (response) {
+        if (!response.ok) {
+            console.error(response);
+            throw new Error(response);
+        }
+        return response.json();
+    }).then(function (data) {
+        const picker = document.getElementById('asmpicker');
+        for (const filename of data) {
+            const op = document.createElement('option');
+            op.textContent = filename.replace(/^asm\//, '').replace(/\.asm$/, '');
+            op.value = filename;
+            if (filename == 'asm/default.asm') {
+                op.selected = 'selected';
+            }
+            picker.appendChild(op);
+        }
+    });
+
+    document.getElementById('asmpicker_load_button').addEventListener('click', function () {
+        const filename = document.getElementById('asmpicker').value;
+        fetch(filename).then(function (response) {
+            if (!response.ok) {
+                console.error(response);
+                throw new Error(response);
+            }
+            return response.text();
+        }).then(function (data) {
+            document.getElementById('codebox').value = data;
+            reset_simui();
+        })
+    })
+});
+window.addEventListener('DOMContentLoaded', function () {
+    setup_simui();
+    reset_simui();
+    update_simui();
+    resize_textarea(document.getElementById('codebox'));
+});
+
+</script>
+
+<!-- AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA -->
+
+        <style>
+            /* https://paletton.com/#uid=53u0I0kgX6j8zeBb67ClS4Srx3b */
+            :root {
+                --main-bg-color: #101A20;
+                --main-bg-color-lighter-1: #1A2227;
+                --main-bg-color-lighter-2: #37434A;
+                --main-bg-color-darker-1: #091319;
+                --main-bg-color-darker-2: #030B10;
+
+                --secondary-color-1: #161323;
+                --secondary-color-2: #172A14;
+
+                --text-color: #f0f0f0;
+            }
+
+            html {
+                color: var(--text-color);
+                background-color: var(--main-bg-color);
+                /* font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif; */
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: 100;
+                font-size: 0.15in;
+            }
+            input, textarea, select {
+                color: var(--text-color);
+                background-color: var(--main-bg-color);
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: normal;
+                font-size: 1rem;
+                line-height: 1rem;
+            }
+            button {
+                color: var(--text-color);
+                background-color: var(--main-bg-color-lighter-1);
+                font-family: 'Cascadia Code', 'Consolas', 'Courier', fixed;
+                font-weight: normal;
+                font-size: 1rem;
+                padding: 2px 1em;
+
+                border: 2px outset var(--main-bg-color-lighter-2);
+                border-radius: 5px;
+            }
+            button:hover {
+                background-color: var(--main-bg-color-lighter-2);
+            }
+            button:active {
+                background-color: var(--main-bg-color-darker-2);
+                border: 2px inset var(--main-bg-color);
+            }
+            button:focus {
+                outline: 2px dotted var(--main-bg-color-lighter-2);
+            }
+            select {
+                padding: 2px;
+                border: 2px solid var(--main-bg-color-lighter-2);
+                border-radius: 5px;
+            }
+
+            #flexcontainer {
+                display: flex;
+            }
+
+            #machine_status_table {
+                width: 100%;
+            }
+            #machine_status_table > tbody > tr > th {
+                text-align: right;
+                padding-right: 0.5em;
+                width: 25%;
+            }
+            #register_table th {
+                min-width: 3.5em;
+            }
+            #status_table td {
+                border: 2px solid transparent;
+                color: var(--main-bg-color-lighter-2);
+                text-align: center;
+                min-width: 3.5em;
+            }
+            #status_table td.on {
+                color: var(--text-color);
+                border-color: var(--text-color);
+            }
+
+            #register_table td, #status_table td, #wp_el, #pc_el, #epci_el {
+                text-shadow: -1px   -1px    0px  var(--main-bg-color-lighter-2), /* top left */
+                             1px    -1px    0px  var(--main-bg-color-darker-1), /* top right */
+                             -1px   1px     0px  var(--main-bg-color-lighter-1), /* bottom left */
+                             1px    1px     0px  var(--main-bg-color-darker-2); /* bottom right */
+            }
+
+            #codebox_grid_container {
+                width: 100%;
+                display: grid;
+                place-items: start;
+                place-content: start;
+            }
+            #codebox_grid_container textarea {
+                font-size: 0.9rem;
+                grid-column-start: 1;
+                grid-row-start: 1;
+            }
+            #codebox_grid_container pre {
+                padding-left: 1rem;
+                grid-column-start: 2;
+                font-weight: normal;
+            }
+            #codebox_grid_container button {
+                grid-column-start: 1;
+                grid-row-start: 2;
+            }
+
+            #errors {
+                color: red;
+                font-weight: bold;
+            }
+
+            .plaid {
+                /* https://codepen.io/weirdvector/pen/YzJZZb */
+                background-color: var(--main-bg-color-lighter-2);
+                background-image: repeating-linear-gradient(45deg, transparent, transparent 4px, var(--secondary-color-1) 4px, var(--secondary-color-1) 7px),
+                                  repeating-linear-gradient(-45deg, transparent, transparent 5px, var(--secondary-color-2) 5px, var(--secondary-color-2) 10px);
+            }
+            .plaid:hover {
+                background-color: var(--main-bg-color-darker-2);
+            }
+
+        </style>
+    </head>
+    <body>
+        <div id="errors"></div>
+        <div id="flexcontainer">
+            <div style="flex: auto;">
+                <section>
+                    <table id="machine_status_table">
+                        <tr><th>Running:</th>       <td id="run_el">No</td></tr>
+                        <tr><th>Prev State:</th>    <td id="pstate_el">Crash</td></tr>
+                        <tr><th>Next State:</th>    <td id="nstate_el">Crash</td></tr>
+                        <tr>
+                            <td colspan="2">
+                                <table id="register_table">
+                                    <tr>
+                                        <th>0</th><th>1</th><th>2</th><th>3</th>
+                                        <th>4</th><th>5</th><th>6</th><th>7</th>
+                                        <th>8</th><th>9</th><th>10</th><th>11</th>
+                                        <th>12</th><th>13</th><th>14</th><th>15</th>
+                                    </tr>
+                                    <tr id="regrow">
+                                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                                        <td>--</td><td>--</td><td>--</td><td>--</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Status:</th>
+                            <td>
+                                <table id="status_table">
+                                    <tr>
+                                        <td id="status_bit_0">Lgt</td>
+                                        <td id="status_bit_1">Agt</td>
+                                        <td id="status_bit_2">EQ</td>
+                                        <td id="status_bit_3">Carry</td>
+                                        <td id="status_bit_4">Over</td>
+                                        <td id="status_bit_5">Parity</td>
+                                        <td id="status_bit_6">XOP</td>
+                                        <td id="status_bit_7">Priv</td>
+                                        <td id="status_bit_8">Mapfile</td>
+                                        <td id="status_bit_9">MM</td>
+                                        <td id="status_bit_10">OvInt</td>
+                                        <td id="status_bit_11">WCS</td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                        <tr><th>WP:</th>            <td id="wp_el">0x0000</td></tr>
+                        <tr><th>PC:</th>            <td id="pc_el">0x0000</td></tr>
+                        <tr><th>Instruction:</th>   <td id="epci_el">--</td></tr>
+                        <tr><th>FPS / IPS:</th>     <td><span id="fps_el">--</span> / <span id="ips_el">--</span></td></tr>
+                    </table>
+                    <button id="step_state_button">State Step</button>
+                    <button id="inst_state_button">Instruction Step</button>
+                    &bull;
+                    <button id="run_button">Run Standard</button>
+                    <button id="runslow_button">Run Slow</button>
+                    <button id="runfast_button" class="plaid">Run <i>Plaid</i></button>
+                    &bull;
+                    <button id="stop_button">Stop</button>
+                    <button id="reset_button">Reset</button>
+                </section>
+                <br>
+                <section>
+                    File: <select id="asmpicker"></select>
+                    <button id="asmpicker_load_button">Load</button>
+                    <br><br>
+                    <section id="codebox_grid_container">
+<textarea id="codebox" cols="80" spellcheck="false">
+                AORG    0
+
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 0 - 3
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 4 - 7
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 8 - 11
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100 ; Interrupts 12 - 15
+
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100  ; XOP 0 - 3
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100  ; XOP 4 - 7
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100  ; XOP 8 - 11
+                DATA    >80,>100,>80,>100,>80,>100,>80,>100  ; XOP 12 - 15
+
+                AORG    >0080
+
+workspace       BSS     32
+scratch         BSS     32
+
+                AORG    >0100
+
+</textarea>
+                        <pre id="assembled"></pre>
+                        <button id="codebox_process_button">Assemble &amp; Load</button>
+                    </section>
+                </section>
+            </div>
+            <div id="viz" style="flex: auto;"></div>
+        </div>
+    </body>
+</html>

@@ -8,5 +8,5 @@
       "strict": true
     },
 
-    "include": ["./*.js", "./classes/*.js"]
+    "include": ["./*.js", "./classes/*.js", "./controllers/*.js"]
 }
