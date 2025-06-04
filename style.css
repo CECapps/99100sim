@@ -52,6 +52,8 @@ button:focus {
 select {
     padding: 2px;
     border: 2px solid var(--main-bg-color-lighter-2);
+    color: var(--text-color);
+    background-color: var(--main-bg-color-darker-2);
     border-radius: 5px;
 }
 
@@ -65,26 +67,26 @@ select {
     background-color: var(--main-bg-color-darker-2);
 }
 
-table#status_bits td {
-    border: 2px solid transparent;
-    color: var(--main-bg-color-lighter-2);
+table th, table td {
+    min-width: 4em;
+    border: 1px inset;
+    border-color: var(--main-bg-color-lighter-2);
     text-align: center;
-    min-width: 3.5em;
+}
+
+table#status_bits td.status-bit-clear {
+    color: var(--main-bg-color-lighter-2);
 }
 table#status_bits td.status-bit-set {
     color: var(--text-color);
     border-color: var(--text-color);
 }
 
-table#registers th {
-    min-width: 3.5em;
-}
-
 table#status_bits td, table#registers td {
     text-shadow: -1px   -1px    0px  var(--main-bg-color-lighter-2), /* top left */
-                    1px    -1px    0px  var(--main-bg-color-darker-1), /* top right */
-                    -1px   1px     0px  var(--main-bg-color-lighter-1), /* bottom left */
-                    1px    1px     0px  var(--main-bg-color-darker-2); /* bottom right */
+                 1px    -1px    0px  var(--main-bg-color-darker-1), /* top right */
+                 -1px   1px     0px  var(--main-bg-color-lighter-1), /* bottom left */
+                 1px    1px     0px  var(--main-bg-color-darker-2); /* bottom right */
 }
 
 section#simcontrol fieldset {
@@ -101,26 +103,26 @@ main {
     display: inline-grid;
 
     grid-template:
-        "a a a a a" auto
-        "b b b b b" auto
-        "c c c d d" auto
-        "e e e d d" auto
-        "f f f g g" auto;
-    grid-template-columns: repeat(5, auto);
+        "a b c" auto
+        "d d c" auto
+        "e e c" auto
+        "f f c" auto
+        "g g c" auto;
+    grid-template-columns: repeat(3, auto);
     grid-template-rows:
-        auto        /* simcontrol (a) */
-        auto        /* error (b) */
-        min-content /* simstate (c) and memory_viz (d) */
-        1fr         /* machine_state (e) and memory_viz (d) */
-        auto;       /* code_input (f) and code_output (g) */
+        min-content
+        min-content
+        min-content
+        1fr
+        auto;
     grid-column-gap: 5px;
     grid-row-gap: 5px;
 }
 
 section#simcontrol { grid-area: a; }
-section#error { grid-area: b; }
-section#simstate { grid-area: c; }
-section#memory_viz { grid-area: d; }
+section#simstate { grid-area: b; }
+section#memory_viz { grid-area: c; }
+section#error { grid-area: d; }
 section#machine_state { grid-area: e; }
 section#code_input { grid-area: f; }
 section#code_output { grid-area: g; }

@@ -10,18 +10,26 @@
         <main>
         <section id="simstate">
             <header><h2>Simulation State</h2></header>
-            <dl>
-                <dt>Running:</dt>
-                <dd id="running">No</dd>
-                <dt>Prev State:</dt>
-                <dd id="prev_state">Crash</dd>
-                <dt>Next State:</dt>
-                <dd id="next_state">Crash</dd>
-                <dt>FPS:</dt>
-                <dd id="fps">--</dd>
-                <dt>IPS:</dt>
-                <dd id="ips">--</dd>
-            </dl>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Running</th>
+                        <th>Prev State</th>
+                        <th>Next State</th>
+                        <th>FPS</th>
+                        <th>IPS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td id="running">No</td>
+                        <td id="prev_state">Crash</td>
+                        <td id="next_state">Crash</td>
+                        <td id="fps">--</td>
+                        <td id="ips">--</td>
+                    </tr>
+                </tbody>
+            </table>
         </section>
         <section id="error">
             <header><h2>Error State</h2></header>
@@ -49,6 +57,7 @@
                     </tr>
                 </tbody>
             </table>
+
             <table id="status_bits">
                 <caption>Status Register Bits</caption>
                 <tbody>
@@ -68,37 +77,50 @@
                     </tr>
                 </tbody>
             </table>
-            <dl>
-                <dt>WP:</dt>
-                <dd id="wp">0x0000</dd>
-                <dt>PC:</dt>
-                <dd id="pc">0x0000</dd>
-                <dt>Instruction:</dt>
-                <dd id="instruction">--</dd>
-            </dl>
+
+            <table>
+                <caption>Machine State</caption>
+                <thead>
+                    <tr>
+                        <th>WP</th>
+                        <th>PC</th>
+                        <th>Instruction</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td id="wp">0x0000</td>
+                        <td id="pc">0x0000</td>
+                        <td id="instruction">--</td>
+                    </tr>
+                </tbody>
+            </table>
         </section>
         <section id="simcontrol">
             <header><h2>Simulation Controls</h2></header>
             <nav aria-label="Simulation Controls">
                 <fieldset>
-                    <button id="reset">Reset</button>
-                    <button id="stop">Stop</button>
-                </fieldset>
-                <fieldset>
                     <button id="run_slow">Run Slow</button>
                     <button id="run">Run Standard</button>
                     <button id="run_fast" class="plaid">Run <i>Plaid</i></button>
                 </fieldset>
-                <fieldset>
-                    <button id="step_instruction">Instruction Step</button>
-                    <button id="step_state">State Step</button>
-                </fieldset>
-            </nav>
-            <div>
+                <br>
                 <fieldset><legend>Fast Mode Steps</legend>
                     <input name="fast_mode_steps" id="fast_mode_steps" type="range" min="1" max="10000" step="7" value="">
                     <br><div id="fast_mode_steps_display">0</div>
                 </fieldset>
+                <br>
+                <fieldset>
+                    <button id="step_instruction">Instruction Step</button>
+                    <button id="step_state">State Step</button>
+                </fieldset>
+                <br>
+                <fieldset>
+                    <button id="reset">Reset</button>
+                    <button id="stop">Stop</button>
+                </fieldset>
+            </nav>
+            <div>
             </div>
         </section>
         <section id="code_input">
