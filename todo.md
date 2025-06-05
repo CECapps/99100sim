@@ -1,8 +1,8 @@
-Here we have the inner guts of my TMS99100 simulator.  We have to know everything about the operations we need to perform.  I collected all of this data in a spreadsheet and then automated the creation of the opcode definitions.  Only the first 200 or so lines of OpInfo.js are important, the rest are just OpDef impls.
-
-I have to use and reuse this same data all over the codebase.  I am not interested in high performance optimizations here, but in a codebase with clearly defined areas of control.  You know, the Single Responsibility Principal and all that.
-
-This code is a *mess* simply because of how it ends up being the core dependency of other things.  Suggest options to make the code around opcodes both better organized and more clear.  This is high-level architectural work, so no code yet, just docs.  Go!
+> Here we have the inner guts of my TMS99100 simulator.  We have to know everything about the operations we need to perform.  I collected all of this data in a spreadsheet and then automated the creation of the opcode definitions.  Only the first 200 or so lines of OpInfo.js are important, the rest are just OpDef impls.
+>
+> I have to use and reuse this same data all over the codebase.  I am not interested in high performance optimizations here, but in a codebase with clearly defined areas of control.  You know, the Single Responsibility Principal and all that.
+>
+> This code is a *mess* simply because of how it ends up being the core dependency of other things.  Suggest options to make the code around opcodes both better organized and more clear.  This is high-level architectural work, so no code yet, just docs.  Go!
 
 -----
 
@@ -66,13 +66,13 @@ This layered approach should lead to a more modular, maintainable, and understan
 
 -----
 
-Ah, I forgot to give you a *working* instruction file to see what they're like.  They include both the op definition and the part of the execution unit that actually runs the instruction.
-
-The trouble I've been having is splitting that line between "this object knows all about itself and can work" and "wait hold on this is a data object, it should not do anything."  Part of this is naming.
-
-The thing that defines the format of the binary instruction is one thing.  The thing that carries an instance of that instruction (could be multiple words) is another.
-
-This is how I ended up with "op" and "instruction" and "execution unit" as terms.  Given this architecture, suggest additional or alternative terms for the various types and state of instruction data.
+> Ah, I forgot to give you a *working* instruction file to see what they're like.  They include both the op definition and the part of the execution unit that actually runs the instruction.
+>
+> The trouble I've been having is splitting that line between "this object knows all about itself and can work" and "wait hold on this is a data object, it should not do anything."  Part of this is naming.
+>
+> The thing that defines the format of the binary instruction is one thing.  The thing that carries an instance of that instruction (could be multiple words) is another.
+>
+> This is how I ended up with "op" and "instruction" and "execution unit" as terms.  Given this architecture, suggest additional or alternative terms for the various types and state of instruction data.
 
 -----
 
@@ -132,3 +132,121 @@ This set of terms aims to clearly separate:
 *   The *behavioral logic* that acts upon that instance.
 
 This should help in reinforcing the Single Responsibility Principle for each component. The `DecodedInstruction` is primarily a data holder, its methods focused on accessing its constituent parts based on its `InstructionDefinition` and `OpcodeLayout`. The `ExecutionUnit` then takes this `DecodedInstruction` and performs the state changes.
+
+-----
+
+> I asked another coding assistant the same question, making sure to get everything in context.
+
+-----
+
+Looking at your TMS99100 simulator architecture, I can see the core issue: opcode-related data and responsibilities are scattered across multiple classes, creating tight coupling and unclear boundaries. Here's my analysis and suggested architectural improvements:
+
+## Current Problems
+
+1. **Scattered Responsibilities**: Opcode data lives in `OpInfo`, metadata in `OpDef`, runtime state in `Instruction`, execution logic in `ExecutionUnit` subclasses, and encoding/decoding in `InstructionDecode`
+2. **Tight Coupling**: Every class needs to know about every other class's internals
+3. **Mixed Concerns**: `Instruction` handles both opcode metadata AND runtime parameter state
+4. **Data Duplication**: Format information exists in multiple places
+5. **Complex Dependencies**: Circular references and deep knowledge requirements
+
+## Proposed Architecture: Layered Separation of Concerns
+
+### Layer 1: Core Opcode Metadata (Read-Only)
+**New: `OpcodeRegistry`** - Single source of truth for all opcode metadata
+- Replaces `OpInfo` static methods
+- Contains immutable opcode definitions, format specs, platform compatibility
+- Pure data, no behavior
+- Indexed by both name and numeric opcode for fast lookup
+
+**Refactored: `OpcodeDefinition`** - Immutable opcode metadata
+- Replaces current `OpDef` classes
+- Contains: name, opcode range, format info, platform flags, status bit effects
+- No execution logic, just metadata
+- Created by `OpcodeRegistry`
+
+**New: `InstructionFormat`** - Format-specific behavior
+- Replaces current `FormatInfo`
+- Handles parameter extraction/insertion logic
+- Knows bit layouts and parameter validation rules
+- One class per format type
+
+### Layer 2: Runtime Instruction State
+**Refactored: `Instruction`** - Pure runtime state container
+- Holds: effective opcode, parameter values, immediate words
+- No longer knows about execution or encoding
+- Simple getter/setter interface
+- Lifecycle management (unset/set/finalized states)
+
+**New: `InstructionBuilder`** - Construction and validation
+- Creates `Instruction` instances from opcodes or names
+- Handles parameter setting and validation
+- Manages immediate operand detection
+- Enforces finalization rules
+
+### Layer 3: Execution Abstraction
+**Refactored: `ExecutionUnit`** - Pure execution logic
+- Takes immutable `Instruction` + `SimulationState`
+- No knowledge of opcode metadata beyond what's needed for execution
+- Focused solely on the execute/validate/fetch/write cycle
+
+**New: `InstructionExecutor`** - Execution coordination
+- Maps opcodes to execution units
+- Handles the begin/fetch/execute/write lifecycle
+- Replaces `ExecutionProcess` complexity with cleaner separation
+
+### Layer 4: Encoding/Assembly Support
+**Refactored: `InstructionCodec`** - Encoding/Decoding
+- Converts between `Instruction` objects and raw bytes
+- Handles multi-word instruction assembly
+- No execution concerns, pure translation
+
+## Key Architectural Principles
+
+### 1. **Dependency Inversion**
+```
+High-level modules (Flow, ExecutionProcess)
+    ↓ depend on abstractions ↓
+Interfaces (IInstructionExecutor, IOpcodeRegistry)
+    ↑ implemented by ↑
+Low-level modules (ConcreteExecutor, OpcodeRegistry)
+```
+
+### 2. **Single Responsibility**
+- `OpcodeRegistry`: Opcode metadata lookup
+- `Instruction`: Runtime parameter state
+- `InstructionBuilder`: Construction and validation
+- `InstructionExecutor`: Execution coordination
+- `ExecutionUnit`: Actual instruction logic
+- `InstructionCodec`: Byte-level encoding/decoding
+
+### 3. **Immutability Where Possible**
+- `OpcodeDefinition` - completely immutable
+- `InstructionFormat` - behavior only, no mutable state
+- `Instruction` - mutable during construction, immutable after finalization
+
+### 4. **Clear Data Flow**
+```
+OpcodeName/Number → OpcodeRegistry → OpcodeDefinition
+                                         ↓
+OpcodeDefinition → InstructionBuilder → Instruction
+                                         ↓
+Instruction → InstructionExecutor → ExecutionUnit → Results
+```
+
+## Benefits of This Architecture
+
+1. **Testability**: Each layer can be tested independently
+2. **Maintainability**: Changes to formats/opcodes are localized
+3. **Extensibility**: New instruction formats just add new `InstructionFormat` classes
+4. **Clarity**: Each class has one clear purpose
+5. **Performance**: Can optimize each layer independently (caching in registry, pooling instructions, etc.)
+
+## Migration Strategy
+
+1. **Phase 1**: Extract `OpcodeRegistry` from `OpInfo`, keeping existing interfaces
+2. **Phase 2**: Create `InstructionBuilder` and gradually move construction logic
+3. **Phase 3**: Separate execution logic from metadata in `ExecutionUnit`
+4. **Phase 4**: Clean up `Instruction` to be pure state container
+5. **Phase 5**: Refactor dependent classes (`Flow`, `ExecutionProcess`) to use new interfaces
+
+This architecture maintains your "clearly defined areas of control" goal while making the opcode system much more maintainable and extensible.
